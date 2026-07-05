@@ -4,25 +4,23 @@ Re-applies game mods/fixes after a SteamOS reinstall or reimage. Companion to
 the SteamOS Backup Manager (which covers Wine prefixes — this covers game-dir
 mods, and later launch options + systemd units).
 
-**Keep this repo private** — payloads contain patched game executables.
+**Payload licensing rule:** this repo is public while every payload is
+redistributable (V-Patch is CC BY-NC 4.0, licenses kept in each recipe's
+`docs/`). The moment a payload contains actual game files or patched
+executables (e.g. TCU), flip the repo private — or keep that payload
+SD-card-only.
 
 ## Fresh-install bootstrap (Steam Deck / SteamOS)
 
-One-time prep: create a **fine-grained personal access token** (GitHub →
-Settings → Developer settings → Personal access tokens → Fine-grained tokens)
-scoped to *only this repo* with *Contents: read-only*. Keep it somewhere you
-can paste from.
-
-Then this single line in Konsole clones (or updates) and applies:
+One line in Konsole clones (or updates) and applies:
 
 ```bash
-TOKEN=<paste-token>; if [ -d ~/game-fix-manager ]; then git -C ~/game-fix-manager pull; else git clone https://$TOKEN@github.com/TPepperoni666/game-fix-manager.git ~/game-fix-manager; fi; python3 ~/game-fix-manager/gfm.py apply la-noire
+if [ -d ~/game-fix-manager ]; then git -C ~/game-fix-manager pull; else git clone https://github.com/TPepperoni666/game-fix-manager.git ~/game-fix-manager; fi; python3 ~/game-fix-manager/gfm.py apply la-noire
 ```
 
-The token is saved into the clone's remote URL, so after the first run plain
-`git pull` works without pasting it again. The app finds its `store/` folder
-inside the clone, so this works before the SD card or Syncthing are set up.
-Install the game(s) from Steam first, then apply.
+The app finds its `store/` folder inside the clone, so this works before the
+SD card or Syncthing are set up. Install the game(s) from Steam first, then
+apply.
 
 ## Commands
 
