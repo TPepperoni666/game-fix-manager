@@ -1,0 +1,7 @@
+# Target platform is SteamOS — keep LF everywhere, even on Windows checkouts.
+* text=auto eol=lf
+# Payload binaries
+*.exe binary
+*.dll binary
+*.asi binary
+*.bin binary

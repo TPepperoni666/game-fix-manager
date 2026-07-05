@@ -1,0 +1,57 @@
+# Game Fix Manager
+
+Re-applies game mods/fixes after a SteamOS reinstall or reimage. Companion to
+the SteamOS Backup Manager (which covers Wine prefixes — this covers game-dir
+mods, and later launch options + systemd units).
+
+**Keep this repo private** — payloads contain patched game executables.
+
+## Fresh-install bootstrap (Steam Deck / SteamOS)
+
+```bash
+git clone <your-private-repo-url> ~/game-fix-manager
+cd ~/game-fix-manager
+python3 gfm.py
+```
+
+That's it — the app finds its `store/` folder inside the clone, so it works
+before the SD card or Syncthing are set up. Install the game(s) from Steam
+first, then Apply Fixes.
+
+## Commands
+
+| Command | What it does |
+|---------|--------------|
+| `python3 gfm.py` | interactive menu (uses gum if present, plain menus otherwise) |
+| `python3 gfm.py list` | every recipe + detected/applied status |
+| `python3 gfm.py apply [id ...]` | apply fixes (prompts for game path if not auto-found) |
+| `python3 gfm.py revert <id>` | restore originals from `.gfm-orig` backups |
+| `--dry-run` | show what would happen, touch nothing |
+| `--store PATH` / `--steam-root PATH` | overrides |
+
+## Adding a game
+
+1. Create `store/games/<id>/manifest.json` (copy `la-noire` as a template).
+2. Put mod files in `store/games/<id>/payload/`.
+3. Commit. No code changes needed.
+
+Step types available: `copy_files`, `swap_exe` (more coming: `launch_options`,
+`systemd_unit` for The Crew/TCU).
+
+Payload size note: GitHub blocks files >100MB — anything bigger needs Git LFS
+or stays SD-card-only.
+
+## Store resolution order
+
+`--store` → `GFM_STORE` env → remembered in `~/.config/gfm/config.json` →
+`store/` next to the app (git clone) → SD card scan
+(`/run/media/*/steamos_restore/game_fixes`).
+
+## Development
+
+Stdlib-only Python 3.11+. Core logic (`core/`) has no UI code; frontends
+implement `ui/base.py` so a GUI can drop in later.
+
+```bash
+python tests/smoke_test.py   # end-to-end test with a fake Steam library
+```

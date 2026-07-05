@@ -1,0 +1,18 @@
+{
+  "id": "la-noire",
+  "name": "L.A. Noire",
+  "aliases": ["LA Noire", "LaNoire", "L.A.Noire"],
+  "steam_appid": 110800,
+  "detect": {
+    "install_dir_names": ["L.A.Noire", "LANoire"],
+    "marker_files": ["LaNoire.exe"]
+  },
+  "steps": [
+    {
+      "type": "swap_exe",
+      "payload": "payload/LaNoire.exe",
+      "target": "LaNoire.exe"
+    }
+  ],
+  "notes": "Patched exe swap. Drop the patched LaNoire.exe into payload/. Original is kept as LaNoire.exe.gfm-orig for revert. TODO: record which patch/version this is and where it came from."
+}

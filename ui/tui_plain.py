@@ -1,0 +1,40 @@
+"""Zero-dependency fallback TUI (numbered menus over stdin). Works anywhere,
+including Windows dev boxes — gum frontend is preferred on the Deck."""
+from __future__ import annotations
+
+from .base import UI
+
+_STYLES = {"info": "", "success": "[OK] ", "warn": "[!] ", "error": "[X] ", "dim": "  "}
+
+
+class PlainUI(UI):
+    def header(self, title: str) -> None:
+        print(f"\n=== {title} ===")
+
+    def msg(self, text: str, style: str = "info") -> None:
+        print(f"{_STYLES.get(style, '')}{text}")
+
+    def choose(self, header: str, options: list[str], multi: bool = False) -> list[str]:
+        print(f"\n{header}")
+        for i, opt in enumerate(options, 1):
+            print(f"  {i}) {opt}")
+        hint = "numbers comma-separated, or 'a' for all" if multi else "number"
+        raw = input(f"Select ({hint}, blank to cancel): ").strip()
+        if not raw:
+            return []
+        if multi and raw.lower() == "a":
+            return list(options)
+        picks = []
+        for part in raw.split(","):
+            part = part.strip()
+            if part.isdigit() and 1 <= int(part) <= len(options):
+                picks.append(options[int(part) - 1])
+        return picks if multi else picks[:1]
+
+    def confirm(self, question: str, danger: bool = False) -> bool:
+        tag = "[DANGER] " if danger else ""
+        return input(f"{tag}{question} [y/N]: ").strip().lower() in ("y", "yes")
+
+    def input(self, prompt: str, default: str = "") -> str:
+        suffix = f" [{default}]" if default else ""
+        return input(f"{prompt}{suffix}: ").strip() or default
