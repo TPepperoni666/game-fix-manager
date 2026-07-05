@@ -1,6 +1,14 @@
-# L.A. Noire payload
+# L.A. Noire payload — V-Patch 2.0
 
-Drop the patched `LaNoire.exe` in this folder.
+`vpatch/` mirrors the patch's `L.A.Noire/` folder and is copied straight into
+the game directory:
 
-The recipe swaps it over the installed exe; the original is preserved as
-`LaNoire.exe.gfm-orig` so the fix can be reverted.
+- `dinput8.dll` — Ultimate ASI Loader (ThirteenAG)
+- `plugins/lanvp.asi` — the V-Patch itself (VaanaCZ)
+- `plugins/lanvp.ini` — config (FPS cap, FoV, borderless, logo skip)
+
+On Proton the game also needs the launch option
+`WINEDLLOVERRIDES="dinput8=n,b" %command%` — the recipe prints this after
+applying (automated once the launch_options step lands).
+
+Upstream readme + licenses: `../docs/`.

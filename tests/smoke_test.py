@@ -1,6 +1,7 @@
 """End-to-end smoke test with a fake Steam library — runs anywhere, no Steam
-needed. Exercises: manifest load, appid detection via ACF, apply (with backup),
-idempotent re-apply, verify, tamper->partial? (single-step: not_applied), revert.
+needed. Mirrors the real L.A. Noire V-Patch recipe: a copy_files tree with a
+nested plugins/ dir, one file that overwrites a pre-existing original (backup
+path) and files that are brand new (add/remove path).
 
 Run:  python tests/smoke_test.py
 """
@@ -30,25 +31,31 @@ def check(desc: str, cond: bool):
 
 
 def build_fixture(root: Path):
-    # Fake Steam library with L.A. Noire "installed"
+    # Fake Steam library with L.A. Noire "installed".
+    # The game ships its own dinput8.dll so the overwrite/backup path is tested.
     steam = root / "steam"
     game_dir = steam / "steamapps" / "common" / "L.A.Noire"
     game_dir.mkdir(parents=True)
-    (game_dir / "LaNoire.exe").write_bytes(b"ORIGINAL GAME EXE v1.0")
+    (game_dir / "LaNoire.exe").write_bytes(b"GAME EXE")
+    (game_dir / "dinput8.dll").write_bytes(b"STOCK DINPUT8")
     (steam / "steamapps" / "appmanifest_110800.acf").write_text(
         '"AppState"\n{\n\t"appid"\t\t"110800"\n\t"name"\t\t"L.A. Noire"\n'
         '\t"installdir"\t\t"L.A.Noire"\n}\n', encoding="utf-8")
 
-    # Fake store with a patched exe payload
+    # Fake store mirroring the real V-Patch payload layout
     recipe_dir = root / "store" / "games" / "la-noire"
-    (recipe_dir / "payload").mkdir(parents=True)
-    (recipe_dir / "payload" / "LaNoire.exe").write_bytes(b"PATCHED EXE - widescreen fix")
+    vpatch = recipe_dir / "payload" / "vpatch"
+    (vpatch / "plugins").mkdir(parents=True)
+    (vpatch / "dinput8.dll").write_bytes(b"ASI LOADER DINPUT8")
+    (vpatch / "plugins" / "lanvp.asi").write_bytes(b"VPATCH ASI")
+    (vpatch / "plugins" / "lanvp.ini").write_bytes(b"fps_unlock=1")
     (recipe_dir / "manifest.json").write_text(json.dumps({
         "id": "la-noire", "name": "L.A. Noire",
         "aliases": ["LA Noire"], "steam_appid": 110800,
         "detect": {"install_dir_names": ["L.A.Noire"], "marker_files": ["LaNoire.exe"]},
-        "steps": [{"type": "swap_exe", "payload": "payload/LaNoire.exe",
-                   "target": "LaNoire.exe"}],
+        "steps": [{"type": "copy_files", "from": "payload/vpatch",
+                   "to": "{game_dir}", "backup_originals": True}],
+        "post_apply_message": "set WINEDLLOVERRIDES",
     }), encoding="utf-8")
     return steam, root / "store", game_dir
 
@@ -57,13 +64,16 @@ def main():
     tmp = Path(tempfile.mkdtemp(prefix="gfm_smoke_"))
     try:
         steam, store_root, game_dir = build_fixture(tmp)
-        exe = game_dir / "LaNoire.exe"
-        backup = game_dir / ("LaNoire.exe" + engine.BACKUP_SUFFIX)
+        dll = game_dir / "dinput8.dll"
+        dll_backup = game_dir / ("dinput8.dll" + engine.BACKUP_SUFFIX)
+        asi = game_dir / "plugins" / "lanvp.asi"
+        ini = game_dir / "plugins" / "lanvp.ini"
 
         print("== load & detect ==")
         recipes = manifest.load_all(store_root)
         check("one recipe loads", len(recipes) == 1 and recipes[0].id == "la-noire")
         recipe = recipes[0]
+        check("post_apply_message loads", recipe.post_apply_message.startswith("set "))
         found = detect.find_game_dir(recipe, steam, remembered={})
         check("game dir found via appid/ACF", found == game_dir)
         found2 = detect.find_game_dir(recipe, steam, remembered={"la-noire": str(game_dir)})
@@ -75,34 +85,38 @@ def main():
         print("== dry run ==")
         dry = engine.Ctx(recipe, game_dir, dry_run=True, log=quiet)
         engine.apply_recipe(recipe, dry)
-        check("dry-run touches nothing", exe.read_bytes() == b"ORIGINAL GAME EXE v1.0"
-              and not backup.exists())
+        check("dry-run touches nothing",
+              dll.read_bytes() == b"STOCK DINPUT8" and not asi.exists()
+              and not dll_backup.exists())
 
         print("== apply ==")
         check("verify before: not applied",
               engine.verify_recipe(recipe, ctx) == engine.NOT_APPLIED)
         engine.apply_recipe(recipe, ctx)
-        check("exe is patched", exe.read_bytes().startswith(b"PATCHED"))
-        check("original backed up", backup.read_bytes() == b"ORIGINAL GAME EXE v1.0")
+        check("dll overwritten", dll.read_bytes() == b"ASI LOADER DINPUT8")
+        check("stock dll backed up", dll_backup.read_bytes() == b"STOCK DINPUT8")
+        check("nested plugins dir created", asi.read_bytes() == b"VPATCH ASI"
+              and ini.read_bytes() == b"fps_unlock=1")
         check("verify after: applied", engine.verify_recipe(recipe, ctx) == engine.APPLIED)
 
         print("== idempotency ==")
         engine.apply_recipe(recipe, ctx)  # run again
         check("re-apply keeps true original in backup",
-              backup.read_bytes() == b"ORIGINAL GAME EXE v1.0")
+              dll_backup.read_bytes() == b"STOCK DINPUT8")
 
         print("== game update clobbers mod (re-apply path) ==")
-        exe.write_bytes(b"ORIGINAL GAME EXE v1.1 (steam updated)")
-        check("verify detects drift", engine.verify_recipe(recipe, ctx) == engine.NOT_APPLIED)
+        dll.write_bytes(b"STOCK DINPUT8 v1.1 (steam updated)")
+        check("verify detects drift", engine.verify_recipe(recipe, ctx) == engine.PARTIAL)
         engine.apply_recipe(recipe, ctx)
-        check("re-patched after update", exe.read_bytes().startswith(b"PATCHED"))
-        check("backup still original v1.0 (first write wins)",
-              backup.read_bytes() == b"ORIGINAL GAME EXE v1.0")
+        check("re-patched after update", dll.read_bytes() == b"ASI LOADER DINPUT8")
+        check("backup still stock v1.0 (first write wins)",
+              dll_backup.read_bytes() == b"STOCK DINPUT8")
 
         print("== revert ==")
         engine.revert_recipe(recipe, ctx)
-        check("original restored", exe.read_bytes() == b"ORIGINAL GAME EXE v1.0")
-        check("backup consumed", not backup.exists())
+        check("stock dll restored", dll.read_bytes() == b"STOCK DINPUT8")
+        check("backup consumed", not dll_backup.exists())
+        check("added files removed", not asi.exists() and not ini.exists())
         check("verify after revert: not applied",
               engine.verify_recipe(recipe, ctx) == engine.NOT_APPLIED)
 

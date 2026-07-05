@@ -2,17 +2,28 @@
 including Windows dev boxes — gum frontend is preferred on the Deck."""
 from __future__ import annotations
 
+import sys
+
 from .base import UI
 
 _STYLES = {"info": "", "success": "[OK] ", "warn": "[!] ", "error": "[X] ", "dim": "  "}
 
 
+def _print(text: str) -> None:
+    """Print, surviving consoles that can't render emoji (e.g. cp1252)."""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        enc = sys.stdout.encoding or "ascii"
+        print(text.encode(enc, errors="replace").decode(enc))
+
+
 class PlainUI(UI):
     def header(self, title: str) -> None:
-        print(f"\n=== {title} ===")
+        _print(f"\n=== {title} ===")
 
     def msg(self, text: str, style: str = "info") -> None:
-        print(f"{_STYLES.get(style, '')}{text}")
+        _print(f"{_STYLES.get(style, '')}{text}")
 
     def choose(self, header: str, options: list[str], multi: bool = False) -> list[str]:
         print(f"\n{header}")

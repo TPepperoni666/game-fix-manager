@@ -22,6 +22,7 @@ class Recipe:
     detect: dict
     steps: list[dict]
     notes: str
+    post_apply_message: str
     dir: Path  # recipe folder (contains manifest.json and payload/)
 
     @property
@@ -62,6 +63,7 @@ def load_recipe(recipe_dir: Path) -> Recipe:
         detect=data.get("detect", {}),
         steps=steps,
         notes=data.get("notes", ""),
+        post_apply_message=data.get("post_apply_message", ""),
         dir=recipe_dir,
     )
 

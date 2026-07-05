@@ -93,7 +93,11 @@ class App:
             if game_dir is None:
                 self.ui.msg(f"Skipping {recipe.name} — not located.", "warn")
                 continue
-            self.run_engine(recipe, game_dir, engine.apply_recipe)
+            ok = self.run_engine(recipe, game_dir, engine.apply_recipe)
+            if ok and recipe.post_apply_message:
+                self.ui.msg("── Manual step needed " + "─" * 20, "warn")
+                for line in recipe.post_apply_message.splitlines():
+                    self.ui.msg(line, "warn")
 
     def cmd_revert(self, ids: list[str]):
         targets = self._pick(ids, "Select games to revert")

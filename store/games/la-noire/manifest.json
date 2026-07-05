@@ -9,10 +9,12 @@
   },
   "steps": [
     {
-      "type": "swap_exe",
-      "payload": "payload/LaNoire.exe",
-      "target": "LaNoire.exe"
+      "type": "copy_files",
+      "from": "payload/vpatch",
+      "to": "{game_dir}",
+      "backup_originals": true
     }
   ],
-  "notes": "Patched exe swap. Drop the patched LaNoire.exe into payload/. Original is kept as LaNoire.exe.gfm-orig for revert. TODO: record which patch/version this is and where it came from."
+  "post_apply_message": "V-Patch loads through dinput8.dll, which Proton ignores by default. Set this launch option in Steam (right-click game > Properties > Launch Options):\n\n  WINEDLLOVERRIDES=\"dinput8=n,b\" %command%\n\n(A future launch_options step will automate this.)",
+  "notes": "V-Patch 2.0 for L.A. Noire: Complete Edition, by VaanaCZ (Aug 2024). FPS uncap + aspect ratio/ultrawide fixes via Ultimate ASI Loader. Source: https://github.com/VaanaCZ/LANVP — license CC BY-NC 4.0, see docs/. Config: plugins/lanvp.ini in the game dir after install."
 }
