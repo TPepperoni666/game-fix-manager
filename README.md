@@ -8,15 +8,21 @@ mods, and later launch options + systemd units).
 
 ## Fresh-install bootstrap (Steam Deck / SteamOS)
 
+One-time prep: create a **fine-grained personal access token** (GitHub →
+Settings → Developer settings → Personal access tokens → Fine-grained tokens)
+scoped to *only this repo* with *Contents: read-only*. Keep it somewhere you
+can paste from.
+
+Then this single line in Konsole clones (or updates) and applies:
+
 ```bash
-git clone <your-private-repo-url> ~/game-fix-manager
-cd ~/game-fix-manager
-python3 gfm.py
+TOKEN=<paste-token>; if [ -d ~/game-fix-manager ]; then git -C ~/game-fix-manager pull; else git clone https://$TOKEN@github.com/TPepperoni666/game-fix-manager.git ~/game-fix-manager; fi; python3 ~/game-fix-manager/gfm.py apply la-noire
 ```
 
-That's it — the app finds its `store/` folder inside the clone, so it works
-before the SD card or Syncthing are set up. Install the game(s) from Steam
-first, then Apply Fixes.
+The token is saved into the clone's remote URL, so after the first run plain
+`git pull` works without pasting it again. The app finds its `store/` folder
+inside the clone, so this works before the SD card or Syncthing are set up.
+Install the game(s) from Steam first, then apply.
 
 ## Commands
 
