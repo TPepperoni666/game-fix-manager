@@ -1,6 +1,7 @@
 # Target platform is SteamOS — keep LF everywhere, even on Windows checkouts.
 * text=auto eol=lf
-# Payload binaries
+# Payloads are shipped bytes — never normalize, diff, or touch them.
+store/games/*/payload/** -text
 *.exe binary
 *.dll binary
 *.asi binary
