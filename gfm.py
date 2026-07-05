@@ -16,7 +16,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from core import detect, engine, manifest, store
+from core import detect, engine, fetch, manifest, store
 from ui import get_ui
 
 STATUS_ICON = {engine.APPLIED: "✅", engine.NOT_APPLIED: "☐ ",
@@ -57,6 +57,8 @@ class App:
             try:
                 status = engine.verify_recipe(recipe, ctx)
             except engine.StepError as e:
+                if recipe.remote_payloads:
+                    return f"☐  {recipe.name} — not applied (payload downloads on apply)"
                 return f"❓ {recipe.name} — payload problem: {e}"
         return f"{STATUS_ICON[status]} {recipe.name} — {STATUS_TEXT[status]}"
 
@@ -93,6 +95,13 @@ class App:
             if game_dir is None:
                 self.ui.msg(f"Skipping {recipe.name} — not located.", "warn")
                 continue
+            if recipe.remote_payloads and not self.args.dry_run:
+                try:
+                    fetch.ensure_remote_payloads(
+                        recipe, log=lambda m: self.ui.msg(m, "dim"))
+                except fetch.FetchError as e:
+                    self.ui.msg(f"{recipe.name}: {e}", "error")
+                    continue
             ok = self.run_engine(recipe, game_dir, engine.apply_recipe)
             if ok and recipe.post_apply_message:
                 self.ui.msg("── Manual step needed " + "─" * 20, "warn")

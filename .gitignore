@@ -1,3 +1,8 @@
 __pycache__/
 *.pyc
 .gfm-orig
+*.part
+
+# Remote payloads: too big for git, shipped as release assets (see manifest
+# remote_payloads). Present locally after capture/first fetch.
+store/games/watch-dogs/payload/mod/data_win64/patch.dat

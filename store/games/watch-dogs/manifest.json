@@ -1,0 +1,27 @@
+{
+  "id": "watch-dogs",
+  "name": "Watch_Dogs",
+  "aliases": ["Watch Dogs", "WatchDogs", "Watch Dogs 1", "WD1"],
+  "steam_appid": 243470,
+  "detect": {
+    "install_dir_names": ["Watch_Dogs"],
+    "marker_files": ["bin/watch_dogs.exe"]
+  },
+  "steps": [
+    {
+      "type": "copy_files",
+      "from": "payload/mod",
+      "to": "{game_dir}",
+      "backup_originals": true
+    }
+  ],
+  "remote_payloads": [
+    {
+      "path": "payload/mod/data_win64/patch.dat",
+      "url": "https://github.com/TPepperoni666/game-fix-manager/releases/download/payload-watch-dogs/patch.dat",
+      "sha256": "39328664cc1745fc968c7cfb41a0f46f120b723afde07088b3558489ccb564cd",
+      "size": 273833146
+    }
+  ],
+  "notes": "Living City mod by The Silver (thesilver.it / ModDB). Captured 2026-07-06 from Tony's working Windows install (mod files dated 2025-04-06). Loads via data_win64/patch.dat + patch.fat; Living_City_MOD_CONFIG.txt is Tony's tuned config. patch.dat (274MB) exceeds GitHub's file limit so it ships as a release asset and downloads on first apply."
+}

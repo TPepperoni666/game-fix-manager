@@ -15,7 +15,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core import detect, engine, manifest  # noqa: E402
+from core import detect, engine, fetch, manifest  # noqa: E402
+from core.steps.copy_files import file_hash  # noqa: E402
 
 PASS = 0
 
@@ -119,6 +120,28 @@ def main():
         check("added files removed", not asi.exists() and not ini.exists())
         check("verify after revert: not applied",
               engine.verify_recipe(recipe, ctx) == engine.NOT_APPLIED)
+
+        print("== remote payload fetch (file:// stand-in for release asset) ==")
+        big = tmp / "hosted" / "patch.dat"
+        big.parent.mkdir()
+        big.write_bytes(b"BIG MOD DATA " * 1000)
+        recipe.remote_payloads = [{
+            "path": "payload/vpatch/patch.dat", "url": big.as_uri(),
+            "sha256": file_hash(big), "size": big.stat().st_size}]
+        fetched = recipe.dir / "payload" / "vpatch" / "patch.dat"
+        fetch.ensure_remote_payloads(recipe, log=quiet)
+        check("missing payload downloaded + verified",
+              fetched.read_bytes() == big.read_bytes())
+        stamp = fetched.stat().st_mtime_ns
+        fetch.ensure_remote_payloads(recipe, log=quiet)
+        check("present payload not re-downloaded", fetched.stat().st_mtime_ns == stamp)
+        recipe.remote_payloads[0]["sha256"] = "0" * 64
+        fetched.unlink()
+        try:
+            fetch.ensure_remote_payloads(recipe, log=quiet)
+            check("hash mismatch rejected", False)
+        except fetch.FetchError:
+            check("hash mismatch rejected", not fetched.exists())
 
         print(f"\nAll {PASS} checks passed.")
     finally:

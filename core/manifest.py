@@ -23,6 +23,7 @@ class Recipe:
     steps: list[dict]
     notes: str
     post_apply_message: str
+    remote_payloads: list[dict]
     dir: Path  # recipe folder (contains manifest.json and payload/)
 
     @property
@@ -64,6 +65,7 @@ def load_recipe(recipe_dir: Path) -> Recipe:
         steps=steps,
         notes=data.get("notes", ""),
         post_apply_message=data.get("post_apply_message", ""),
+        remote_payloads=data.get("remote_payloads", []),
         dir=recipe_dir,
     )
 

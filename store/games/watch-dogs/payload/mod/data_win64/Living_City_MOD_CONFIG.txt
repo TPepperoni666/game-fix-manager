@@ -1,0 +1,159 @@
+-- Watch_Dogs Living_City Mod by The Silver - CONFIGURATION FILE
+
+-- This is the user configuration file of the mod, where you can finetune many features to suit your tastes.
+-- This file works only if placed in the same "data_win64" folder of the "patch.dat" and "patch.fat" files.
+-- Follow the descriptions to tweak the mod, be sure to change only the values and not the variable names.
+-- Wrong edits should not break the mod but will be skipped, so if something doesn't work check your edits.
+-- This file is optional so if you delete or break it the mod will simply use the default values.
+-- In case this file is missing or unreadable the mod will disable the Limited_Inventory for safety.
+
+
+-- Switch to 1 to enable the TWOHANDED DRIVING (default 0 = Disabled)
+Globals._CUSTOM_SCRIPTS._Twohanded_Driving = 0
+
+-- Switch to 1 to enable the AUTOHIDING HUD (default 0 = Disabled | alternative 2 = autohide also minimap)
+Globals._CUSTOM_SCRIPTS._Autohide_Hud = 0
+
+-- Switch to 1 to enable the BODYCAM TOGGLE (default 0 = Disabled)
+Globals._CUSTOM_SCRIPTS._Bodycam = 0
+
+-- Switch to 0 to disable the FUEL SYSTEM (default 1 = Enabled | alternative 2 = display only when low)
+Globals._CUSTOM_SCRIPTS._FuelGauge = 1
+
+-- Switch to 0 to disable the SWITCH SHOULDER (default 1 = Enabled | alternative 2 = toggle zoom)
+Globals._CUSTOM_SCRIPTS._Aim = 1
+
+-- Switch to 0 to disable the TALKATIVE AIDEN (default 1 = Enabled)
+Globals._CUSTOM_SCRIPTS._Talk = 1
+
+-- Switch to 0 to disable the MADNESS CAR MACHINEGUNS (default 1 = Enabled)
+Globals._CUSTOM_SCRIPTS._Armedcar = 1
+
+-- Switch to 0 to disable the HANDS IN POCKETS TOGGLE (default 1 = Enabled | alternative 2 = pockets unusable)
+Globals._CUSTOM_SCRIPTS._Pockets_Toggle = 1
+
+-- Switch to 0 to disable the MASK TOGGLE (default 1 = Enabled | alternative 2 = no auto-masking)
+Globals._CUSTOM_SCRIPTS._Mask_Toggle = 1
+
+-- Switch to 0 to disable the CLOCK (default 1 = Enabled)
+Globals._CUSTOM_SCRIPTS._Clock = 1
+
+-- Switch to 0 to disable the SPEEDOMETER (default 1 = Enabled | alternative 2 = MPH)
+Globals._CUSTOM_SCRIPTS._Speedometer = 1
+
+-- Switch to 0 to disable the OFFLINE_INVASIONS (default 1 = Enabled)
+Globals._CUSTOM_SCRIPTS._Offline_Invasions = 1
+
+-- Switch to 0 to disable the TAXI_ACTIVITY (default 1 = Enabled)
+Globals._CUSTOM_SCRIPTS._Activity_Taxi = 1
+
+-- Switch to 0 to disable the OFFLINE_RACES (default 1 = Enabled)
+Globals._CUSTOM_SCRIPTS._Races_Enabled = 1
+
+-- Switch to 0 to disable the AIR_TRAFFIC (default 1 = Enabled)
+Globals._CUSTOM_SCRIPTS._Air_Traffic = 1
+
+-- Switch to 0 to disable the CIVILIAN_HACKS (default 1 = Enabled)
+Globals._CUSTOM_SCRIPTS._Hacks_Enabled = 1
+
+-- Switch to 0 to disable the RANDOM_EVENTS (default 1 = Enabled)
+Globals._CUSTOM_SCRIPTS._Events_Enabled = 1
+
+-- Switch to 0 to disable the OWLMOTEL HIDEOUT restoration (default 1 = Enabled)
+Globals._CUSTOM_SCRIPTS._OwlMotel_Restoration = 1
+
+-- Switch to 0 to disable the BLACK_MARKET BODYGUARD CALL_POLICE HUNTER DRIVER REST CAMERA gadgets (default 1 = Enabled)
+Globals._CUSTOM_SCRIPTS._Companion_Items = 1
+
+-- Switch to 0 to disable the CTOS_CHAOS (default 1 = Enabled)
+Globals._CUSTOM_SCRIPTS._ctOS_Chaos = 1
+
+-- Switch to 0 to disable the CTOSTOWERS_FASTTRAVEL (default 1 = Enabled)
+Globals._CUSTOM_SCRIPTS._Fast_Travel = 1
+
+-- Switch to 1 to disable the FIRST_LOAD randomized time (default 0 = Enabled)
+Globals._CUSTOM_SCRIPTS._First_Load_Disable_Timelapse = 0
+
+-- Switch to 0 to disable the FIRST_LOAD (default 1 = Enabled)
+Globals._CUSTOM_SCRIPTS._First_Load = 1
+
+-- Switch to 0 to disable the LIMITED_INVENTORY (default 1 = Enabled)
+Globals._CUSTOM_SCRIPTS._Limited_Inventory = 1
+
+-- Switch to 0 to disable the REPLACE_SCAN (default 1 = Enabled)
+Globals._CUSTOM_SCRIPTS._Replace_Scan = 1
+
+-- Seconds before RESTRICTED_AREAS guards respawn (default 600 = 10 minutes)
+Globals._CUSTOM_SCRIPTS._Respawn_Timeout = 600
+
+-- Switch to 1 to allow repeating CUSTOM_MISSIONS (default 0 = Disabled)
+Globals._CUSTOM_SCRIPTS._Repeat_Custom_Missions = 0
+
+-- Lower to 0 to disable the AMBUSH (chance percentage, default 20 out of 100)
+Globals._CUSTOM_SCRIPTS._Ambush_Chance = 20
+
+-- Switch to 1 to allow AMBUSH happen anytime (default 0 = Disabled)
+Globals._CUSTOM_SCRIPTS._Ambush_Anytime = 0
+
+-- Switch to 0 to disable the WATER BULLETHIT FIX (default 1 = Enabled)
+Globals._CUSTOM_SCRIPTS._Water_Bullethit = 1
+
+-- !!! UNTESTED !!! EXPECT BUGS !!! ENABLE AT YOUR OWN RISK !!! (default 0 = Disabled)
+Globals._CUSTOM_SCRIPTS._Enable_CompanionItems_InMissions = 0
+
+-- !!! UNTESTED !!! EXPECT BUGS !!! ENABLE AT YOUR OWN RISK !!! (default 0 = Disabled)
+Globals._CUSTOM_SCRIPTS._Force_BadBlood_Compatibility = 0
+
+
+-- List of UNLOCKED_INTERIORS (to disable one simply delete or comment its line)
+Globals._CUSTOM_SCRIPTS._Unlocked_Interiors = {
+  --"Domino/User/windycity/custom_scripts/unlocked_interiors/COMMENTED_LINE_EXAMPLE.lua", --Example of a commented line (notice the -- at the start)
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Antenna.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Auction.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Bedbug.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.BlumeHQ.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Bunker.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Dirty_Secrets.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Dot_Connexion.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.G1gg1L3s.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Garage.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Infinite92.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Lighthouse.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Limbik.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Merlaut.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Necessary_Evil.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Nicky_House.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Not_The_Pizza_Guy.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Plaza_Office.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Prison.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.River_Side.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Rossi_Fremont.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Satellite_Hack.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.SoSueMe.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Stadium.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.TBone.lua",
+  "Domino/User/windycity/custom_scripts/unlocked_interiors/Interior.Yolanda_House.lua",
+}
+
+-- List of RESTRICTED_AREAS (to disable one simply delete or comment its line)
+Globals._CUSTOM_SCRIPTS._Restricted_Areas = {
+  --"Domino/User/windycity/custom_scripts/restricted_areas/COMMENTED_LINE_EXAMPLE.lua", --Example of a commented line (notice the -- at the start)
+  "Domino/User/windycity/custom_scripts/restricted_areas/02_madmile_hubunlock.02_madmile_hubunlock_persistent_activation.lua",
+  "Domino/User/windycity/custom_scripts/restricted_areas/04_thewards_hubunlock.04_thewards_hubunlock_persistent_activation.lua",
+  "Domino/User/windycity/custom_scripts/restricted_areas/05_brandondocks_hubunlock.05_brandondocks_hubunlock_persistent_activation.lua",
+  "Domino/User/windycity/custom_scripts/restricted_areas/07_pontiac_hubunlock.07_pontiac_hubunlock_persistent_activation.lua",
+  "Domino/User/windycity/custom_scripts/restricted_areas/10_pontiac_blumehq.10_pontiac_blumehq_persistent_activation.lua",
+  "Domino/User/windycity/custom_scripts/restricted_areas/11_loop_ctos_plaza_garage.11_loop_ctos_plaza_garage_persistent_activation.lua",
+  "Domino/User/windycity/custom_scripts/restricted_areas/12_loop_railyard.12_loop_railyard_persistent_activation.lua",
+  "Domino/User/windycity/custom_scripts/restricted_areas/13_brandondocks_racine.13_brandondocks_racine_persistent_activation.lua",
+  "Domino/User/windycity/custom_scripts/restricted_areas/14_thewards_rossifremont.14_thewards_rossifremont_persistent_activation.lua",
+  "Domino/User/windycity/custom_scripts/restricted_areas/15_thewards_neighborhood.15_thewards_neighborhood_persistent_activation.lua",
+  "Domino/User/windycity/custom_scripts/restricted_areas/16_loop_marina.16_loop_marina_persistent_activation.lua",
+  "Domino/User/windycity/custom_scripts/restricted_areas/17_madmile_cardealership.17_madmile_cardealership_persistent_activation.lua",
+  "Domino/User/windycity/custom_scripts/restricted_areas/18_madmile_seasiderestaurant.18_madmile_seasiderestaurant_persistent_activation.lua",
+  "Domino/User/windycity/custom_scripts/restricted_areas/19_thewards_building.19_thewards_building_persistent_activation.lua",
+  "Domino/User/windycity/custom_scripts/restricted_areas/20_pawnee_camp.20_pawnee_camp_persistent_activation.lua",
+  "Domino/User/windycity/custom_scripts/restricted_areas/21_pawnee_trailerpark.21_pawnee_trailerpark_persistent_activation.lua",
+  "Domino/User/windycity/custom_scripts/restricted_areas/22_brandondocks_warehouse.22_brandondocks_warehouse_persistent_activation.lua",
+  "Domino/User/windycity/custom_scripts/restricted_areas/23_madmile_marlaut.23_madmile_marlaut_persistent_activation.lua",
+}
