@@ -52,6 +52,7 @@ then apply its fix. For couch use, pick **🖥️ Install Shortcut** once — se
 | **Force Unleashed 1** | Raises the 30 FPS cap to **40** (above 40 the grip physics break — a hard blocker in the Jedi Temple DLC; the manifest explains switching to 60). Downloads patched exes from PCGamingWiki. | None |
 | **Force Unleashed 2** | 60 FPS exe, skips the 7 logo intros, sets physics-taming launch options. Wet-clothes mod slot is ready but waiting on its ModDB file. | None |
 | **Transformers: WFC** | Stages the FPS-unlock trainer + a wrapper so it launches with the game, sets the launch option. Trainer is runtime memory patching — **press Num0 in game each session** (bind a back button). Untested under Proton. | Num0 per session; 60 FPS cap in QAM |
+| **DeckOps (COD setup)** | Puts the official [DeckOps](https://github.com/GalvarinoDev/DeckOps) installer on the desktop — a tool recipe, no game needed. Run it from Desktop Mode; it self-updates and installs the Call of Duty clients (CoD4x, IW4x, Plutonium, T7X, AlterWare…). | Run the installer; provide game files yourself |
 
 ## Controller support
 
