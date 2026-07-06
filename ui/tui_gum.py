@@ -31,8 +31,10 @@ class GumUI(UI):
         self.gum = _find_gum()
 
     def _run(self, args: list[str], capture: bool = True) -> str:
+        # gum draws its interactive UI on stderr and prints the selection to
+        # stdout — capture stdout ONLY, or the menu is invisible.
         result = subprocess.run([self.gum, *args], text=True,
-                                capture_output=capture)
+                                stdout=subprocess.PIPE if capture else None)
         return (result.stdout or "").rstrip("\n") if capture else ""
 
     def header(self, title: str) -> None:
