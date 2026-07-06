@@ -13,8 +13,11 @@
       "from": "payload/vpatch",
       "to": "{game_dir}",
       "backup_originals": true
+    },
+    {
+      "type": "launch_options",
+      "value": "WINEDLLOVERRIDES=\"dinput8=n,b\" %command%"
     }
   ],
-  "post_apply_message": "V-Patch loads through dinput8.dll, which Proton ignores by default. Set this launch option in Steam (right-click game > Properties > Launch Options):\n\n  WINEDLLOVERRIDES=\"dinput8=n,b\" %command%\n\n(A future launch_options step will automate this.)",
   "notes": "V-Patch 2.0 for L.A. Noire: Complete Edition, by VaanaCZ (Aug 2024). FPS uncap + aspect ratio/ultrawide fixes via Ultimate ASI Loader. Source: https://github.com/VaanaCZ/LANVP — license CC BY-NC 4.0, see docs/. Config: plugins/lanvp.ini in the game dir after install."
 }

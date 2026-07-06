@@ -41,8 +41,12 @@
       "scope": "system",
       "enable": true,
       "start": true
+    },
+    {
+      "type": "launch_options",
+      "value": "WINEDLLOVERRIDES=\"dinput8=n,b\" %command%"
     }
   ],
-  "post_apply_message": "Remaining manual steps for TCU:\n1. If the systemd step failed with a sudo error, set a password (run: passwd) and re-apply.\n2. Set the Steam launch option for The Crew (Properties > Launch Options):\n\n     WINEDLLOVERRIDES=\"dinput8=n,b\" %command%\n\n   (TCU hooks via dinput8.dll, same as V-Patch — Proton ignores it without this.)\n3. Optional: TCU Launcher is staged at ~/TCULauncher for save management (Offline Server > Manage) — run it under Proton if needed. Patching via the launcher is NOT needed; this recipe installs the patch directly.\n4. IMPORTANT: your offline save lives at <game_dir>/data.bin — it is NOT covered by prefix backups. Back it up separately.",
+  "post_apply_message": "Notes for TCU:\n1. If the systemd step failed with a sudo error, set a password (run: passwd) and re-apply.\n2. Steam version only: launch options were set automatically. If your Crew is a NON-Steam shortcut, set manually: WINEDLLOVERRIDES=\"dinput8=n,b\" %command%\n3. Optional: TCU Launcher is staged at ~/TCULauncher for save management (Offline Server > Manage). Patching via the launcher is NOT needed.\n4. IMPORTANT: your offline save lives at <game_dir>/data.bin — it is NOT covered by prefix backups. Back it up separately.",
   "notes": "The Crew servers died 2024; TCU (thecrewunlimited.com) revives it with a local offline server inside dinput8.dll. Patch 1.4.5.0 for game 1.2.0.0 is fetched DIRECTLY from TCU's servers (URL found in the launcher's own log) and extracted with bsdtar — nothing of theirs is rehosted, repo stays public. Patch = addon_items.xml, addon_missions.xml, tcu.manifest.cheats.xml, dinput8.dll; payload/config adds the launcher's install receipt (tcu.manifest.patch.xml, so the launcher sees it as patched) and server.ini (Tony's username). tcu-network.service (sysctl unprivileged port 443 + iptables DNAT of public-ubiservices.ubi.com to 127.0.0.1) replaces DAKOP's run-every-boot root script. To bump TCU versions: update url/sha256/size/filename here (launcher log shows the URL pattern). Verified against Tony's working Windows install, F:\\games\\The Crew, 2026-07-06. Launch options on Deck still to be confirmed on real hardware."
 }

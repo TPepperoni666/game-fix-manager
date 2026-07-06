@@ -77,7 +77,12 @@ def vdf_loads(text: str) -> dict:
             key = tok
             val = next(tok_iter)
             if val == "{":
-                block[key] = parse_block(tok_iter, "}")
+                sub = parse_block(tok_iter, "}")
+                # KeyValues allows duplicate keys; merge rather than clobber
+                if isinstance(block.get(key), dict):
+                    block[key].update(sub)
+                else:
+                    block[key] = sub
             elif isinstance(val, str):
                 block[key] = val
             else:
@@ -142,15 +147,23 @@ def _apps_node(tree: dict, create: bool = False) -> dict | None:
     return node
 
 
+def _get_lo_ci(app: dict) -> tuple[str, str]:
+    """(actual key name, value) for LaunchOptions, case-insensitive."""
+    for k, v in app.items():
+        if k.lower() == "launchoptions" and isinstance(v, str):
+            return k, v
+    return "LaunchOptions", ""
+
+
 def get_launch_options(steam_root: Path, appid: int) -> dict[str, str]:
     """Current LaunchOptions per localconfig file (path -> value)."""
     result = {}
     for cfg in _localconfigs(steam_root):
-        tree = vdf_loads(cfg.read_text(encoding="utf-8", errors="replace"))
+        tree = vdf_loads(cfg.read_text(encoding="utf-8", errors="surrogateescape"))
         apps = _apps_node(tree)
         app = apps.get(str(appid)) if apps else None
         if isinstance(app, dict):
-            result[str(cfg)] = app.get("LaunchOptions", "")
+            result[str(cfg)] = _get_lo_ci(app)[1]
     return result
 
 
@@ -159,7 +172,7 @@ def set_launch_options(steam_root: Path, appid: int, value: str) -> int:
     Caller must ensure Steam is closed. Returns number of files updated."""
     updated = 0
     for cfg in _localconfigs(steam_root):
-        text = cfg.read_text(encoding="utf-8", errors="replace")
+        text = cfg.read_text(encoding="utf-8", errors="surrogateescape")
         tree = vdf_loads(text)
         apps = _apps_node(tree, create=True)
         if apps is None:
@@ -167,11 +180,13 @@ def set_launch_options(steam_root: Path, appid: int, value: str) -> int:
         app = apps.setdefault(str(appid), {})
         if not isinstance(app, dict):
             continue
-        if app.get("LaunchOptions", "") == value:
+        key, current = _get_lo_ci(app)
+        if current == value:
             continue
-        app["LaunchOptions"] = value
+        app[key] = value
         shutil.copy2(cfg, cfg.with_suffix(".vdf.gfm-bak"))
-        cfg.write_text(vdf_dumps(tree) + "\n", encoding="utf-8")
+        cfg.write_text(vdf_dumps(tree) + "\n", encoding="utf-8",
+                       errors="surrogateescape")
         updated += 1
     return updated
 
