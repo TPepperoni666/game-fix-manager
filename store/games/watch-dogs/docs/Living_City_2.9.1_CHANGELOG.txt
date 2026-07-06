@@ -1,0 +1,374 @@
+Living_City MOD Update 2.9.1 Changelog:
+
+- Added _Hackingcam toggle to config file for the hacking zoom camera.
+- Fixed FUEL SYSTEM script not properly disabled in some conditions.
+
+
+Living_City MOD Update 2.9 Changelog:
+
+- Added configurable FUEL SYSTEM script with indicator and refueling feature.
+- Moved lib_icons_color.xbt from optional to required for FUEL SYSTEM.
+- Added optional AUTOHIDE HUD script to enable hud autohiding when not needed.
+- Added optional TWOHANDED DRIVING script to switch to two-handed driving anims.
+- Added water bullethit fix script to restore the effects when bullets hits water.
+- Added hands-in-pockets disabler by setting _Pockets_Toggle = 2 in the mod config file.
+- Added Aim script ZOOM IN toggle option by setting _Aim = 2 in the mod config file.
+- Added Aim script HIPFIRE feature to skip aiming camera when shooting without aiming.
+- Improved Aim script ZOOM IN feature to work even from behind cover.
+- Improved Aim script ZOOM IN cameras with better Depth Of Field.
+- Improved Aim script to increase responsiveness and prevent rare bugs.
+- Improved Speedometer to display knots as speed unit when appropriate.
+- Merged optional BODYCAM script and added _Bodycam = 0 setting to the mod config file.
+- Changed Limited_Inventory DROP WEAPON feature to hold Craft instead of press.
+- Prevented Offline_Invasions until original invasion tutorial mission has been played.
+- Increased climbing out of water max height to get out of water more easily.
+- Fixed Bodyguard not being able to engage specific targets.
+- Fixed vanilla breakableentitymonitor_v2 system function by Ubisoft.
+- Fixed duplicated entity id in WLU file a02_f02_activation.
+- Remade char36_endingavatar.xbg fix for Ubisoft LOD bug at low settings.
+- Rewritten redzones scripts to prevent occasional bugs with other concurring dialogs.
+- Reduced cars headlights shadows distance for performance in OPTIONAL_GRAPHIC_TWEAKS.
+- Added higher quality gfx_bloodscreen_hit_d_high.xbt to OPTIONAL_GRAPHIC_TWEAKS.
+- Added pc.xbt with fixed swapped mouse side buttons to OPTIONAL_GRAPHIC_TWEAKS.
+- Included inventory wheel icon for sighted 417 by Epox in OPTIONAL_GRAPHIC_TWEAKS.
+- Included Watermod Revisited by Soaring in OPTIONAL_GRAPHIC_TWEAKS.
+- Updated Native Anisotropic Filtering by Parallellines in OPTIONAL_GRAPHIC_TWEAKS.
+
+
+Living_City MOD Update 2.8 Changelog:
+
+- Added Aim script SWITCH SHOULDER feature by tapping Interact while aiming.
+- Added Aim script ZOOM IN feature by holding Interact while aiming.
+- Added edited Press Any Key video background with Living_City logo by Mr. Bubsy J. Wubbus.
+- Rewritten Talk script to prevent occasional bugs with other concurring dialogs.
+- Rewritten Air_Traffic script to prevent occasional bugs with other concurring dialogs.
+- Rewritten Black_Market script to prevent occasional bugs with other concurring dialogs.
+- Rewritten Bodyguard script to prevent occasional bugs with other concurring dialogs.
+- Rewritten Call_911 script to prevent occasional bugs with other concurring dialogs.
+- Rewritten ctOS_Chaos script to prevent occasional bugs with other concurring dialogs.
+- Rewritten Reinforcements script to prevent occasional bugs with other concurring dialogs.
+- Rewritten Taxi script to prevent occasional bugs with other concurring dialogs.
+- Fixed broken materials of ultra quality version of dirtleaves_02 decals.
+- Fixed missing Madness car preview in Car On Demand on partial merges.
+- Included Disable Aim Assist mod by DotspaceDotNexus to properly remove aim assist.
+- Included in full version of Living_City edits for separate SlideFix mod by Sad_Gamers.
+
+
+Living_City MOD Update 2.7 Changelog:
+
+- Added Talk script by me and hardVatsuki that makes Aiden say lines in certain cases.
+- Added more dialog lines in Fixer_Tailing, Bodyguard, Restricted_Areas etc.
+- Added MPH mode to Speedometer by setting _Speedometer = 2 in the mod config file.
+- Added auto-masking disabler by setting _Mask_Toggle = 2 in the mod config file.
+- Improved Civilian_Hacks to show only while profiling like vanilla civilian hacks.
+- Fixed visual bug of Hacking Camera not blending well with civilian camera hack.
+- Fixed rare bug of Offline_Invader spawning in wrong position.
+- Added FSM shadows LOD tweaks by Parallellines.
+- Included Native Anisotropic Filtering tweak by Parallellines.
+- Included Road_1_RestoBoat material wetness fix by miru.
+- Included In Vehicle Rain SFX Fix by miru.
+- Included Aiden Neutral Facial Animation Fix by miru.
+- Included 417 with Holographic sight model by Vector4782.
+- Included Aiden beard blurriness removal by miru.
+- Removed improper char36_endingavatar.xbg added in 2.0 to fix vanilla LOD bug.
+
+
+Living_City MOD Update 2.6 Changelog:
+
+- Added Madness car now available for free through Car On Demand app.
+- Included my Madness car reskin mod inspired by the Death Race 2008 movie.
+- Added machineguns to Madness car from Car On Demand usable with LMB or Look Back.
+- Improved the Darkened Sky Cubemaps removing black outline of previous version.
+- Fixed SPEEDOMETER occasionally stopping to work after some events.
+- Fixed M1014 shotgun texture displaying shadows of non-existing rails on handguard.
+- Fixed Bunker Unlocked_Interior script breaking intro of "SOMEONE'S KNOCKING".
+- Fixed Replace_Scan interfering with "SOMETIMES YOU STILL LOSE" scripted scans.
+
+
+Living_City MOD Update 2.5 Changelog:
+
+- Added setting in config file to force-enable Companion_Scripts in missions.
+- Added POCKETS TOGGLE feature to allow/prevent hands-in-pockets by tapping Sprint.
+- Added MASK TOGGLE feature to manually wear/unwear the mask by holding Reload.
+- Added CLOCK feature to display the current time by holding the Smartphone button.
+- Added SPEEDOMETER feature that displays the speed when driving vehicles.
+- Improved First_Load execution for better compatibility with custom missions.
+- Improved outfits thanks to new fitting Aiden head part by Mr. Bubsy J. Wubbus.
+- Included lighting Auto Exposure speed fix by Parallelines.
+- Restored reputation effect for killing mission NPC to -15 like in vanilla game.
+
+
+Living_City MOD Update 2.4 Changelog:
+
+- Added DROP WEAPON feature by pressing Craft with weapon highlighted in the wheel.
+- Added visible laser to HUNTER remote sniper turret Companion_Script.
+- Fixed missing pickup sound of HUNTER remote sniper turret Companion_Script.
+- Sped up Blackout recovery time to compensate for increased blackout radius.
+- Disabled tagging of Clara and T-Bone in Bunker Unlocked_Interior script.
+- Disabled interaction with Owl Motel restoration mission while chased.
+- Added police radio dialogue for when ctOS Chaos triggers as suggested by Slick.
+- Restored prison ledger check animation in "DRESSED IN PEELS" mission.
+- Fixed vanilla bug of wrong Helena Tucci phonecall profile picture.
+- Included Darkened Sky Cubemaps to reduce broken sky intensity and reflections.
+- Included tweak of restored radio chatter for patrolling cops thanks to Olanov.
+- Included fix for Bedbug death and gameover in "NOT A JOB FOR TYRONE" by Shev.
+- Included fix for broken dead tree material with white leaves by Parallelines.
+- Included fix for invisible vehicle lights glass material by miru.
+- Included fix for excessive fake traffic density in LC made by Parallelines.
+- Included fix for reward and loc of "CHASING SHADOWS" custom convoy thanks to Slick.
+- Removed aim assist tweak by Slick because it caused a bug with vanilla crimes.
+
+
+Living_City MOD Update 2.3 Changelog:
+
+- Added new OFFLINE_INVASION random event that allows to be invaded by 2XTheTap anytime.
+- Reduced fastest-travel price for DRIVER Companion_Script for accessibility purposes.
+- Tobias shop offers discounts inversely proportional to your rep like Black Market Dealer.
+- Removed arrow for off-screen Random_Events initiation markers to reduce HUD clutter.
+- Changed offline racers keyintel color to purple to match the races color preset.
+- Added missing _high version of ultra quality dirtleaves_02 texture from Watch Dogs 2.
+- Fixed occasional unresponsiveness of ESCAPE_ARTIST event prisoner in certain situations.
+- Fixed rare chance of a specific bug occurring in Random_Events and Custom_Missions.
+- Fixed obtaining all weapons after initial mission in some specific cases with LI disabled.
+- Fixed rare bug of infinite enemy spawning in Shoreside Club Restaurant restricted area.
+- Included Stealth Walk Movement Fix by miru that fixes rigid turning in stealth with weapons.
+- Included water puddles fix by miru that adds back ripples to puddles during rain.
+- Included "NOT THE PIZZA GUY" cutscene Depth of Field fix by miru.
+- Included G106 sight fix by Mr. Bubsy J. Wubbus that adds proper seethrough glass.
+
+
+Living_City MOD Update 2.2 Changelog:
+
+- Removed unnecessary tagging of Race_Chase random event vehicles to avoid confusion.
+- Fixed door becoming unopenable after reloading STREET CLEANING in specific location.
+- Fixed crash in STREET CLEANING if character switches while you're intruded in a camera.
+- Fixed typo in HUNTER script message appearing in case of hunter destroyed.
+- Added tweak by Slick to remove aim assist in effect after you started aiming at an enemy.
+
+
+Living_City MOD Update 2.1 Changelog:
+
+- Re-added buyable System Keys to every Pawn Shop (it accidentally reverted somehow).
+- Fixed bug with Limited_Inventory not properly disabling in specific situations.
+- Fixed being able to use some Companion_Scripts in unhandled situations.
+
+
+Living_City MOD Update 2.0 Changelog:
+
+- Added STICKY CAMERA craftable gadget that you can throw to add your own cameras.
+- Added REST craftable item that you can use anywhere to move time forward and reset heat.
+- Added HUNTER Companion_Script that acts as upgradeable remote sniper turret.
+- Added DRIVER Companion_Script that drives you to any point of interest you choose.
+- Slightly edited Bodyguard script for better interaction with DRIVER script.
+- Implemented HACKING FOCUS CAMERA to focus on hacked civilians by holding the hack button.
+- Added new STREET CLEANING exclusive contract as highly repeatable randomized challenge.
+- Implemented 18 OFFLINE RACES similar to Online Races but with cpu opponents.
+- Restored some cut street races and even the BOAT RACES which are all playable offline.
+- Added underground racers to Civilian_Hacks to intrude in races without paying their fee.
+- Added new RACE random_event that lets you challenge a random driver for an impromptu race.
+- Added new Race_Chase random event that simulates an ongoing underground race.
+- Reworked LIMITED_INVENTORY so now you have to buy weapons only once at gunshops.
+- Reworked ARMORY so now it's used to freely equip/unequip your owned weapons.
+- Added ARMORY to Black Market Dealer to still allow to both buy weapons and change loadout.
+- Expanded Ambush to work along the Fisrt_Load script in form of a car bomb.
+- Edited gang patrol Random_Event to be neutral until specific campaign missions.
+- Added hackable keypad to unlock ctOS Plaza garage door also from inside.
+- Improved ctOS Chaos script by adding also Road Spikes hack thanks to Deebz__.
+- Improved Owl Motel Restoration to more reliably remove boards blocking the door.
+- Made all Companion_Items refund appropriate crafting components if item already full.
+- Increased L-Train headlight shadows distance from 45 to 75 units for better visibility.
+- Fixed some Unlocked_Interiors sometimes loading without solid floor on low-end computers.
+- Fixed some vanilla game icons erroneously appearing also in Bad Blood map.
+- Fixed some Custom_Missions becoming available earlier than appropriate.
+- Fixed potential minor bug if damaging Air_Traffic helicopter while already chased.
+- Fixed battery Civilian_Hack not really refilling your battery completely.
+- Fixed chance of Police_Chase event vehicles despawning even if player stole them.
+- Fixed VINCENT outfit torso invisible at low graphics settings thanks to Dennis and ShevNR.
+- Fixed custom SMG ammo regeneration being unfairly slow in multiplayer thanks to Deebz__.
+- Fixed duplicated door inside Defalt's apartment in "THE RAT'S LAIR" mission cutscene.
+- Included fix by ShevNR for swapped phonecall title and name in "BY ANY MEANS NECESSARY".
+- Removed mipmaps from Beretta icons so they doesn't look blurry at lowest settings.
+- Renamed satellite re-hack mapicon from "SOMETIMES YOU STILL LOSE" to "ctOS Satellite Uplink".
+- Restored "Online Contracts App" tile name instead of modded name "Monitoring Network".
+- Restored police emergency lights to be all blue instead of custom red & blue.
+- Removed custom ctOS Control Center white icons so now no icon will show once unlocked.
+- Slightly improved some Restricted_Areas scripts and fixed a few minor bugs.
+- Added _Ambush_Anytime setting in config file to force random ambushes anywhere anytime.
+- Included Consistent Weapon Skins minimod that aims to make weapons look more consistent.
+
+
+Living_City MOD Update 1.9.4 Changelog:
+
+- Improved and expanded Aiden dialogues for Bodyguard commands.
+- Fixed Bodyguard teleporting each time the stop command is issued after exiting boats.
+- Improved Bodyguard teleporting behaviour when player exits boats or commands him to exit.
+- Improved ESCAPE_ARTIST prisoner teleporting behaviour when exiting boats.
+- Expanded reputation-dependent price discounts/increases to PawnShops too, besides Gunshops.
+- Changed Bodyguard combat personality from Enemy to more appropriate Ally combat personality.
+- Improved Infinite92 unlocked interior by opening also the room where Poppy was.
+- Fixed erroneous weapon dropping when a Random_Event temporarily changes player inventory.
+- Fixed civilians wrongly complaining if you walk on hackables supposed to be walked on.
+- Fixed rare crash on specific configurations upon starting BREAKTHROUGH armored truck event.
+
+
+Living_City MOD Update 1.9.3 Changelog:
+
+- Allowed re-hack of satellite from SOMETIMES YOU STILL LOSE final mission.
+- Added map icons to G1gg1L3s intrusion and satellite breach point for easier location.
+- Made Bodyguard reappear with different car if you left him behind by driving his car.
+- Added chance of police helicopter supporting the cops in the Police_Chase random event.
+- Added various Aiden dialogues for every Bodyguard command and in case of death.
+- Added setting in config file that allows you to replay Custom_Missions any time you want.
+- Fixed possible duplicated Clara/T-Bone bug inside bunker due to unlocked interior script.
+- Fixed bug with Bodyguards sometimes not entering your vehicle in specific situations.
+- Implemented Air_Traffic script created by Cobra that adds civilian helicopters flying around.
+
+
+Living_City MOD Update 1.9.2 Changelog:
+
+- Improved Civilian_Hacks to prioritize the BATTERY recharge hack when player is chased.
+- Improved reliability of BODYGUARD hackables visibility in specific situations.
+- Improved reliability of Armor Plated script to prevent mission-breaking bugs.
+- Fixed some remaining specific fixer contracts not fully completing sometimes.
+
+
+Living_City MOD Update 1.9.1 Changelog:
+
+- Made AMBUSH not count as a mission for what concerns the 3 companion scripts.
+- Improved responsiveness of BODYGUARD in specific combat situations.
+- Made BODYGUARD sprint away instead of walk away if dismissed in combat situations.
+- Fixed chance of BODYGUARD stuck in combat mode attacking enemies even after dismissed.
+- Fixed fixer contracts sometimes not properly completing if a chase was involved.
+
+
+Living_City MOD Update 1.9 Changelog:
+
+- Implemented BLACK MARKET DEALER that spawns in a nearby alley and sells any weapon.
+- Implemented BODYGUARD ally that follows you around defending you and fighting for you.
+- Implemented CALL POLICE that allows you to call for a patrol cop in your position.
+- Added "OPEN YOUR WORLD" Blume Security Director office as new hideout inside ctOS Plaza.
+- Added "BIG BROTHER" new hideout in Nicky's house after you drive her and Jacks out of town.
+- Added "NOT A JOB FOR TYRONE" Bedbug's house unlocked interior and made it a new hideout.
+- Added "A Necessary Evil" new hideout in MadMile created from a Privacy Invasion interior.
+- Added "Dirty Secrets" new hideout in Brandon Docks created from a Privacy Invasion interior.
+- Added "River Side" new hideout in the Loop created from a Privacy Invasion interior.
+- Added custom outfit VINCENT from the name of the Collateral movie protagonist.
+- Added custom outfit ARMORED with full bodyarmor painted like Punisher War Zone.
+- Added custom outfit HITMAN with black suit white shirt and red tie like Hitman games.
+- Added custom outfit GUNMAN consisting in black leather biker clothing without helmet.
+- Added custom outfit INMATE with Aiden's prisoner clothing from Dressed In Peels mission.
+- Added custom outfit MEMORIES with Aiden's casual clothing from flashback cutscene.
+- Added custom outfit DISASTER SURVIVOR inspired to the protagonist of The Division.
+- Added custom outfit POLICE OFFICER which lets you dress like a CPD officer.
+- Added new "Custom" category inside Wardrobe that lists only the new custom outfits.
+- Improved Limited_Inventory reliability and made it execute even if loading mid mission.
+- Implemented previous-weapon dropping when replacing weapons with Limited_Inventory enabled.
+- Included tweak that preserves saved ammo amount on game load instead of vanilla free-refill.
+- Added "Armory" in every hideout which allows to buy weapons and ammo like in gunshops.
+- Added "Workbench" in every hideout which allows to buy craftables like Tobias shop.
+- Reduced to believable amounts the ammo you get from weapons dropped by killed enemies.
+- Assigned unused SMG ammo type to all submachineguns instead of using pistol ammo.
+- New SMGs max ammo 360 so new max ammo values are 120 pistol, 360 smg, 240 rifle, 80 shotgun.
+- Moved all ammo gunshop-items to new shop category simply called "Ammo" to reduce clutter.
+- Added chance of finding random ammunitions when looting a vehicle's glovebox and found bags.
+- Reduced to 4 the items to empty a weapon slot and moved to new "Inventory Empty" cateogry.
+- Made special weapons like Destroyer exclusive for gunshops and not in hideouts Armory.
+- Brought back SALE feature for gunshops and marked every gunshop-exclusive weapon as on sale.
+- Now gunshops can offer price discounts or increases depending on your reputation.
+- Added Clara and T-Bone npcs inside the Bunker hideout when appropriate during the story.
+- Restored AMBUSH warning call from Clara that plays when appropriate during the story.
+- Tweaked AMBUSH so if you die the mission simply ends instead of restarting until you win it.
+- Restored several AMBUSH survived phonecalls of contract manager apologizing for the ambush.
+- Restored "sprinklers" hack inside Prison laundry room with profile and effects.
+- Replaced red Zusume-R escape vehicle of "BOTTOM OF THE EIGHT" mission with black Vespid 5.2
+- Rebalanced rewards of new Human Traffic investigations with increased reputation and xp.
+- Added barman and bar-shop feature to high-stakes Poker underground bar north of the Loop.
+- Added barman and bar-shop feature to Dot-Connexion Infinite92 MayStadium unlocked interiors.
+- Improved chopper's headlight position so front fender shadow doesn't obstruct headlight.
+- Restored penalties for "Victim deceased" and "Criminal escaped" during vanilla crimes.
+- Added new custom FastTravel points at every ctOS Tower available after unlocking it.
+- Added missing Rossi-Fremont ctOS Tower icon and FastTravel point after unlocking it.
+- Added white CTOS CONTROL CENTER icons to unlocked ctOS control centers like in 14 min demo.
+- Fixed matte-black paint of personal Vespid 5.2 and assigned it EOK2D0 plate like in E3 2013.
+- Added proper climbing and cover actions to Aiden's silver N3XU5 Sonarus from Car On Demand.
+- Enabled button to call elevator from outside it in Rossi-Fremont unlocked interior.
+- Enabled Iraq's mainframe server hack to play Rose video in Rossi-Fremont unlocked interior.
+- Implemented Rossi-Fremont RAID with special rewards for killing all enemies in the building.
+- Swapped all Fixers defending Quinn in "NO TURNING BACK" with Chicago South Club counterparts.
+- Implemented additional check to ensure Unlocked_Interiors aren't loaded in Digital Trips.
+- Added toggle to enable/disable the OwlMotel restoration mission and the restored room hideout.
+- Added buyable System Keys to every Pawn Shop just like the Bad Blood skill does.
+- Improved FIXER TAILING random event with warning sound and additional voiceovers from Aiden.
+- Improved FIXER TAILING random event adding chance of Call Reinforcements to tailing fixer.
+- Improved MOST WANTED random event so only enemy dots are hidden instead of entire minimap.
+- Improved POLICE CHASE random event so cops and criminals might dismount to fight each other.
+- Added rare LOTTERY WINNER civilian hack that allows to detect and steal a huge cash prize.
+- Fixed rare chance of event marker misplaced underground if story still incomplete.
+- Made crosshair disappear while ducking behind cover and appear only when peeking and aiming.
+- Added NITRO craftable consumable that can be used while driving to boost vehicle speed.
+- Buffed BATTERY civilian hack to fully recharge all battery instead of only 1 battery slot.
+- Added explanatory message if player fails to sneak inside Dot-Connexion unlocked interior.
+- Assigned vanilla profiles and disabled dummy hacks on DedSec members inside Dot Connexion.
+- Allowed Random_Events and Civilian_Hacks only in unlocked in districts to prevent bugs.
+- Fixed "Restart Mission" button for all Custom_Missions where it was bugged including AMBUSH.
+- Fixed rare crash on some configurations in specific stage of ESCAPE ARTIST random event.
+- Improved ESCAPE ARTIST so it should be easier to profile the prisoner in the back seat.
+- Fixed chance of scripts erroneously autorelaunching when using "Reload from last autosave".
+- Implemented failsafe script to teleport player to safety if fallen through the game world.
+- Allowed starting Digital Trips from Restricted_Areas so no more "narrative event" block.
+- Scripted functional sliding door to make accessible "NOT THE PIZZA GUY" apartment interior.
+- Restored "Pearce Passes Bedbug" cutscene at the end of "BY ANY MEANS NECESSARY" mission.
+- Included Water Color Mod created by mlleemiles that gives more blueish color to water.
+- Included takedowns DoF mod by Slick that enables the Depth of Field during takedowns.
+
+
+Living_City MOD Update 1.8 Changelog:
+
+- Released LOOSE FILES version specifically made for easier merging with other graphic mods.
+- Enabled access to inmates rooftop yard of Palin Correctional Center unlocked interior.
+- Additional voicelines for blowing up target truck and evading in ARMOR PLATED random event.
+- Applied proper video displayed on Blume Information Kiosk screen inside Pawnee Blume HQ.
+- Added specific profiler informations to Blume Information Kiosk inside Pawnee Blume HQ.
+- Fixed chance of unescapable Ambush chase if triggered when starting specific random events.
+- Disabled useless re-hack of Iraq's mainframe server inside Rossi-Fremont unlocked interior.
+- Prevented G1gg1L3s videos from playing on city screens if exiting his camera by FastTravel.
+
+
+Living_City MOD Update 1.7 Changelog:
+
+- Replaced personal vehicle Sonarus LX of First_Load script with a black Vespid 5.2
+- Improved spawn of personal vehicle feature of First_Load script to prevent bugs.
+- Fixed VIP limo of BREAKTHROUGH random event not appropriately fleeing after VIP hacked.
+- Improved Prison interior script to ensure player can't trap himself inside it.
+- Included a fix for a rare bug where First_Load camera could start in a wrong position.
+- Implemented additional checks to safely disable the mod while playing Bad Blood.
+
+
+Living_City MOD Update 1.6.1 Changelog:
+
+- Removed leftover debug script that might have displayed debug messages in custom missions.
+
+
+Living_City MOD Update 1.6 Changelog:
+
+- Made G1gg1L3s apartment camera intrudeable again at any time after completing his mission.
+- Completely fixed Human Traffic custom mission of Loop district (including unhackable laptop).
+- Completely fixed both new Gang Hideouts contracts (now completable also by killing all enemies).
+- Improved Replace_Scan feature and prevented conflicts with any vanilla mission.
+- Slightly lowered RoF of enemy pistols so they shoot believably instead of like full-auto madmen.
+- Enabled collision with civilians for NPC bullets (in vanilla they just hit you through them).
+- Fixed rare chance of final campaign mission breaking due to Merlaut unlocked interior.
+
+
+Living_City MOD Update 1.5 Changelog:
+
+- Added "THE FUTURE IS IN BLUME" unlocked interior inside pawnee Blume HQ restricted area.
+- Added "THE PALACE" unlocked interior from The Palace Pack and made it a new hideout.
+- Added "HOPE IS A SAD THING" T-Bone workplace unlocked interior and made it a new hideout.
+- Reworked existing "THE RAT'S LAIR" unlocked interior and made it a new hideout.
+- Initial fix for Human Traffic custom mission of Loop district (proper destination arrival).
+- Initial fix for both new Gang Hideouts contracts (now completable by leaving their area).
+- Added 6 new "Empty" items in gunshops which allows to empty any weapon slot you want.
+- Ensured main gates ctOS box of Pawnee Blume HQ is always hackable when appropriate.
+- Fixed chance of Rossi-Fremont restricted area re-enabling too early after killing Iraq.
+- Fixed chance of inventory being improperly restored after EXCLUSIVE CONTRACT random event.

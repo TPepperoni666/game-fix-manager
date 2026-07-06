@@ -1,0 +1,18 @@
+Watch_Dogs Living_City Mod by The Silver
+
+
+
+UNINSTALLATION GUIDE
+
+
+FIRST DELETE THE "Living_City_MOD_CONFIG.txt" FILE AND THEN LOAD THE GAME ONCE BEFORE CONTINUING.
+
+This ensures the Limited_Inventory is disabled and all your weapons are given back, without this step you 
+would be left with only the 4 weapons you had when you were using this mod with Limited_Inventory enabled.
+
+
+To remove the mod you just need to restore the original "patch.dat" and "patch.fat" files, either by using a backup that 
+you made during the mod installation or by verifying the game files through your game client (Steam or Uplay for example).
+
+
+NB: Any "patch1" files that you might see is NOT related to this mod, so you are supposed to keep those untouched.

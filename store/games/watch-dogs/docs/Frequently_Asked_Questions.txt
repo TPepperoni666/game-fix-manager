@@ -1,0 +1,103 @@
+Watch_Dogs Living_City Mod by The Silver
+
+
+Official Discord server with comprehensive Mod Wiki and community help: https://discord.gg/uCpz54B
+
+
+FREQUENTLY ASKED QUESTIONS
+
+Q: I have a bug with X or a crash when doing Y how can I solve it?
+A: First of all try reinstalling my mod "as is" removing any merge or other mod or injectors or trainers, then try running the game as administrator, also try lowering your graphic settings.
+
+Q: I've already tried all things mentioned above but the problem is still here, any other suggestion?
+A: Try disabling features one by one through the config file, maybe your pc dislikes one of them, and if nothing works backup your current save and try starting a new game.
+
+Q: I wanted uninstall the mod but then I can't re-buy the weapons and I'm stuck with the ones I already have, how can I solve that?
+A: Follow the UNINSTALLATION GUDE carefully ensuring the Limited_Inventory is disabled before removing the "patch" files of the mod.
+
+Q: I have the Bad Blood DLC, can I install this mod anyway?
+A: Yes, but it works only when you play the original game, the features of this mod are disabled when you play the Bad Blood DLC to prevent bugs.
+
+Q: I don't like the feature [INSERT FEATURE NAME HERE] can I do something about it?
+A: Yes, by editing the configuration file "Living_City_MOD_CONFIG.txt" you can finetune red zones, bonus scripts, Ambush probability and much more.
+
+Q: Why the changes that I've done to the configuration file "Living_City_MOD_CONFIG.txt" doesn't apply ingame?
+A: Check that it's in the right folder, the values are valid, the file syntax is untouched, also Windows 10 is known to stop the config file from working in rare cases and there's no fix.
+
+Q: I deployed the HUNTER remote sniper turret but I can't see its upgrade prompt, how can I fix it?
+A: This is known to happen in some places, simply walk around a bit or re-deploy it somewhere else and it'll show up.
+
+Q: How can I command the bodyguard to go where I want?
+A: You can issue this command from his personal camera which you can intrude by holding the hack button on him.
+
+Q: The bodyguard doesn't obey my commands how can I fix that?
+A: Sometimes they stop obeying your movement commands but fixes themselves after a while, otherwise simply dismiss and recall him.
+
+Q: My weapon slots defaulted to the Px4, the 416, the SVD and the SG-90 specifically, is this due to the Limited Inventory bonus script?
+A: Yes, it limits your inventory to max 1 weapon per slot, and on first launch it obviously finds more than one per slot so it defaults them to a base weapon.
+
+Q: I'm using the Limited_Inventory but once I buy a new weapon I can't buy the previous one anymore, how can I change weapons then?
+A: You buy weapons only once at gunshops then the Armory in every hideout holds all your owned weapons and allows you to swap them for free.
+
+Q: Why upon disabling the Limited_Inventory all the weapons of the game are returned to me instead of only the ones I had before enabling it?
+A: Because there's no way to know which weapons you already had at the moment you enabled it so the only solution is to give you them all.
+
+Q: Does this mod affect missions?
+A: Partially, to prevent bugs and annoyances the Random_Events, the Civilian_Hacks and the Companion_Scripts are not available while playing missions.
+
+Q: Does this mod affect multiplayer?
+A: No, all the main features of this mod are not available while doing online activities and vice versa (being invaded/tailed is one of them).
+
+Q: Why I can't be invaded by other players while I'm inside the radius of a Restricted Area?
+A: Restricted Areas and multiplayer are incompatible, so invasions are disabled while inside a populated red zone (and red zones are disabled while invaded).
+
+Q: Why I can't find nor access an unlocked interior or custom hideout in my map?
+A: Most of them are available only after you've visited them in the vanilla missions, so just continue the main campaign and the other missions (like The Palace).
+
+Q: I see the unlocked interior marker in the map but when I reach it I cannot enter it, why?
+A: Just like the Restricted Areas even the Unlocked Interiors disables while doing online activities, so maybe you're not alone now...
+
+Q: Why I can't find all the Fast Travel points that I expect from the attached Fast_Travel.jpg map?
+A: The Fast Travel points that you see there unlocks only after you unlock their corresponding ctOS Tower.
+
+Q: How can I identify an event from very far away before starting it?
+A: You can check its map marker, every event has its own specific name.
+
+Q: An available event just disappeared in front of my eyes, what happened?
+A: Restricted Areas, Random Events and Civilian Hacks gets immediately disabled while you're invaded/tailed, so you might have company now...
+
+Q: Why sometimes it takes several minutes for new events to spawn?
+A: Some events doesn't have a map marker, so you might have simply missed some (also the less populated is the area, the less frequent are the events).
+
+Q: It's been really a while and no events are spawning anymore, how can I fix that?
+A: Assuming that you're not invaded you can try moving to a more populated area, and if this doesn't fix it just go back to the main menu and reload the game.
+
+Q: Does failing an event cause any negative consequence?
+A: No, there's no penalty for failing any of the new activities (Ambush included) so don't worry and just have fun.
+
+Q: I've started an event but I don't wanna continue it, how can I quit it?
+A: Press ESC and select "Reload from last autosave" or simply suicide, there's no failure penalty anyway.
+
+Q: Can I select which hack to perform on a civilian?
+A: No, the Profiler already highlights the only available hack for the targeted civilian (just like the vanilla game).
+
+Q: It's been a while and I can't see any civilian hack anymore, what's happening?
+A: Try going back to main menu and reloading (but remember also that Restricted Areas, Random Events and Civilian Hacks are disabled while invaded/tailed).
+
+Q: Does this mod requires to start a new game?
+A: No it doesn't, you can install this mod at any time, it's compatible with both new saves and existing saves.
+
+Q: How can I know if I have installed the mod correctly and it's working?
+A: When booting the game you don't see the Ubisoft logo and see Living_City in the Press Any Key screen, also you're now able to skip the game story intro cutscene.
+
+Q: What are the buttons for the new features of the mod?
+A: The added controls are:
+Tap CRAFT with a weapon highlighted in the wheel to drop it
+Hold RELOAD to manually toggle mask on/off
+Tap SPRINT to manually allow or prevent hands-in-pockets
+Hold SMARTPHONE to display the clock
+Tap INTERACT while aiming not in cover to swap shoulder
+Hold INTERACT while aiming not in cover to zoom in
+
+Q: Is this mod compatible with that other mod?
+A: I don't know, but most likely not, anyway you can follow the Loose_Files quick merge guide and check yourself.

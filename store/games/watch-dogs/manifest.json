@@ -23,5 +23,5 @@
       "size": 273833146
     }
   ],
-  "notes": "Living City mod by The Silver (thesilver.it / ModDB). Captured 2026-07-06 from Tony's working Windows install (mod files dated 2025-04-06). Loads via data_win64/patch.dat + patch.fat; Living_City_MOD_CONFIG.txt is Tony's tuned config. patch.dat (274MB) exceeds GitHub's file limit so it ships as a release asset and downloads on first apply."
+  "notes": "Living City mod v2.9 by The Silver (thesilver.it / Nexus mod 81). Version identified via config options vs the 2.9.1 changelog — the 'v1.9.3 BETA' debug string inside patch.dat is a stale label, ignore it. Captured 2026-07-06 from Tony's working Windows install (mod files dated 2025-04-06). Loads via data_win64/patch.dat + patch.fat; Living_City_MOD_CONFIG.txt is Tony's tuned config. Includes the Black Market gadget = weapon unlocks (Gold D50, Auto-6, Biometric Rifle, Spec Ops variants, etc.). patch.dat (274MB) exceeds GitHub's file limit so it ships as a release asset and downloads on first apply. To upgrade to 2.9.1+ later: download the STANDARD variant (ready-made patch.dat), not LOOSE FILES (that's the Gibbed-tools merge kit, not installable as-is); swap payload + upload new release asset + update sha256/size here. Upstream docs archived in docs/."
 }
