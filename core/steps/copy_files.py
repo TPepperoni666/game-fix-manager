@@ -50,9 +50,11 @@ def revert_one(src: Path, dst: Path, ctx: Ctx) -> None:
 
 
 def iter_pairs(src_root: Path, dst_root: Path):
-    """Yield (payload_file, target_file) pairs for a file or tree."""
+    """Yield (payload_file, target_file) pairs for a file or tree.
+    "to" is always a destination DIRECTORY — a single-file payload lands
+    inside it, whether or not the directory exists yet."""
     if src_root.is_file():
-        yield src_root, dst_root / src_root.name if dst_root.is_dir() else dst_root
+        yield src_root, dst_root / src_root.name
         return
     for src in sorted(src_root.rglob("*")):
         if src.is_file():

@@ -1,0 +1,18 @@
+{
+  "id": "deckops",
+  "name": "DeckOps (Call of Duty setup)",
+  "aliases": ["DeckOps", "COD Setup", "Call of Duty"],
+  "requires_game": false,
+  "detect": {},
+  "steps": [
+    {
+      "type": "copy_files",
+      "from": "payload/DeckOps.desktop",
+      "to": "{game_dir}/Desktop",
+      "backup_originals": false,
+      "executable": true
+    }
+  ],
+  "post_apply_message": "DeckOps installer is on your desktop. Run it from Desktop Mode (double-click; KDE may ask to trust it once) — it opens a terminal, always fetches its own latest version, and walks you through installing the COD clients (CoD4x, IW4x, Plutonium, T7X, AlterWare...). Your Steam games are not touched by it. You still need the game files themselves — DeckOps handles clients/patching, not game content.",
+  "notes": "Tool recipe (requires_game: false — {game_dir} resolves to the home dir, so the target is ~/Desktop). DeckOps by GalvarinoDev (github.com/GalvarinoDev/DeckOps): community installer that sets up Call of Duty clients on SteamOS. The payload is their 484-byte release .desktop (sha256 2c2ee4f7… matches their v1 release digest) — it just curls launcher.sh from their main branch and runs it, so DeckOps itself is always current; nothing of theirs is meaningfully rehosted. GFM's job here is only: put the installer on the desktop after a reimage."
+}

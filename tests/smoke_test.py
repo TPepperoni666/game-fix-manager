@@ -342,6 +342,27 @@ def main():
               and entry["appid"][1] == 0xDEADBEEF
               and (scdir / "shortcuts.vdf.gfm-bak").is_file())
 
+        print("== tool recipe (requires_game: false) ==")
+        tool_dir = tmp / "store" / "games" / "a-tool"
+        (tool_dir / "payload").mkdir(parents=True)
+        (tool_dir / "payload" / "Tool.desktop").write_text("[Desktop Entry]\n")
+        (tool_dir / "manifest.json").write_text(_json.dumps({
+            "id": "a-tool", "name": "A Tool", "requires_game": False,
+            "steps": [{"type": "copy_files", "from": "payload/Tool.desktop",
+                       "to": "{game_dir}/Desktop", "backup_originals": False,
+                       "executable": True}],
+        }), encoding="utf-8")
+        tool = [r for r in manifest.load_all(tmp / "store") if r.id == "a-tool"][0]
+        check("requires_game flag loads", tool.requires_game is False)
+        check("game recipes default to requires_game", recipe.requires_game is True)
+        fake_home = tmp / "fakehome"
+        tool_ctx = engine.Ctx(tool, fake_home, dry_run=False, log=quiet)
+        engine.apply_recipe(tool, tool_ctx)
+        check("tool staged to desktop",
+              (fake_home / "Desktop" / "Tool.desktop").is_file())
+        check("tool verify applied",
+              engine.verify_recipe(tool, tool_ctx) == engine.APPLIED)
+
         print("== store mirror (incremental offline copy) ==")
         from core import store as store_mod
         mirror_dest = tmp / "sdcard" / "steamos_restore" / "game_fixes"

@@ -40,6 +40,8 @@ class App:
     # --- shared helpers ---
 
     def game_dir_for(self, recipe, interactive: bool) -> Path | None:
+        if not recipe.requires_game:
+            return Path.home()  # tool recipe: {game_dir} means the home dir
         remembered = self.cfg.get("game_paths", {})
         found = detect.find_game_dir(recipe, self.steam_root, remembered)
         if found or not interactive:

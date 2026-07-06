@@ -25,6 +25,7 @@ class Recipe:
     notes: str
     post_apply_message: str
     remote_payloads: list[dict]
+    requires_game: bool  # False for tool recipes (no install dir; {game_dir} = home)
     dir: Path  # recipe folder (contains manifest.json and payload/)
 
     @property
@@ -67,6 +68,7 @@ def load_recipe(recipe_dir: Path) -> Recipe:
         notes=data.get("notes", ""),
         post_apply_message=data.get("post_apply_message", ""),
         remote_payloads=data.get("remote_payloads", []),
+        requires_game=data.get("requires_game", True),
         dir=recipe_dir,
     )
 
