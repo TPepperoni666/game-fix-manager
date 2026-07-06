@@ -1,0 +1,18 @@
+{
+  "id": "shift2-unleashed",
+  "name": "Shift 2 Unleashed",
+  "aliases": ["SHIFT 2 UNLEASHED", "NFS Shift 2", "Need for Speed Shift 2 Unleashed", "Need for Speed: Shift 2"],
+  "steam_appid": 47920,
+  "detect": {
+    "install_dir_names": ["Shift 2 Unleashed", "SHIFT 2 UNLEASHED", "need for speed shift 2"],
+    "marker_files": ["PakFiles/BOOTFLOW.bff"]
+  },
+  "steps": [
+    {
+      "type": "swap_exe",
+      "payload": "payload/BOOTFLOW.bff",
+      "target": "PakFiles/BOOTFLOW.bff"
+    }
+  ],
+  "notes": "Xbox 360 controller button prompts by Garcias-Garage.de — single pak swap, 'Updated Version for Patch 01'. Original kept as BOOTFLOW.bff.gfm-orig. Game is delisted from Steam; appid 47920 is best-effort — if detection misses on the Deck, the path prompt covers it (and remembers). Not installed on the Windows PC (2026-07-06), so unverified against a real install; sha256 of payload: 3678f1bc9a79124f3d5c0ecd716103e72ab7e545d4fc54293284972fd91989d1."
+}
