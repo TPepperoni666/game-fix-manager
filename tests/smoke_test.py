@@ -342,6 +342,24 @@ def main():
               and entry["appid"][1] == 0xDEADBEEF
               and (scdir / "shortcuts.vdf.gfm-bak").is_file())
 
+        print("== store mirror (incremental offline copy) ==")
+        from core import store as store_mod
+        mirror_dest = tmp / "sdcard" / "steamos_restore" / "game_fixes"
+        c1, f1 = store_mod.mirror_store(tmp / "store", mirror_dest)
+        check("first mirror copies everything", c1 > 0 and f1 == 0)
+        check("payload arrived at mirror",
+              (mirror_dest / "games" / "la-noire" / "payload" / "vpatch"
+               / "dinput8.dll").is_file())
+        c2, f2 = store_mod.mirror_store(tmp / "store", mirror_dest)
+        check("second mirror copies nothing", c2 == 0 and f2 == c1)
+        target = tmp / "store" / "games" / "la-noire" / "manifest.json"
+        future = target.stat().st_mtime + 5  # mtime compare is whole-second
+        _os.utime(target, (future, future))
+        c3, _ = store_mod.mirror_store(tmp / "store", mirror_dest)
+        check("touched file re-copied", c3 == 1)
+        check("mirrored store is loadable",
+              len(manifest.load_all(mirror_dest)) == len(manifest.load_all(tmp / "store")))
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

@@ -187,6 +187,45 @@ class App:
         picked = self.ui.choose(prompt, options, multi=True)
         return [by_label[p] for p in picked]
 
+    def cmd_mirror(self, dest_arg: str | None):
+        """Make the SD card (or any path) a complete offline copy of the
+        store: pre-fetch every remote payload, then incremental copy."""
+        self.ui.header("💾 MIRROR STORE")
+        self.ui.msg("Fetching any missing payloads so the mirror is complete...", "dim")
+        for recipe in self.recipes:
+            if recipe.remote_payloads:
+                try:
+                    fetch.ensure_remote_payloads(
+                        recipe, log=lambda m: self.ui.msg(m, "dim"))
+                except fetch.FetchError as e:
+                    self.ui.msg(f"{recipe.name}: {e} — mirror will lack "
+                                "this payload", "warn")
+
+        dest = Path(dest_arg) if dest_arg else None
+        if dest is None:
+            cards = store.sd_card_roots()
+            if cards:
+                pick = self.ui.choose("Mirror to which card/drive?",
+                                      [str(c) for c in cards])
+                if not pick:
+                    return
+                dest = Path(pick[0]) / "steamos_restore" / "game_fixes"
+            else:
+                raw = self.ui.input("No SD card found — enter a destination path")
+                if not raw:
+                    return
+                dest = Path(raw)
+        if dest.resolve() == Path(self.store_root).resolve():
+            self.ui.msg("The store already lives at that destination.", "warn")
+            return
+        self.ui.msg(f"Mirroring store -> {dest}", "dim")
+        copied, fresh = store.mirror_store(self.store_root, dest,
+                                           log=lambda m: self.ui.msg(m, "dim"))
+        self.ui.msg(f"Mirror complete: {copied} file(s) copied, "
+                    f"{fresh} already up to date.", "success")
+        self.ui.msg("A reimage can now restore every game from this copy — "
+                    "no internet needed.", "dim")
+
     def cmd_install(self):
         """Desktop + Game Mode launcher, GBM-style (controller-navigable)."""
         if os.name == "nt":
@@ -238,6 +277,7 @@ class App:
                 "🔧 Apply Fixes",
                 "📋 Status",
                 "↩️  Revert a Game",
+                "💾 Mirror Store (offline copy on SD/NAS)",
                 "🖥️  Install Shortcut (Desktop + Game Mode)",
                 "❌ Exit"])
             choice = choice[0] if choice else "❌ Exit"
@@ -249,6 +289,9 @@ class App:
                 self.ui.input("Press Enter to continue")
             elif choice.startswith("↩"):
                 self.cmd_revert([])
+            elif choice.startswith("💾"):
+                self.cmd_mirror(None)
+                self.ui.input("Press Enter to continue")
             elif choice.startswith("🖥"):
                 self.cmd_install()
                 self.ui.input("Press Enter to continue")
@@ -259,11 +302,12 @@ class App:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", nargs="?",
-                        choices=["list", "apply", "revert", "install"],
+                        choices=["list", "apply", "revert", "install", "mirror"],
                         help="omit for interactive menu")
     parser.add_argument("ids", nargs="*", help="recipe ids (e.g. la-noire)")
     parser.add_argument("--store", help="path to the fix store")
     parser.add_argument("--steam-root", help="override Steam root detection")
+    parser.add_argument("--dest", help="mirror destination (default: SD card)")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -281,6 +325,8 @@ def main():
         app.cmd_revert(args.ids)
     elif args.command == "install":
         app.cmd_install()
+    elif args.command == "mirror":
+        app.cmd_mirror(args.dest)
     else:
         app.menu()
 
