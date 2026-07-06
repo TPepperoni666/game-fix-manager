@@ -71,13 +71,24 @@ def apply_recipe(recipe: Recipe, ctx: Ctx) -> None:
     for i, step in enumerate(recipe.steps, 1):
         impl = _step_impl(step)
         ctx.log(f"  [{i}/{len(recipe.steps)}] {step['type']}")
-        impl.apply(ctx)
+        try:
+            impl.apply(ctx)
+        except StepError as e:
+            if not step.get("optional"):
+                raise
+            ctx.log(f"      ! optional step skipped: {e}")
 
 
 def verify_recipe(recipe: Recipe, ctx: Ctx) -> str:
-    statuses = [_step_impl(s).verify(ctx) for s in recipe.steps]
-    if all(s == APPLIED for s in statuses):
-        return APPLIED
+    statuses = []
+    for s in recipe.steps:
+        try:
+            statuses.append(_step_impl(s).verify(ctx))
+        except StepError:
+            if not s.get("optional"):
+                raise
+    if not statuses or all(s == APPLIED for s in statuses):
+        return APPLIED if statuses else NOT_APPLIED
     if all(s == NOT_APPLIED for s in statuses):
         return NOT_APPLIED
     return PARTIAL
@@ -91,5 +102,5 @@ def revert_recipe(recipe: Recipe, ctx: Ctx) -> None:
 
 
 # Import step modules for their registration side effects.
-from .steps import (copy_files, launch_options, swap_exe,  # noqa: E402,F401
-                    systemd_unit)
+from .steps import (copy_files, launch_options, pak_edit,  # noqa: E402,F401
+                    remove_files, swap_exe, systemd_unit)

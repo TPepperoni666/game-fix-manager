@@ -23,6 +23,33 @@
       "target": "SWTFU2.exe"
     },
     {
+      "type": "remove_files",
+      "targets": [
+        "Game/Disc/FMV/Win32/LEC",
+        "Game/Disc/FMV/Win32/LEC_DE",
+        "Game/Disc/FMV/Win32/LEC_ES",
+        "Game/Disc/FMV/Win32/LEC_FR",
+        "Game/Disc/FMV/Win32/LEC_IT",
+        "Game/Disc/FMV/Win32/LEC_PL",
+        "Game/Disc/FMV/Win32/LEC_RU"
+      ]
+    },
+    {
+      "type": "pak_edit",
+      "optional": true,
+      "archive": "LevelPacks/pak0.lp",
+      "insert": [
+        {
+          "from": "payload/wet/maleAverage",
+          "into": "Game/Disc/Characters/maleAverage"
+        },
+        {
+          "from": "payload/wet/darthVader",
+          "into": "Game/Disc/Characters/maleBrute/darthVader"
+        }
+      ]
+    },
+    {
       "type": "launch_options",
       "value": "%command% -VariableTimeSteps -vsync"
     }

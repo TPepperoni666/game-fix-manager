@@ -177,6 +177,48 @@ def main():
         check("no re-extract when archive and dir present",
               marker.stat().st_mtime_ns == stamp)
 
+        print("== remove_files + pak_edit (+ optional step handling) ==")
+        import json as _j
+        import zipfile as _zf
+        pk_dir = tmp / "store" / "games" / "pak-game"
+        (pk_dir / "payload" / "wet").mkdir(parents=True)
+        (pk_dir / "payload" / "wet" / "hero.material").write_bytes(b"WET MATERIAL")
+        pak = game_dir / "pak0.lp"
+        with _zf.ZipFile(pak, "w") as z:
+            z.writestr("Chars/hero/hero.material", "DRY MATERIAL")
+            z.writestr("Chars/hero/hero.gto", "MODEL DATA")
+            z.writestr("FMV/LEC", "logo video")
+        (game_dir / "intro.bik").write_bytes(b"INTRO")
+        (pk_dir / "manifest.json").write_text(_j.dumps({
+            "id": "pak-game", "name": "Pak Game",
+            "steps": [
+                {"type": "remove_files", "targets": ["intro.bik"]},
+                {"type": "pak_edit", "archive": "pak0.lp",
+                 "insert": [{"from": "payload/wet", "into": "Chars/hero"}]},
+                {"type": "pak_edit", "optional": True, "archive": "pak0.lp",
+                 "insert": [{"from": "payload/missing", "into": "X"}]},
+            ]}), encoding="utf-8")
+        pk = [r for r in manifest.load_all(tmp / "store") if r.id == "pak-game"][0]
+        pk_ctx = engine.Ctx(pk, game_dir, dry_run=False, log=quiet)
+        check("verify before: not applied",
+              engine.verify_recipe(pk, pk_ctx) == engine.NOT_APPLIED)
+        engine.apply_recipe(pk, pk_ctx)  # optional step must not raise
+        check("intro renamed away", not (game_dir / "intro.bik").exists()
+              and (game_dir / "intro.bik.gfm-orig").read_bytes() == b"INTRO")
+        with _zf.ZipFile(pak) as z:
+            check("pak member replaced", z.read("Chars/hero/hero.material") == b"WET MATERIAL")
+            check("other members untouched", z.read("Chars/hero/hero.gto") == b"MODEL DATA"
+                  and z.read("FMV/LEC") == b"logo video")
+        check("compact pak backup exists",
+              (game_dir / "pak0.lp.gfm-pakbak.zip").stat().st_size < 1000)
+        check("verify after: applied", engine.verify_recipe(pk, pk_ctx) == engine.APPLIED)
+        engine.apply_recipe(pk, pk_ctx)  # idempotent — must skip rewrite
+        engine.revert_recipe(pk, pk_ctx)
+        with _zf.ZipFile(pak) as z:
+            check("pak reverted to stock", z.read("Chars/hero/hero.material") == b"DRY MATERIAL")
+        check("intro restored", (game_dir / "intro.bik").read_bytes() == b"INTRO")
+        check("pak backup consumed", not (game_dir / "pak0.lp.gfm-pakbak.zip").exists())
+
         print("== systemd_unit (redirected unit dir; no-systemctl path on Windows) ==")
         import json as _json
         import os as _os
@@ -191,7 +233,8 @@ def main():
             "steps": [{"type": "systemd_unit", "unit": "payload/test.service",
                        "scope": "user", "enable": True}],
         }), encoding="utf-8")
-        svc_recipe = manifest.load_all(tmp / "store")[1]  # sorted: la-noire, svc-game
+        svc_recipe = [r for r in manifest.load_all(tmp / "store")
+                      if r.id == "svc-game"][0]
         svc_ctx = engine.Ctx(svc_recipe, game_dir, dry_run=False, log=quiet)
         check("verify before: not applied",
               engine.verify_recipe(svc_recipe, svc_ctx) == engine.NOT_APPLIED)
