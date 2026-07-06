@@ -141,6 +141,20 @@ def find_game_dirs(steam_root: Path, names: list[str]) -> list[Path]:
     return found
 
 
+def find_appids(steam_root: Path, names: list[str]) -> list[int]:
+    """Shortcut appids (unsigned, = compatdata prefix dir name) whose
+    AppName matches any of the given names."""
+    names_norm = {_norm(n) for n in names}
+    ids = []
+    for f in _shortcut_files(steam_root):
+        for entry in _entries(loads(f.read_bytes())):
+            if _matches(entry, names_norm):
+                _, t, appid = _get_ci(entry, "appid")
+                if t == TYPE_INT and appid and appid not in ids:
+                    ids.append(appid)
+    return ids
+
+
 def get_launch_options(steam_root: Path, names: list[str]) -> dict[str, str]:
     """Current LaunchOptions per matching shortcut ("file#AppName" -> value)."""
     names_norm = {_norm(n) for n in names}

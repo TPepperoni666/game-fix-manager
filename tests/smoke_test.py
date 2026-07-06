@@ -363,6 +363,42 @@ def main():
         check("tool verify applied",
               engine.verify_recipe(tool, tool_ctx) == engine.APPLIED)
 
+        print("== wine_registry (prefix user.reg, non-Steam appid) ==")
+        # prefix belongs to a non-Steam shortcut: appid 0xDEADBEEF from the
+        # shortcuts.vdf fixture above -> compatdata/3735928559
+        pfx = steam / "steamapps" / "compatdata" / str(0xDEADBEEF) / "pfx"
+        pfx.mkdir(parents=True)
+        (pfx / "user.reg").write_text(
+            "WINE REGISTRY Version 2\n;; All keys relative to \\\\User\\\\S-1-5-21-0-0-0-1000\n\n"
+            "[Software\\\\Existing\\\\Key] 1600000000\n"
+            '"Untouched"="yes"\n', encoding="utf-8")
+        rg_dir = tmp / "store" / "games" / "rg-game"
+        (rg_dir / "payload").mkdir(parents=True)
+        (rg_dir / "manifest.json").write_text(_json.dumps({
+            "id": "rg-game", "name": "RG Game",
+            "aliases": ["The Crew Unlimited"],
+            "steps": [{"type": "wine_registry", "key": "Software\\THQ\\Barnyard",
+                       "values": {"ControllerEnabled": 1, "Player": "Tony"}}],
+        }), encoding="utf-8")
+        rg = [r for r in manifest.load_all(tmp / "store") if r.id == "rg-game"][0]
+        rg_ctx = engine.Ctx(rg, game_dir, dry_run=False, log=quiet, steam_root=steam)
+        check("verify before: not applied",
+              engine.verify_recipe(rg, rg_ctx) == engine.NOT_APPLIED)
+        engine.apply_recipe(rg, rg_ctx)
+        regtext = (pfx / "user.reg").read_text(encoding="utf-8")
+        check("dword + string written",
+              '"ControllerEnabled"=dword:00000001' in regtext
+              and '"Player"="Tony"' in regtext)
+        check("existing keys untouched", '"Untouched"="yes"' in regtext)
+        check("verify after: applied", engine.verify_recipe(rg, rg_ctx) == engine.APPLIED)
+        engine.apply_recipe(rg, rg_ctx)  # idempotent
+        check("no duplicate section",
+              (pfx / "user.reg").read_text(encoding="utf-8").count("THQ") == 1)
+        engine.revert_recipe(rg, rg_ctx)
+        regtext = (pfx / "user.reg").read_text(encoding="utf-8")
+        check("managed values removed on revert",
+              "ControllerEnabled" not in regtext and '"Untouched"="yes"' in regtext)
+
         print("== store mirror (incremental offline copy) ==")
         from core import store as store_mod
         mirror_dest = tmp / "sdcard" / "steamos_restore" / "game_fixes"

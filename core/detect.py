@@ -89,6 +89,26 @@ def find_by_markers(recipe: Recipe, libs: list[Path]) -> Path | None:
     return None
 
 
+def find_prefix(recipe: Recipe, steam_root: Path | None) -> Path | None:
+    """The game's Proton/Wine prefix (compatdata/<id>/pfx). Steam games use
+    the recipe appid; non-Steam games use the matching shortcut's appid."""
+    if steam_root is None:
+        return None
+    ids: list[int] = []
+    if recipe.steam_appid:
+        ids.append(recipe.steam_appid)
+    try:
+        ids += shortcutsvdf.find_appids(steam_root, recipe.all_names)
+    except shortcutsvdf.ShortcutsError:
+        pass
+    for lib in library_folders(steam_root):
+        for appid in ids:
+            pfx = lib / "steamapps" / "compatdata" / str(appid) / "pfx"
+            if pfx.is_dir():
+                return pfx
+    return None
+
+
 def find_game_dir(recipe: Recipe, steam_root: Path | None,
                   remembered: dict[str, str]) -> Path | None:
     saved = remembered.get(recipe.id)
