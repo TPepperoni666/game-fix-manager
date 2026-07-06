@@ -292,6 +292,56 @@ def main():
         n2 = steamvdf.set_launch_options(steam, w["appid"], w["value"])
         check("idempotent second write", n2 == 0)
 
+        print("== non-Steam shortcuts (binary vdf): detect + launch options ==")
+        from core import shortcutsvdf
+        crew_dir = tmp / "games" / "TheCrew"
+        crew_dir.mkdir(parents=True)
+        (crew_dir / "TheCrew.exe").write_bytes(b"EXE")
+        sc_root = {"shortcuts": (0, {
+            "0": (0, {
+                "appid": (2, 0xDEADBEEF),
+                "AppName": (1, "The Crew Unlimited"),
+                "Exe": (1, f'"{crew_dir / "TheCrew.exe"}"'),
+                "StartDir": (1, f'"{crew_dir}"'),
+                "LaunchOptions": (1, ""),
+                "tags": (0, {}),
+            }),
+            "1": (0, {"appname": (1, "Other Game"),
+                      "Exe": (1, '"/somewhere/else.exe"')}),
+        })}
+        scdir = steam / "userdata" / "12345678" / "config"
+        raw = shortcutsvdf.dumps(sc_root)
+        (scdir / "shortcuts.vdf").write_bytes(raw)
+        check("binary vdf roundtrip byte-identical",
+              shortcutsvdf.dumps(shortcutsvdf.loads(raw)) == raw)
+
+        crew_store = tmp / "store" / "games" / "crew-game"
+        (crew_store / "payload").mkdir(parents=True)
+        (crew_store / "manifest.json").write_text(_json.dumps({
+            "id": "crew-game", "name": "The Crew",
+            "aliases": ["The Crew Unlimited", "TCU"], "steam_appid": 241560,
+            "steps": [{"type": "launch_options", "value": opts}],
+        }), encoding="utf-8")
+        crew = [r for r in manifest.load_all(tmp / "store") if r.id == "crew-game"][0]
+        check("game dir found via non-Steam shortcut",
+              detect.find_game_dir(crew, steam, {}) == crew_dir)
+
+        crew_ctx = engine.Ctx(crew, crew_dir, dry_run=False, log=quiet,
+                              steam_root=steam)
+        engine.apply_recipe(crew, crew_ctx)
+        cw = crew_ctx.deferred_vdf_writes[0]
+        check("shortcut targeted over appid", cw["kind"] == "shortcut")
+        n3 = shortcutsvdf.set_launch_options(steam, cw["names"], cw["value"])
+        check("shortcut launch options written", n3 == 1)
+        check("verify after shortcut flush: applied",
+              engine.verify_recipe(crew, crew_ctx) == engine.APPLIED)
+        again = shortcutsvdf.loads((scdir / "shortcuts.vdf").read_bytes())
+        entry = again["shortcuts"][1]["0"][1]
+        check("other shortcut fields intact",
+              entry["AppName"][1] == "The Crew Unlimited"
+              and entry["appid"][1] == 0xDEADBEEF
+              and (scdir / "shortcuts.vdf.gfm-bak").is_file())
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from . import shortcutsvdf
 from .manifest import Recipe
 
 _KV_RE = re.compile(r'"([^"]+)"\s+"([^"]*)"')
@@ -100,4 +101,12 @@ def find_game_dir(recipe: Recipe, steam_root: Path | None,
         found = find_by_appid(recipe.steam_appid, libs)
         if found:
             return found
+    # Non-Steam shortcut the user added themselves — strong evidence.
+    # (The recommended flow for unobtainable games like The Crew: add the
+    # exe to Steam first, and detection reads the location from there.)
+    try:
+        for p in shortcutsvdf.find_game_dirs(steam_root, recipe.all_names):
+            return p
+    except shortcutsvdf.ShortcutsError:
+        pass  # malformed shortcuts.vdf shouldn't kill detection
     return find_by_markers(recipe, libs)

@@ -18,7 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from core import detect, engine, fetch, manifest, steamvdf, store
+from core import detect, engine, fetch, manifest, shortcutsvdf, steamvdf, store
 from ui import get_ui
 
 STATUS_ICON = {engine.APPLIED: "✅", engine.NOT_APPLIED: "☐ ",
@@ -99,7 +99,12 @@ class App:
             steamvdf.close_steam(lambda m: self.ui.msg(m, "warn"))
         total = 0
         for w in writes:
-            n = steamvdf.set_launch_options(self.steam_root, w["appid"], w["value"])
+            if w.get("kind") == "shortcut":
+                n = shortcutsvdf.set_launch_options(self.steam_root,
+                                                    w["names"], w["value"])
+            else:
+                n = steamvdf.set_launch_options(self.steam_root,
+                                                w["appid"], w["value"])
             self.ui.msg(f'  {w["game"]}: LaunchOptions = {w["value"] or "(cleared)"} '
                         f'({n} user file(s))', "dim")
             total += n
