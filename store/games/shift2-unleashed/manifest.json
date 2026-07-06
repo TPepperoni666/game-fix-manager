@@ -5,7 +5,7 @@
   "steam_appid": 47920,
   "detect": {
     "install_dir_names": ["Shift 2 Unleashed", "SHIFT 2 UNLEASHED", "need for speed shift 2"],
-    "marker_files": ["PakFiles/BOOTFLOW.bff"]
+    "marker_files": ["shift2u.exe", "PakFiles/BOOTFLOW.bff"]
   },
   "steps": [
     {

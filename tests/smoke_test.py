@@ -81,6 +81,18 @@ def main():
         found2 = detect.find_game_dir(recipe, steam, remembered={"la-noire": str(game_dir)})
         check("remembered path wins", found2 == game_dir)
 
+        # Engine siblings can share marker files (Shift 2 vs Automobilista 2
+        # both have PakFiles/BOOTFLOW.bff) — a name match must always win.
+        decoy = steam / "steamapps" / "common" / "AAA Decoy Engine Sibling"
+        decoy.mkdir(parents=True)
+        (decoy / "LaNoire.exe").write_bytes(b"NOT THE GAME")  # recipe's marker file
+        (steam / "steamapps" / "appmanifest_110800.acf").unlink()  # force marker path
+        found3 = detect.find_game_dir(recipe, steam, remembered={})
+        check("name match beats decoy with same marker", found3 == game_dir)
+        (steam / "steamapps" / "appmanifest_110800.acf").write_text(
+            '"AppState"\n{\n\t"appid"\t\t"110800"\n\t"name"\t\t"L.A. Noire"\n'
+            '\t"installdir"\t\t"L.A.Noire"\n}\n', encoding="utf-8")
+
         quiet = lambda _m: None  # noqa: E731
         ctx = engine.Ctx(recipe, game_dir, dry_run=False, log=quiet)
 
