@@ -204,6 +204,51 @@ def main():
         check("unit file removed on revert", not installed.exists())
         del _os.environ["GFM_SYSTEMD_USER_DIR"]
 
+        print("== launch_options + VDF roundtrip ==")
+        from core import steamvdf
+        cfgdir = steam / "userdata" / "12345678" / "config"
+        cfgdir.mkdir(parents=True)
+        (cfgdir / "localconfig.vdf").write_text(
+            '"UserLocalConfigStore"\n{\n'
+            '\t"Software"\n\t{\n\t\t"Valve"\n\t\t{\n\t\t\t"Steam"\n\t\t\t{\n'
+            '\t\t\t\t"apps"\n\t\t\t\t{\n'
+            '\t\t\t\t\t"110800"\n\t\t\t\t\t{\n\t\t\t\t\t\t"playtime"\t\t"42"\n\t\t\t\t\t}\n'
+            '\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n'
+            '\t"friends"\n\t{\n\t\t"name"\t\t"Tony \\"Pep\\" P"\n\t}\n}\n',
+            encoding="utf-8")
+        opts = 'WINEDLLOVERRIDES="dinput8=n,b" %command%'
+        lo_dir = tmp / "store" / "games" / "lo-game"
+        (lo_dir / "payload").mkdir(parents=True)
+        (lo_dir / "manifest.json").write_text(_json.dumps({
+            "id": "lo-game", "name": "LO Game", "steam_appid": 110800,
+            "steps": [{"type": "launch_options", "value": opts}],
+        }), encoding="utf-8")
+        lo_recipe = [r for r in manifest.load_all(tmp / "store") if r.id == "lo-game"][0]
+        lo_ctx = engine.Ctx(lo_recipe, game_dir, dry_run=False, log=quiet,
+                            steam_root=steam)
+        check("verify before: not applied",
+              engine.verify_recipe(lo_recipe, lo_ctx) == engine.NOT_APPLIED)
+        engine.apply_recipe(lo_recipe, lo_ctx)
+        check("write queued, not written yet",
+              len(lo_ctx.deferred_vdf_writes) == 1
+              and engine.verify_recipe(lo_recipe, lo_ctx) == engine.NOT_APPLIED)
+        w = lo_ctx.deferred_vdf_writes[0]
+        n = steamvdf.set_launch_options(steam, w["appid"], w["value"])
+        check("one user file updated", n == 1)
+        check("verify after flush: applied",
+              engine.verify_recipe(lo_recipe, lo_ctx) == engine.APPLIED)
+        tree = steamvdf.vdf_loads((cfgdir / "localconfig.vdf").read_text(encoding="utf-8"))
+        apps = tree["UserLocalConfigStore"]["Software"]["Valve"]["Steam"]["apps"]
+        check("launch options exact (quotes survive)",
+              apps["110800"]["LaunchOptions"] == opts)
+        check("existing keys preserved",
+              apps["110800"]["playtime"] == "42"
+              and tree["UserLocalConfigStore"]["friends"]["name"] == 'Tony "Pep" P')
+        check("backup written",
+              (cfgdir / "localconfig.vdf.gfm-bak").is_file())
+        n2 = steamvdf.set_launch_options(steam, w["appid"], w["value"])
+        check("idempotent second write", n2 == 0)
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

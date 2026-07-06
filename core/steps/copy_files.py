@@ -65,13 +65,17 @@ class CopyFiles:
         self.src = step["from"]
         self.dst = step["to"]
         self.backup = step.get("backup_originals", True)
+        self.executable = step.get("executable", False)
 
     def _pairs(self, ctx: Ctx):
         return list(iter_pairs(ctx.payload_path(self.src), ctx.resolve_target(self.dst)))
 
     def apply(self, ctx: Ctx) -> None:
+        import os
         for src, dst in self._pairs(ctx):
             copy_one(src, dst, self.backup, ctx)
+            if self.executable and not ctx.dry_run and os.name != "nt":
+                os.chmod(dst, 0o755)
 
     def verify(self, ctx: Ctx) -> str:
         pairs = self._pairs(ctx)

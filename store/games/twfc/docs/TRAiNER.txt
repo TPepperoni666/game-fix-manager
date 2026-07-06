@@ -1,0 +1,128 @@
+
+  ** IF YOU ARE VIEWING THIS FILE FROM WITHIN THE TRAINER
+     THEN PLEASE CLOSE IT OTHERWISE THE HOTKEYS WILL FAIL **
+
+
+
+  .-------------------------------------------------------.
+  |-------------------------------------------------------|
+  | :::::::::   ::::::::  :::   :::  ::::::::  :::    ::: |
+  | :+:    :+: :+:    :+: :+:   :+: :+:    :+: :+:    :+: |
+  | +:+    +:+ +:+         +:+ +:+  +:+        +:+    +:+ |
+  | +#++:++#+  +#++:++#++   +#++:   +#+        +#++:++#++ |
+  | +#+               +#+    +#+    +#+        +#+    +#+ |
+  | #+#        #+#    #+#    #+#    #+#    #+# #+#    #+# |
+  | ###         ########     ###     ########  ###    ### |
+  |-------------------------------------------------------|
+  '-----------------------------------< Game Reversing >--'
+
+
+
+            Transformers: War for Cybertron
+            (c)Activision  FPS Cap Unlocker
+            *******************************
+
+             (for the initial v1.0 release)
+
+
+
+  NOTE! This release is intended for FREE public distribution. If you
+        have payed anything for this release, you have been scammed.
+        Please report any of this activity to me at my email below.
+        Donations are always quite welcome though, as I do work hard
+        to produce these releases, and it does tend to eat my time!
+
+        Also please know that I do not support cheating in multiplayer,
+        and although an FPS-unlocker shouldn't be considered a cheat
+        and probably won't cause any issues, I cannot be responsible
+        for any use in MP which gets you banned etc. Thanks.
+
+
+  Usage
+  ~~~~~
+
+  1) Start the game and trainer (in any order)
+  2) Refer to the hotkeys below (or on the trainer)
+  3) Enjoy it!
+
+
+  Options
+  ~~~~~~~
+
+  Trainer options are activated using the NUMPAD on the right side of the
+  keyboard. You will need NUMLOCK 'On' for the hotkeys to works properly.
+  Laptop users  may need to  plug in a  USB  keyboard  to get these keys.
+
+
+    Hotkey           Option
+    ------           ------
+
+    Num0             Remove FPS Cap
+
+
+  Detailed Notes
+  ~~~~~~~~~~~~~~
+
+
+  Remove FPS Cap: Breaks the extremely low FPS cap the game has.
+  Now you can play with an unlocked framerate, limited only by
+  the computer you run. You can also run in proper VSync mode.
+  This all makes for a much smooter game experience, and brings
+  the possibility of using the game as a system benchmark test.
+
+
+  Troubleshooting
+  ~~~~~~~~~~~~~~~
+
+  If you encounter issues with the trainer not working, please ensure you
+  disable  any  security software  temporarily  (particularly firewalls).
+
+  IF USING VISTA OR WINDOWS 7, MAKE SURE YOU RUN THE GAME AND THE TRAINER
+  AS/IN AN ADMINISTRATOR USER/MODE AND/OR DISABLE UAC FROM CONTROL PANEL.
+
+  Users with  x64 (64-bit) Windows operating systems  should bear this in
+  mind:  My trainers are created for  x86 (32-bit games). If a game has a
+  64-bit component,  then  you should  refrain  from using it,  unless my
+  trainer notes  specifically  state that it's for such an environment.
+
+  A MINORITY OF ANTI-VIRUS SOFTWARE MAY DETECT THIS RELEASE AS MALICIOUS.
+  THIS  IS  A  FALSE-POSITIVE  AS  A  RESULT OF THE TRAINERS COMPRESSION.
+  PLEASE ADD IT TO YOUR  EXCEPTIONS/WHITELIST  IF  IT  BECOMES A PROBLEM.
+
+  Please note that  the  trainer  hotkeys  won't function whilst the Info
+  page is open,  so please close  that before use,  and refer to the main
+  screen or use this .txt file for hotkeys and details.
+
+
+  Contact
+  ~~~~~~~
+
+  Spam and abuse  will be reported and pursued  through the relevant
+  channels. Bad attitude will instantly forfeit your right to help!
+
+  psych[AT]live[DOT]co[DOT]uk
+
+  Have fun with this release!
+
+  ~Psych
+  29-06-10
+
+
+
+  IMPORTANT NOTICE - MULTIPLAYER
+  ------------------------------
+  
+  This trainer release is intended for singleplayer use only!  I
+  don't support MP cheating of any kind. Any queries relating to
+  this  trainer  not  working  in  MP  will  simply  be ignored.
+
+  
+  IMPORTANT NOTICE - ANTI-PIRACY
+  ------------------------------
+
+  Full version releases are personalised  and encrypted  upon download.
+  This is to  prevent  illegal distribution.  Users who are found to be
+  engaged in such action  will have their  rights revoked  and will not
+  be eligible for future trainers and updates. Please respect the work!
+
+  Free trainers  may be spread freely  so long as they are not altered.

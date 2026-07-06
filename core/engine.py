@@ -39,7 +39,9 @@ class Ctx:
     game_dir: Path
     dry_run: bool = False
     log: Callable[[str], None] = print
-    # steps that need Steam closed can queue work here; the caller batches it
+    steam_root: Path | None = None
+    # steps that need Steam closed queue work here; the caller batches every
+    # queued write behind a single close-Steam/restart-Steam at the end
     deferred_vdf_writes: list = field(default_factory=list)
 
     def resolve_target(self, template: str) -> Path:
@@ -89,4 +91,5 @@ def revert_recipe(recipe: Recipe, ctx: Ctx) -> None:
 
 
 # Import step modules for their registration side effects.
-from .steps import copy_files, swap_exe, systemd_unit  # noqa: E402,F401
+from .steps import (copy_files, launch_options, swap_exe,  # noqa: E402,F401
+                    systemd_unit)

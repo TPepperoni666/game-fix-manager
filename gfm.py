@@ -16,7 +16,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from core import detect, engine, fetch, manifest, store
+from core import detect, engine, fetch, manifest, steamvdf, store
 from ui import get_ui
 
 STATUS_ICON = {engine.APPLIED: "✅", engine.NOT_APPLIED: "☐ ",
@@ -32,6 +32,7 @@ class App:
         self.cfg = store.load_config()
         self.store_root = store.resolve_store(args.store, self.cfg)
         self.steam_root = detect.find_steam_root(args.steam_root)
+        self.pending_vdf_writes: list = []
         self.recipes = manifest.load_all(self.store_root) if self.store_root else []
 
     # --- shared helpers ---
@@ -53,7 +54,8 @@ class App:
         if game_dir is None:
             status = "not_found"
         else:
-            ctx = engine.Ctx(recipe, game_dir, dry_run=True, log=lambda _: None)
+            ctx = engine.Ctx(recipe, game_dir, dry_run=True, log=lambda _: None,
+                             steam_root=self.steam_root)
             try:
                 status = engine.verify_recipe(recipe, ctx)
             except engine.StepError as e:
@@ -64,7 +66,8 @@ class App:
 
     def run_engine(self, recipe, game_dir, action) -> bool:
         ctx = engine.Ctx(recipe, game_dir, dry_run=self.args.dry_run,
-                         log=lambda m: self.ui.msg(m, "dim"))
+                         log=lambda m: self.ui.msg(m, "dim"),
+                         steam_root=self.steam_root)
         label = "DRY RUN " if self.args.dry_run else ""
         self.ui.msg(f"{label}{action.__name__.split('_')[0]}: {recipe.name} -> {game_dir}")
         try:
@@ -72,8 +75,35 @@ class App:
         except engine.StepError as e:
             self.ui.msg(f"{recipe.name}: {e}", "error")
             return False
+        self.pending_vdf_writes.extend(ctx.deferred_vdf_writes)
         self.ui.msg(f"{recipe.name} done.", "success")
         return True
+
+    def flush_vdf_writes(self):
+        """Apply queued launch-option writes with one Steam bounce for all."""
+        writes = self.pending_vdf_writes
+        if not writes:
+            return
+        self.pending_vdf_writes = []
+        names = ", ".join(sorted({w["game"] for w in writes}))
+        self.ui.msg(f"Launch options queued for: {names}", "warn")
+        was_running = steamvdf.steam_running()
+        if was_running:
+            if not self.ui.confirm(
+                    "Steam must close briefly to write launch options "
+                    "(controller drops out until it's back). Do it now?"):
+                self.ui.msg("Skipped — re-run apply later to set launch options.", "warn")
+                return
+            steamvdf.close_steam(lambda m: self.ui.msg(m, "warn"))
+        total = 0
+        for w in writes:
+            n = steamvdf.set_launch_options(self.steam_root, w["appid"], w["value"])
+            self.ui.msg(f'  {w["game"]}: LaunchOptions = {w["value"] or "(cleared)"} '
+                        f'({n} user file(s))', "dim")
+            total += n
+        if was_running:
+            steamvdf.start_steam(lambda m: self.ui.msg(m, "warn"))
+        self.ui.msg(f"Launch options written ({total} file update(s)).", "success")
 
     # --- commands ---
 
@@ -107,6 +137,7 @@ class App:
                 self.ui.msg("── Manual step needed " + "─" * 20, "warn")
                 for line in recipe.post_apply_message.splitlines():
                     self.ui.msg(line, "warn")
+        self.flush_vdf_writes()
 
     def cmd_revert(self, ids: list[str]):
         targets = self._pick(ids, "Select games to revert")
@@ -116,6 +147,7 @@ class App:
                 continue
             if self.ui.confirm(f"Revert fixes for {recipe.name}?", danger=True):
                 self.run_engine(recipe, game_dir, engine.revert_recipe)
+        self.flush_vdf_writes()
 
     def _pick(self, ids: list[str], prompt: str):
         if ids:

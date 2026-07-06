@@ -39,8 +39,9 @@ apply.
 2. Put mod files in `store/games/<id>/payload/`.
 3. Commit. No code changes needed.
 
-Step types available: `copy_files`, `swap_exe` (more coming: `launch_options`,
-`systemd_unit` for The Crew/TCU).
+Step types available: `copy_files` (with `executable` flag for scripts),
+`swap_exe`, `systemd_unit` (user/system scope), `launch_options` (batched
+behind a single close-Steam → write → restart-Steam dance).
 
 Payload size note: GitHub blocks files >100MB — anything bigger needs Git LFS
 or stays SD-card-only.
