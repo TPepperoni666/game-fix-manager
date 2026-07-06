@@ -1,0 +1,312 @@
+<!--
+	This is the default localization file.
+	The "id" attribute is how the launcher addresses each string internally.
+	The inner text (between the <string>...</string> diamond brackets) is the actual string that will be shown to the user.
+	
+	To create a new line in inner text, you can either type in "\n" (ie "\n\n" for 2 new lines),
+	or just press Enter to create a new line as usual. Both methods work.
+-->
+<lang>
+	<!-- Info -->
+	<info lang="English" author="whammy4" version="1.3.2.0"/>
+	<!-- Actions -->
+	<string id="ok">OK</string>
+	<string id="accept">Accept</string>
+	<string id="cancel">Cancel</string>
+	<string id="yes">Yes</string>
+	<string id="no">No</string>
+	<string id="no_scary">NO</string>
+	<string id="manual_install">Manual</string>
+	<string id="select">Select</string>
+	<string id="selected">Selected</string>
+	<string id="run_anyway">Run Anyway</string>
+	<string id="create">Create</string>
+	<string id="import">Import</string>
+	<string id="rename">Rename</string>
+	<string id="file">File</string>
+	<string id="play">Play</string>
+	<string id="play_on_steam">Play on Steam</string>
+	<string id="restart">Restart</string>
+	<string id="exit">Exit</string>
+	<string id="exit_anyway">Exit Anyway</string>
+	<!-- Titles -->
+	<string id="is_success">Success</string>
+	<string id="is_offline">Offline</string>
+	<string id="is_error">Error</string>
+	<string id="warning">Warning</string>
+	<string id="alert">Alert</string>
+	<string id="info">Info</string>
+	<string id="already_running">Already Running</string>
+	<string id="deleting_savegame">DELETING SAVEGAME</string>	<!-- Uppercase because scary -->
+	<string id="fail_no_reason">No reason</string>
+	<string id="patching_failed">Patching Failed</string>
+	<string id="server_list">Server List</string>
+	<string id="settings">Settings</string>
+	<string id="settings_language">Language</string>
+	<string id="settings_options">Options</string>
+	<string id="title_settings_reset">Reset Settings</string>
+	<string id="welcome_to_tcu">Welcome to {0}</string>
+	<string id="new_update">New Update</string>
+	<string id="processes_ongoing">Ongoing Processes</string>
+	<string id="directory_invalid">Invalid Directory</string>
+	<string id="unpatched_instance">Unpatched Instance</string>
+	<string id="version_error">Version Error</string>
+	<string id="title_patch">Patch</string>
+	<string id="title_update">Update</string>
+	<string id="title_cheats">Cheats</string>
+	<string id="title_unsupported">Unsupported</string>
+	<string id="title_unavailable">Unavailable</string>
+	<string id="title_save_create">Create new savegame</string>
+	<string id="title_save_rename">Rename savegame</string>
+	<string id="title_save_enter_new_name">Enter new savegame name</string>
+	<string id="title_save_active">Active Save</string>
+	<string id="title_save_import">Import Save</string>
+	<string id="title_save_export">Export Save</string>
+	<string id="title_save_import_ubi">Import UBI Save</string>
+	<string id="title_save_import_select">Select a TCU savegame to import</string>
+	<string id="title_save_import_ubi_select">Select a dumped ubisoft savegame to import</string>
+	<string id="title_save_export_select">Select an exported savegame</string>
+	<string id="title_how_to_use">How to use TCU Launcher</string>
+	<string id="local_server_manager">Local Server Manager</string>
+	<!-- Launcher Front-end -->
+	<string id="launcher_starting">Starting TCU Launcher...</string>
+	<string id="status_bar">{0} Launcher {1} | Instances: {2}</string>
+	<string id="status_bar_update_pending">[Update available: {0}!]</string>
+	<string id="new_update_details">New Launcher update available: {0}. \n Would you like to download it now? \n (Note: You can disable startup launcher update prompts in the settings)</string>
+    <string id="directory_invalid_details">Invalid {0} game directory selected. Please select a valid directory that contains the file "{1}".</string>	<!-- {0} = The Crew, {1} = TheCrew.exe -->
+	<string id="launcher_instructions">The TCU Launcher helps you set up and patch your The Crew game installation(s). \n It does NOT supply nor help you acquire any The Crew game files. \n\n
+To add an existing The Crew game installation as a "Game Instance":
+ - Click on the [+] button on the left side of the window
+ - Navigate to your The Crew install directory, and select "TheCrew.exe"
+ - Your game installation is now added as a Game Instance. Click the [{0}] button to install the TCU patch into the selected Game Instance.
+ - Select the server you want to play on in the Server List (Offline Server for offline play).
+ - Click [{1}] and have fun!
+ 
+How to reinstall the TCU Patch:
+ - Remove the "{2}" file in your game directory, or any other TCU Patch file. This will trigger the Launcher to display an "Update" button in the respective Game Instance - press it to reinstall the TCU Patch!
+
+Utility Belt:
+ - The Utility Belt is a new feature to help you troubleshoot problems with your game. Select the Game Instance you want to work with, then a little button will appear at the bottom-right of the Launcher window. Click on it to access the Utility Belt and it's options.
+</string>
+	<string id="archive_enter_password">Enter decryption password</string>
+	<string id="archive_enter_password_details">This archive is encrypted. Please enter the password to decrypt it.</string>
+	<!-- Settings -->
+	<string id="settings_reset">Reset To Default</string>
+	<string id="settings_reset_details">You are about to reset your Launcher settings to default. Are you sure you want to continue?</string>
+	<string id="settings_update_launcher">Update Launcher</string>
+	<string id="settings_launcher_updated">Launcher Updated.</string>
+	<string id="settings_update_launcher_offline">Launcher is Offline</string>
+	<string id="settings_update_details">You are about to install a new Launcher update ({0}). Do you want to continue?</string>
+	<string id="settings_clear_downloads">Clear Downloads</string>
+	<string id="settings_legal_info">Legal and Credits</string>
+	<string id="settings_legal_info_details">Welcome to TCU!
+	
+TCU Project, 2025 [Est. {0}]
+Created by {1}.
+
+TCU is a community project that revives the online-only game "{12}" (2014) that was shut down in 2024.
+*** The TCU Project and it's developers are not affiliated with the publisher {2} nor developer {3} in any way.
+
+TCU Launcher (version {4}) is created by {1} and written in {5}, using {6} for the GUI.
+External Libraries used:
+* {7}, for displaying the main news page.
+* {8}, for .7z archive support.
+
+* Among original assets, some images, fonts and media are utilized from The Crew Fansite kit.
+Thank you to {13} for adding support for Czech letters to the fonts!
+
+TCU Launcher does not collect, store, or upload any of your personal data.
+* Your launcher user settings are stored within the launcher installation directory.
+* Downloads acquired via the TCU Launcher may be cached and stored temporarily in the "downloads" folder. If needed, they can be deleted manually or by pressing the "{9}" button in launcher settings.
+* The Launcher may connect to the TCU Project's website ({10}) during startup and usage, to retrieve the latest news, launcher and TCU patch updates; no user data is sent/uploaded. You can always opt-out of this by enabling the "{11}" setting.
+
+*** The TCU Launcher/Project does NOT help you acquire The Crew game files illegally!
+</string>
+	<string id="settings_restart_changes_details">Please restart the Launcher to apply these changes.</string>
+	<string id="settings_language_credit">{0} (by: {1})</string> <!-- 0 = language, 1 = author, ie: "English (by: whammy4)" -->
+	<string id="settings_launcher_offlinemode">Launcher Offline Mode</string>
+	<string id="settings_launcher_update_prompt">Prompt about Launcher Updates</string>
+	<string id="settings_offline_cheats">Offline Server Cheats</string>
+	<string id="settings_scan_running_instances">Scan Running Instances</string>
+	<!-- TCU Net -->
+	<string id="tcunet_offline">Couldn't connect to TCU Net.</string>
+	<string id="tcunet_offline_details">Launcher online features are unavailable. You can still play and manage your instances and savegames.</string>
+	<string id="tcunet_connecting">Connecting to TCU Net...</string>
+	<string id="tcunet_connecting_hold">Please hold on...</string>
+	<string id="tcunet_getting_news">Getting the latest TCU News...</string>
+	<string id="tcunet_failed_to_get_news">Failed to get TCU News!</string>
+	<string id="tcunet_failed_to_get_news_details">Please try again later.</string>
+	<string id="ext_link_traversal_details">You're about to open the link "{0}" in your default web browser.</string>
+	<string id="opening_tcuwebsite">Opening the TCU Website</string>
+	<string id="opening_discord">Opening Discord</string>
+	<string id="opening_patreon">Opening Patreon</string>
+	<string id="opening_youtube">Opening YouTube</string>
+	<!-- Game Instance -->
+	<string id="instance_new">Add New Installation</string>
+	<string id="instance_patch">Patch</string>
+	<string id="instance_patched">Patched</string>
+	<string id="instance_patch_update">Update</string>
+	<string id="instance_patch_update_available">Update Available</string>
+	<string id="instance_patch_invalid">Patch Damaged</string>
+	<string id="instance_unpatched">Unpatched</string>
+	<string id="instance_patching">Patching...</string>
+	<string id="instance_unsupported">Unsupported</string>
+	<string id="instance_unsupported_why">Why?</string>
+	<string id="instance_unsupported_details">Unfortunately, this game version is not supported by any available TCU Patch versions. ({0})</string>
+	<string id="instance_patch_offline">Launcher is offline, can't acquire any TCU server patch.
+	Alternatively, you can manually select a TCU patch to install from your hard drive.</string>
+	<string id="instance_patch_details">Are you sure you want to patch this game instance? Your game files may be modified.
+	(Latest TCU Server version: {0})
+	Alternatively, you can manually select a TCU patch to install from your hard drive.</string>
+	<string id="instance_patch_update_details">Are you sure you want to update the TCU patch in this Game Instance? Your savegames and settings will not be affected.
+	(Latest TCU Server version: {0})
+	Alternatively, you can manually select a TCU patch to install from your hard drive.</string>
+	<string id="instance_already_running">Another The Crew game process is already running. Close it first before running another.</string>
+	<string id="instance_action_while_running">Please close your game to perform this action!</string>
+	<string id="instance_unpatched_details">This game installation is unpatched, and will simply not work. \n Press the "Patch" button to the right, then you will be able to run the game properly.</string>
+	<string id="instance_noversion">Game instance has no version info! Make sure your game installation is valid, and try to recreate the game instance!</string>
+	<string id="instance_failed_to_launch">Failed to launch this game instance! Make sure your game installation is valid, and try to recreate the game instance!</string>
+	<string id="instance_remove_details">Are you sure you want to remove game instance '{0}'? This will not remove or affect your actual game files and saves, and it will remain patched.
+	You can add this game instance back any time.</string>
+	<!-- Server Instance -->
+	<string id="server_youre_playing_on">You're playing on: {0}.</string>	<!-- 0 = Server name -->
+	<string id="server_youre_playing_offline">You're playing offline.</string>
+	<string id="server_youre_playing_offline_as">You're playing offline as "{0}"</string>	<!-- Local savegame name -->
+	<string id="server_youre_not_playing">You are probably not playing.</string>		<!-- For unsupported versions -->
+	<string id="server_local_name">Offline Server</string>
+	<string id="server_local_desc">Local Offline Server that runs on your machine. In other words: Offline Mode!</string>
+	<string id="server_cheats_disabled">Offline Server Cheats are disabled (in Launcher settings).</string>
+	<!-- Patching -->
+	<string id="launcher_patch_success">Instance '{0}' has been patched. TCU Server version: {1}</string>
+	<string id="launcher_patch_failed">Failed to patch instance '{0}': {1}</string>			<!-- 0 = Game instance name, 1 = Reason -->
+	<string id="launcher_patch_offline">Launcher can't connect to TCU Net. You will have to download and install the patch manually.</string>
+	<string id="launcher_patch_no_svmanifest">No Server Manifest available. Please report this error to the developers!</string>
+	<string id="launcher_patch_nopatch">No TCU Server patch available for game version {0} at the moment. Sorry!</string>
+	<!-- Processes -->
+	<string id="processes_ongoing_details">There are ongoing processes in the Launcher. Please wait for them to complete first.</string>
+	<string id="processes_ongoing_exit_details">Are you sure? This may cause corruption.</string>
+	<string id="process_patching">Patching Instance... [{0}]</string>
+	<!-- Savegames -->
+	<string id="save_enter_name">Enter the new savegame name...</string>
+	<string id="save_fileselect_none">No file selected</string>
+	<string id="save_name">Savegame name</string>
+	<string id="save_added">New savegame named "{0}" has been added. Have fun!</string>
+	<string id="save_added_failed">Something went wrong while trying to create a new savegame. Is your local server data file corrupt?</string>
+	<string id="save_delete">DELETE</string> <!-- Uppercase as a warning -->
+	<string id="save_delete_details">You are about to delete the savegame "{0}". This action can not be undone. \n Are you sure you want to proceed?</string>
+	<string id="save_delete_success">Savegame "{0}" has been successfully deleted.</string>
+	<string id="save_delete_failed">Something went wrong while deleting savegame "{0}". This save may not exist anymore, or your local server data file is corrupted.</string>
+	<string id="save_delete_failed_nonexistent">Can't delete savegame "{0}", it does not exist.</string>
+	<string id="save_import_success">New savegame imported as "{0}".</string>
+	<string id="save_import_failed">Failed to import savegame! It may be corrupt.</string>
+	<string id="save_export_dialog_title">Export TCU savegame</string>
+	<string id="save_export_success">Savegame successfully exported.</string>
+	<string id="save_export_failed">Failed to export savegame. It may not exist or be corrupted.</string>
+	<string id="save_import_ubi_semifailed">Savegame has been imported, but some elements have been corrupt and will be missing: \n {0}</string>
+	<string id="save_import_ubi_success">Dumped savegame imported successfully!</string>
+	<string id="save_import_ubi_failed">Failed to import this savegame! It appears to be corrupt. \n No savegame has been added.</string>
+	<string id="save_import_ubi_notice">This option is only for those who used the TCU save dumper in March 2024 before the official server shutdown. \n \n The file should be named "{0}". You may have renamed it, but that's okay as long as you keep the .json extension.</string>
+	<string id="save_savename_exists">The player name "{0}" already exists! Please pick a different one.</string>
+	<string id="save_savename_long">The player name "{0}" is too long! It must be less than {1} characters.</string>
+	<string id="save_savename_short">The player name "{0}" is too short! It must be at least {1} characters.</string>
+	<string id="save_rename_success">Successfully renamed savegame "{0}" to "{1}".</string>
+	<string id="save_rename_failed">Failed to rename savegame "{0}" to "{1}".</string>
+	<string id="save_rename_taken">Failed to rename savegame "{0}", because a savegame named "{1}" already exists! Please choose a different name.</string>
+	<!-- Tooltips -->
+	<string id="tooltip_instance_new">Create a new The Crew instance</string>
+	<string id="tooltip_instance_remove">Remove selected instance</string>
+	<string id="tooltip_instance_move_up">Move selected instance up</string>
+	<string id="tooltip_instance_move_down">Move selected instance down</string>
+	<string id="tooltip_instance_opendir">Open directory of the selected The Crew instance</string>
+	<string id="tooltip_btn_news">Open the News page</string>
+	<string id="tooltip_btn_settings">Open the settings menu</string>
+	<string id="tooltip_btn_tcuwebsite">Visit the TCU Website!</string>
+	<string id="tooltip_btn_discord">Visit our {0} Server</string>		<!-- Discord -->
+	<string id="tooltip_btn_patreon">Visit our {0} Page</string>		<!-- Patreon -->
+	<string id="tooltip_btn_youtube">Visit our {0} Channel</string>		<!-- YouTube -->
+	<string id="tooltip_save_add">Add a new save to your local server</string>
+	<string id="tooltip_save_remove">Delete the selected savegame permanently (You will be asked to confirm again before deleting).</string>
+	<string id="tooltip_save_import">Import a new savegame into your local server</string>
+	<string id="tooltip_save_export">Export the selected savegame</string>
+	<string id="tooltip_save_import_ubi">Import a dumped ubisoft save</string>
+	<string id="tooltip_save_rename">Rename selected savegame</string>
+	<string id="tooltip_settings_launcher_offlinemode">Puts the Launcher into offline mode. It will not connect to {0}, and will not be able to get the latest news, and download any TCU server patches.</string>
+	<string id="tooltip_settings_launcher_update_prompt">If disabled, you will not be prompted about Launcher updates if there are any.</string>
+	<string id="tooltip_settings_offline_cheats">If enabled, you will be able to use cheats in your offline server.</string>
+	<string id="tooltip_settings_scan_running_instances">If true, then the launcher will scan and detect already running game instances of yours on launcher startup. It strictly and exclusively scans for processes named "{0}", but if that still makes you uncomfortable then feel free to disable this.</string>	<!-- {0} = "TheCrew.exe" -->
+	<string id="tooltip_settings_reset">Resets your TCU Launcher settings to default.</string>
+	<string id="tooltip_settings_clear_downloads">Clear cached downloads from the downloads folder. Done automatically every {0} days.</string>
+	<string id="tooltip_settings_launcher_update">Download and install a TCU Launcher update, if available.</string>
+	<string id="tooltip_settings_legal_info">View legal info and credits.</string>
+	<string id="tooltip_instructions">How to use TCU Launcher</string>
+	<string id="tooltip_platform_ubi">This is a {0} version.</string>
+	<string id="tooltip_platform_steam">This is a {0} version. TCU Launcher has to relay the game launch to {0} due to DRM.</string>
+	<!-- Error messages -->
+	<string id="errormsg_patch_launcheroffline">Launcher is offline</string>
+	<string id="errormsg_patch_gameinstance_nopath">Game Instance has no path set: {0}</string>
+	<string id="errormsg_patch_gameinstance_invalid_version">Game version is invalid for this instance</string>
+	<string id="errormsg_patch_gameinstance_invalidpath">Game Instance has invalid path: {0}</string>
+	<string id="errormsg_patch_download_failed">Failed to download patch ({0})</string>
+	<string id="errormsg_patch_download_failed_verbose">Failed to download patch ({0}) for game version: {1} \n {2}</string>
+	<string id="errormsg_patch_download_failed_completely">Failed to initialize download due to a connection error.</string>
+	<string id="errormsg_patch_download_missing">Compatible patch found ({0}), but couldn't download it. Please report this to the developers!</string>
+	<string id="errormsg_patch_archivecheck_failed">Archive check failed. It may be encrypted, in that case the supplied password is incorrect!</string>
+	<string id="errormsg_patch_no_patch_found">No compatible TCU Server patch is available for game version: {0}</string>
+	<string id="errormsg_patch_deploy_failed">Patch downloaded ({0}) but failed to install!</string>
+	<string id="errormsg_no_connection_to_tcunet">Can't connect to {0}. It may currently be down, or you have lost your internet connection.</string>	<!-- {0} = "TCU Net" -->
+	<string id="errormsg_duplicate_instance">This game installation is already added as an instance: "{0}"!</string>
+	<!-- Warning messages -->
+	<string id="warnmsg_multiple_steam_installs">You have added more than one {0} installation of the game. Due to the way the {0} DRM works, it will only launch your main {0} installation of the game, regardless of which one you select. If you know what you're doing, check the "{1}" file for more info.</string>	<!-- {0} = "Steam" -->
+	<!-- Success messages -->
+	<string id="successmsg_patch_installed">Patch installed successfully! ({0})</string>
+	<!-- End of 1.0.0.0 strings -->
+	
+	<!-- 1.1.0.0 strings -->
+	<string id="apply">Apply</string>
+	<!-- End of 1.1.0.0 strings -->
+	
+	<!-- 1.1.5.0 strings -->
+	<string id="save_already_in_use">The server's data file seems to be already in use by another program (Maybe the game).</string>
+	<!-- End of 1.1.5.0 strings -->
+	
+	<!-- 1.1.6.0 strings -->
+	<string id="server_manage">Manage</string>
+	<string id="try_again">Try Again</string>
+	<string id="successmsg_savecorrupted_restored">Your savegame file appears to have been corrupted, but it has been restored from backup. You may have lost a few minutes of progress at most.</string>
+	<string id="errormsg_savecorrupted_filelocked">Your savegame file appears to have been corrupted, but the Launcher can't restore it. Is it being used by another process? ({0})</string>
+	<!-- End of 1.1.6.0 stirngs -->
+	
+	<!-- 1.2.0.0 strings -->
+	<string id="utilbelt_title">Utility Belt</string>
+	<string id="utilbelt_instance">Instance: "{0}"</string>
+	<string id="utilbelt_redist">Install The Crew Redistributables</string>
+	<string id="utilbelt_redist_success_details">Redistributables installed. \n (Unless the install processes were canceled)</string>
+	<string id="utilbelt_bad_redist_details">Your game installation directory has corrupt or missing redistributables.
+	However, you can search for and install the necessary components manually:
+	{0}
+	</string>
+	<string id="utilbelt_support_manual">Open The Crew Manual</string>
+	<string id="utilbelt_support_readme">Open The Crew Readme</string>
+	<string id="utilbelt_port_checker">Diagnose Ports</string>
+	<string id="utilbelt_port_check_results">Port Check Results</string>
+	<string id="utilbelt_port_checker_success">All ports are available!</string>
+	<string id="utilbelt_port_checker_failure">Some ports are unavailable - this will likely prevent the TCU Server emulator from functioning locally! Please check which currently running software on your computer is occupying the unavailable ports.
+	\n\n - Is it possible to change used ports for TCU?
+	Sadly, The Crew is hardcoded to use these specific ports, so changing them is not possible.
+	</string>
+	<string id="utilbelt_port_checker_failure_short">Some ports are unavailable - this will likely prevent the TCU Server emulator from functioning locally! Please go to {0} for more info. </string>
+	<string id="utilbelt_port_available">Available</string>
+	<string id="utilbelt_port_unavailable">Unavailable</string>
+	<string id="tooltip_btn_utilbelt">Utility Belt - Tools, Help and Troubleshooting</string>
+	<!-- Note: string "launcher_instructions" has been updated. -->
+	<!-- End of 1.2.0.0 strings -->
+	
+	<!-- 1.3.0.0 strings -->
+	<string id="instance_patch_status">TCU Patch</string>
+	<!-- End of 1.3.0.0 strings -->
+	
+	<!-- 1.3.2.0 strings -->
+	<string id="settings_https_port">HTTPs Port For Offline Server:</string>
+	<string id="tooltip_settings_https_port">Sets a custom HTTPs Port for your local offline server. The default port is {0}.</string>
+	<!-- End of 1.3.2.0 strings -->
+</lang>

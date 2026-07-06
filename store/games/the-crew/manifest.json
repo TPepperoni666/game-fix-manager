@@ -1,0 +1,27 @@
+{
+  "id": "the-crew",
+  "name": "The Crew",
+  "aliases": ["The Crew Unlimited", "TCU", "TheCrew", "The Crew (TCU)"],
+  "steam_appid": 241560,
+  "detect": {
+    "install_dir_names": ["TheCrew", "The Crew"],
+    "marker_files": ["TheCrew.exe"]
+  },
+  "steps": [
+    {
+      "type": "copy_files",
+      "from": "payload/tculauncher",
+      "to": "~/TCULauncher",
+      "backup_originals": false
+    },
+    {
+      "type": "systemd_unit",
+      "unit": "payload/tcu-network.service",
+      "scope": "system",
+      "enable": true,
+      "start": true
+    }
+  ],
+  "post_apply_message": "Remaining manual steps for TCU:\n1. The systemd step needs sudo — if it failed, set a password first (run: passwd) and re-apply.\n2. Run the TCU Launcher from ~/TCULauncher/TCULauncher.exe (add it as a non-Steam game with Proton, or: protontricks-launch --appid 241560 ~/TCULauncher/TCULauncher.exe).\n3. In the launcher: Add installation -> select TheCrew.exe in the game folder -> Patch.\n4. Optional: set your savegame name under Offline Server -> Manage.\nGame must be version 1.2.0.0 (the final Steam version is fine).",
+  "notes": "The Crew servers died 2024; TCU (thecrewunlimited.com) revives it with a local offline server. TCULauncher 1.3.2.0 staged to ~/TCULauncher (their instructions say keep it OUT of the game dir). The launcher downloads the TCU patch when you click Patch — the patch files are NOT in this payload yet. TODO (before any reimage!): capture the patched game files from Tony's working Deck install into a payload so restore needs no launcher/network. That payload will contain Ubisoft-derived files -> flip repo private or keep it SD-only. Also TODO: confirm whether Steam launch options are needed on the Deck (Tony thought maybe; capture from working install). tcu-network.service replaces DAKOP's run-every-boot root script (sysctl unprivileged port 443 + iptables DNAT of public-ubiservices.ubi.com to 127.0.0.1)."
+}

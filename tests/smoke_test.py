@@ -143,6 +143,33 @@ def main():
         except fetch.FetchError:
             check("hash mismatch rejected", not fetched.exists())
 
+        print("== systemd_unit (redirected unit dir; no-systemctl path on Windows) ==")
+        import json as _json
+        import os as _os
+        unit_dir = tmp / "fake_systemd_user"
+        _os.environ["GFM_SYSTEMD_USER_DIR"] = str(unit_dir)
+        svc_dir = tmp / "store" / "games" / "svc-game"
+        (svc_dir / "payload").mkdir(parents=True)
+        (svc_dir / "payload" / "test.service").write_text(
+            "[Unit]\nDescription=test\n", encoding="utf-8")
+        (svc_dir / "manifest.json").write_text(_json.dumps({
+            "id": "svc-game", "name": "Svc Game",
+            "steps": [{"type": "systemd_unit", "unit": "payload/test.service",
+                       "scope": "user", "enable": True}],
+        }), encoding="utf-8")
+        svc_recipe = manifest.load_all(tmp / "store")[1]  # sorted: la-noire, svc-game
+        svc_ctx = engine.Ctx(svc_recipe, game_dir, dry_run=False, log=quiet)
+        check("verify before: not applied",
+              engine.verify_recipe(svc_recipe, svc_ctx) == engine.NOT_APPLIED)
+        engine.apply_recipe(svc_recipe, svc_ctx)
+        installed = unit_dir / "test.service"
+        check("unit file installed", installed.read_text(encoding="utf-8").startswith("[Unit]"))
+        status = engine.verify_recipe(svc_recipe, svc_ctx)
+        check("verify after install", status in (engine.APPLIED, engine.PARTIAL))
+        engine.revert_recipe(svc_recipe, svc_ctx)
+        check("unit file removed on revert", not installed.exists())
+        del _os.environ["GFM_SYSTEMD_USER_DIR"]
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

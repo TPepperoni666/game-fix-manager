@@ -1,0 +1,18 @@
+[Unit]
+Description=TCU network setup for The Crew (unprivileged port 443 + ubiservices redirect)
+# DNS must be up: iptables resolves public-ubiservices.ubi.com when the rule is added
+After=network-online.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Let the TCU offline server (runs as user) bind port 443
+ExecStart=/usr/bin/sysctl net.ipv4.ip_unprivileged_port_start=443
+# Redirect the game's Ubisoft traffic to the local TCU server (-C guard: no duplicate rules)
+ExecStart=/usr/bin/bash -c 'iptables -t nat -C OUTPUT -d public-ubiservices.ubi.com -j DNAT --to-destination 127.0.0.1 2>/dev/null || iptables -t nat -A OUTPUT -d public-ubiservices.ubi.com -j DNAT --to-destination 127.0.0.1'
+ExecStop=/usr/bin/bash -c 'iptables -t nat -D OUTPUT -d public-ubiservices.ubi.com -j DNAT --to-destination 127.0.0.1 2>/dev/null || true'
+ExecStop=/usr/bin/sysctl net.ipv4.ip_unprivileged_port_start=1024
+
+[Install]
+WantedBy=multi-user.target

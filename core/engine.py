@@ -89,4 +89,4 @@ def revert_recipe(recipe: Recipe, ctx: Ctx) -> None:
 
 
 # Import step modules for their registration side effects.
-from .steps import copy_files, swap_exe  # noqa: E402,F401
+from .steps import copy_files, swap_exe, systemd_unit  # noqa: E402,F401
