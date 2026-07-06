@@ -13,6 +13,8 @@ Options: --store PATH, --steam-root PATH, --dry-run
 from __future__ import annotations
 
 import argparse
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -163,32 +165,83 @@ class App:
             label = self.status_line(recipe, game_dir)
             options.append(label)
             by_label[label] = recipe
+        self.ui.msg("TAB to select  •  ENTER to confirm  •  ESC to cancel", "dim")
         picked = self.ui.choose(prompt, options, multi=True)
         return [by_label[p] for p in picked]
+
+    def cmd_install(self):
+        """Desktop + Game Mode launcher, GBM-style (controller-navigable)."""
+        if os.name == "nt":
+            self.ui.msg("Shortcut install is for the Deck — nothing to do on Windows.", "warn")
+            return
+        app_dir = Path(__file__).resolve().parent
+        launcher = app_dir / "gfm-launch.sh"
+        launcher.write_text(
+            "#!/bin/bash\n"
+            "# Game Fix Manager launcher — used by the desktop shortcut and the\n"
+            "# Game Mode (non-Steam) entry. Konsole gives gum a real terminal.\n"
+            f'cd "{app_dir}"\n'
+            "git pull --ff-only 2>/dev/null   # freshen recipes when online\n"
+            "exec python3 gfm.py\n", encoding="utf-8")
+        launcher.chmod(0o755)
+
+        desktop = Path.home() / "Desktop" / "Game Fix Manager.desktop"
+        desktop.parent.mkdir(parents=True, exist_ok=True)
+        desktop.write_text(
+            "[Desktop Entry]\n"
+            "Name=Game Fix Manager\n"
+            "Comment=Re-apply game mods and fixes\n"
+            f"Exec=konsole --hide-menubar --hide-tabbar -e {launcher}\n"
+            "Icon=applications-games\n"
+            "Type=Application\n"
+            "Categories=Utility;\n", encoding="utf-8")
+        desktop.chmod(0o755)
+        subprocess.run(["gio", "set", str(desktop), "metadata::trusted", "true"],
+                       capture_output=True)
+
+        self.ui.msg("Desktop shortcut installed.", "success")
+        self.ui.msg("", "dim")
+        self.ui.msg("Controller support:", "info")
+        self.ui.msg("• Desktop Mode: works now — Steam's desktop layout already maps", "dim")
+        self.ui.msg("  D-pad to arrows, A to Enter, B to Esc.", "dim")
+        self.ui.msg("• Game Mode: right-click the desktop shortcut > Add to Steam,", "dim")
+        self.ui.msg("  then in its controller settings pick the official", "dim")
+        self.ui.msg("  'Keyboard (WASD) and Mouse' template (or map D-pad to arrow", "dim")
+        self.ui.msg("  keys, A to Enter, B to Esc).", "dim")
 
     def menu(self):
         while True:
             self.ui.header("🔧 GAME FIX MANAGER")
-            self.ui.msg(f"Store : {self.store_root or 'NOT FOUND'}", "dim")
-            self.ui.msg(f"Steam : {self.steam_root or 'not found'}", "dim")
-            self.ui.msg(f"Games : {len(self.recipes)} recipe(s)", "dim")
+            self.ui.msg(f"📦 Store : {self.store_root or 'NOT FOUND'}", "dim")
+            self.ui.msg(f"🎮 Steam : {self.steam_root or 'not found'}", "dim")
+            self.ui.msg(f"🗂️  Games : {len(self.recipes)} recipe(s)", "dim")
+            self.ui.msg("", "dim")
             choice = self.ui.choose("What would you like to do?", [
-                "🔧 Apply Fixes", "📋 Status", "↩️  Revert a Game", "❌ Exit"])
+                "🔧 Apply Fixes",
+                "📋 Status",
+                "↩️  Revert a Game",
+                "🖥️  Install Shortcut (Desktop + Game Mode)",
+                "❌ Exit"])
             choice = choice[0] if choice else "❌ Exit"
             if choice.startswith("🔧"):
                 self.cmd_apply([])
+                self.ui.input("Press Enter to continue")
             elif choice.startswith("📋"):
                 self.cmd_list()
                 self.ui.input("Press Enter to continue")
             elif choice.startswith("↩"):
                 self.cmd_revert([])
+            elif choice.startswith("🖥"):
+                self.cmd_install()
+                self.ui.input("Press Enter to continue")
             else:
                 return
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", nargs="?", choices=["list", "apply", "revert"],
+    parser.add_argument("command", nargs="?",
+                        choices=["list", "apply", "revert", "install"],
                         help="omit for interactive menu")
     parser.add_argument("ids", nargs="*", help="recipe ids (e.g. la-noire)")
     parser.add_argument("--store", help="path to the fix store")
@@ -208,6 +261,8 @@ def main():
         app.cmd_apply(args.ids)
     elif args.command == "revert":
         app.cmd_revert(args.ids)
+    elif args.command == "install":
+        app.cmd_install()
     else:
         app.menu()
 

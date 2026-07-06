@@ -22,6 +22,25 @@ The app finds its `store/` folder inside the clone, so this works before the
 SD card or Syncthing are set up. Install the game(s) from Steam first, then
 apply.
 
+## TUI & controller support
+
+The interactive menu uses the same gum interface as the SteamOS Backup
+Manager (and reuses the gum binary it installs). One-time setup on the Deck:
+
+```bash
+python3 ~/game-fix-manager/gfm.py install
+```
+
+This creates a **Game Fix Manager** desktop shortcut (Konsole, menu-driven,
+auto-pulls recipe updates on launch). Controller navigation:
+
+- **Desktop Mode** — works immediately: Steam's built-in desktop layout maps
+  D-pad → arrows, A → Enter, B → Esc.
+- **Game Mode** — right-click the desktop shortcut → *Add to Steam*, then in
+  the shortcut's controller settings choose the official *Keyboard (WASD) and
+  Mouse* template (or map D-pad → arrow keys, A → Enter, B → Esc, and a
+  button for TAB to toggle multi-select entries).
+
 ## Commands
 
 | Command | What it does |

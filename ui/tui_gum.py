@@ -38,7 +38,7 @@ class GumUI(UI):
     def header(self, title: str) -> None:
         subprocess.run("clear" if os.name != "nt" else "cls", shell=True)
         self._run(["style", "--foreground", "99", "--border-foreground", "99",
-                   "--border", "double", "--align", "center", "--width", "54",
+                   "--border", "double", "--align", "center", "--width", "60",
                    "--margin", "1 1", "--padding", "0 2", title], capture=False)
 
     def msg(self, text: str, style: str = "info") -> None:
