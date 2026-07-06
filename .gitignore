@@ -6,3 +6,8 @@ __pycache__/
 # Remote payloads: too big for git, shipped as release assets (see manifest
 # remote_payloads). Present locally after capture/first fetch.
 store/games/watch-dogs/payload/mod/data_win64/patch.dat
+
+# Local capture working files (TCU binaries + personal save state) — the
+# publishable payload gets promoted out of here deliberately, not by default.
+store/games/the-crew/capture/pre-update-tcu-files/
+store/games/the-crew/capture/post-update-tcu-files/
