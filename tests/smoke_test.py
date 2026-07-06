@@ -15,8 +15,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core import detect, engine, fetch, manifest  # noqa: E402
-from core.steps.copy_files import file_hash  # noqa: E402
+from core import fetch  # noqa: E402  (first, to guard against import cycles)
+from core import detect, engine, manifest  # noqa: E402
+from core.hashutil import file_hash  # noqa: E402
 
 PASS = 0
 
@@ -142,6 +143,27 @@ def main():
             check("hash mismatch rejected", False)
         except fetch.FetchError:
             check("hash mismatch rejected", not fetched.exists())
+
+        print("== remote payload with extract_to (zip stand-in for TCU 7z) ==")
+        import zipfile
+        hosted_zip = tmp / "hosted" / "patch_pkg.zip"
+        with zipfile.ZipFile(hosted_zip, "w") as z:
+            z.writestr("hook.dll", "FAKE HOOK")
+            z.writestr("sub/addon.xml", "<addon/>")
+        recipe.remote_payloads = [{
+            "path": "payload/downloads/patch_pkg.zip", "url": hosted_zip.as_uri(),
+            "sha256": file_hash(hosted_zip), "size": hosted_zip.stat().st_size,
+            "extract_to": "payload/patch"}]
+        fetch.ensure_remote_payloads(recipe, log=quiet)
+        extracted = recipe.dir / "payload" / "patch"
+        check("archive downloaded and extracted",
+              (extracted / "hook.dll").read_text() == "FAKE HOOK"
+              and (extracted / "sub" / "addon.xml").is_file())
+        marker = extracted / "hook.dll"
+        stamp = marker.stat().st_mtime_ns
+        fetch.ensure_remote_payloads(recipe, log=quiet)
+        check("no re-extract when archive and dir present",
+              marker.stat().st_mtime_ns == stamp)
 
         print("== systemd_unit (redirected unit dir; no-systemctl path on Windows) ==")
         import json as _json

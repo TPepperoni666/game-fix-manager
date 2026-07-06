@@ -21,7 +21,7 @@ from pathlib import Path
 
 from ..engine import (APPLIED, NOT_APPLIED, PARTIAL, Ctx, StepError,
                       register_step)
-from .copy_files import _same_file
+from ..hashutil import same_file as _same_file
 
 SCOPES = {
     "system": {"dir": "/etc/systemd/system", "ctl": ["systemctl"], "root": True},

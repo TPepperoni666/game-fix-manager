@@ -1,0 +1,8 @@
+<tcupatch>
+  <info installedDate="7/6/2026 1:45:53 PM" gameVersion="1.2.0.0" patchVersion="1.4.5.0" />
+  <file>addon_items.xml</file>
+  <file>addon_missions.xml</file>
+  <file>tcu.manifest.cheats.xml</file>
+  <file>dinput8.dll</file>
+  <file>tcu.manifest.patch.xml</file>
+</tcupatch>

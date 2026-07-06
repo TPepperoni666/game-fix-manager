@@ -11,3 +11,7 @@ store/games/watch-dogs/payload/mod/data_win64/patch.dat
 # publishable payload gets promoted out of here deliberately, not by default.
 store/games/the-crew/capture/pre-update-tcu-files/
 store/games/the-crew/capture/post-update-tcu-files/
+
+# Derived from the TCU download at apply time — never committed.
+store/games/the-crew/payload/downloads/
+store/games/the-crew/payload/patch/
