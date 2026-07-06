@@ -127,13 +127,26 @@ class App:
             if game_dir is None:
                 self.ui.msg(f"Skipping {recipe.name} — not located.", "warn")
                 continue
-            if recipe.remote_payloads and not self.args.dry_run:
-                try:
-                    fetch.ensure_remote_payloads(
-                        recipe, log=lambda m: self.ui.msg(m, "dim"))
-                except fetch.FetchError as e:
-                    self.ui.msg(f"{recipe.name}: {e}", "error")
-                    continue
+            if recipe.remote_payloads:
+                if self.args.dry_run:
+                    missing = [i for i in recipe.remote_payloads
+                               if not (recipe.dir / i["path"]).is_file()
+                               or (i.get("extract_to")
+                                   and not (recipe.dir / i["extract_to"]).is_dir())]
+                    if missing:
+                        for i in missing:
+                            self.ui.msg(f'DRY RUN would download {i["url"]} '
+                                        f'({i.get("size", 0) // (1 << 20)} MB)', "dim")
+                        self.ui.msg(f"{recipe.name}: rest of the plan needs the "
+                                    "payload — run a real apply to fetch it.", "warn")
+                        continue
+                else:
+                    try:
+                        fetch.ensure_remote_payloads(
+                            recipe, log=lambda m: self.ui.msg(m, "dim"))
+                    except fetch.FetchError as e:
+                        self.ui.msg(f"{recipe.name}: {e}", "error")
+                        continue
             ok = self.run_engine(recipe, game_dir, engine.apply_recipe)
             if ok and recipe.post_apply_message:
                 self.ui.msg("── Manual step needed " + "─" * 20, "warn")

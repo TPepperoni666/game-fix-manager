@@ -1,0 +1,28 @@
+{
+  "id": "force-unleashed-1",
+  "name": "Star Wars: The Force Unleashed",
+  "aliases": ["STAR WARS: The Force Unleashed Ultimate Sith Edition", "The Force Unleashed", "SWTFU", "TFU", "Force Unleashed 1"],
+  "steam_appid": 32430,
+  "detect": {
+    "install_dir_names": ["Star Wars The Force Unleashed"],
+    "marker_files": ["SWTFU.exe"]
+  },
+  "remote_payloads": [
+    {
+      "path": "payload/downloads/swtfu_fps_fix.7z",
+      "url": "https://community.pcgamingwiki.com/applications/core/interface/file/attachment.php?id=621",
+      "sha256": "48b40a8569efdf8a1e5cfdd6be879f332d1ec84e17219a00bf002b329b985b9c",
+      "size": 30421283,
+      "extract_to": "payload/fix"
+    }
+  ],
+  "steps": [
+    {
+      "type": "swap_exe",
+      "payload": "payload/fix/Star Wars - The Force Unleashed I/40 FPS/SWTFU.exe",
+      "target": "SWTFU.exe"
+    }
+  ],
+  "post_apply_message": "TFU1 is set to 40 FPS — the safe cap. Above 40 the physics break: Force-gripped objects float upward on their own, which can block progress (hard stop in the Jedi Temple DLC). If you want 60 anyway, change '40 FPS' to '60 FPS' in this game's manifest.json and re-apply; drop back to 40 for the Jedi Temple missions.",
+  "notes": "FPS cap fix from PCGamingWiki community file 506 (fetched direct from source, nothing rehosted — payload contains patched GOG game exes, so it must NOT go in the public repo). Archive covers BOTH TFU games at 40/50/60/Unlimited + originals. Verified 2026-07-06: each capped variant differs from the original GOG exe by EXACTLY 1 byte — the 30fps constant 0x1E at offset 0x26E0A -> 0x28(40)/0x32(50)/0x3C(60); Unlimited is a 4-byte jump patch at 0x15F95. Steam's own exe is DRM-wrapped (hex-patching it directly is impossible), hence the GOG exe swap — the community-standard approach. Original Steam exe kept as SWTFU.exe.gfm-orig."
+}

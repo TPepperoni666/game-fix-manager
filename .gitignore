@@ -12,6 +12,9 @@ store/games/watch-dogs/payload/mod/data_win64/patch.dat
 store/games/the-crew/capture/pre-update-tcu-files/
 store/games/the-crew/capture/post-update-tcu-files/
 
-# Derived from the TCU download at apply time — never committed.
-store/games/the-crew/payload/downloads/
+# Downloaded/extracted at apply time — never committed (some contain
+# copyrighted game executables that must stay out of the public repo).
+store/games/*/payload/downloads/
 store/games/the-crew/payload/patch/
+store/games/force-unleashed-1/payload/fix/
+store/games/force-unleashed-2/payload/fix/
