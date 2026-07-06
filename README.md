@@ -1,81 +1,112 @@
 # Game Fix Manager
 
-Re-applies game mods/fixes after a SteamOS reinstall or reimage. Companion to
-the SteamOS Backup Manager (which covers Wine prefixes — this covers game-dir
-mods, and later launch options + systemd units).
+Re-applies game mods and fixes after a SteamOS reinstall or reimage.
+Companion to the SteamOS Backup Manager: that tool saves your Wine prefixes,
+this one puts the mods, launch options, and system setup back.
 
-**Payload licensing rule:** this repo is public while every payload is
-redistributable (V-Patch is CC BY-NC 4.0, licenses kept in each recipe's
-`docs/`). The moment a payload contains actual game files or patched
-executables (e.g. TCU), flip the repo private — or keep that payload
-SD-card-only.
+**The mental model:** every game has a *recipe* (what to do) and a *payload*
+(the mod files). Apply a recipe and it converges the game to the fixed state —
+run it twice, nothing breaks. Every original file is kept next to the modified
+one as `<name>.gfm-orig`, so **Revert always gets you back to stock.**
 
-## Fresh-install bootstrap (Steam Deck / SteamOS)
+## Quick start (Steam Deck / SteamOS)
 
-One line in Konsole clones (or updates) and applies:
-
-```bash
-if [ -d ~/game-fix-manager ]; then git -C ~/game-fix-manager pull; else git clone https://github.com/TPepperoni666/game-fix-manager.git ~/game-fix-manager; fi; python3 ~/game-fix-manager/gfm.py apply la-noire
-```
-
-The app finds its `store/` folder inside the clone, so this works before the
-SD card or Syncthing are set up. Install the game(s) from Steam first, then
-apply.
-
-## TUI & controller support
-
-The interactive menu uses the same gum interface as the SteamOS Backup
-Manager (and reuses the gum binary it installs). One-time setup on the Deck:
+One line in Konsole — clones on first run, updates after that, then opens the
+menu:
 
 ```bash
-python3 ~/game-fix-manager/gfm.py install
+if [ -d ~/game-fix-manager ]; then git -C ~/game-fix-manager pull; else git clone https://github.com/TPepperoni666/game-fix-manager.git ~/game-fix-manager; fi; python3 ~/game-fix-manager/gfm.py
 ```
 
-This creates a **Game Fix Manager** desktop shortcut (Konsole, menu-driven,
-auto-pulls recipe updates on launch). Controller navigation:
+Install the game from Steam first (exception: The Crew — see its row below),
+then apply its fix. For couch use, pick **🖥️ Install Shortcut** once — see
+[Controller support](#controller-support).
 
-- **Desktop Mode** — works immediately: Steam's built-in desktop layout maps
+## The menu — what each entry does
+
+| Entry | What it does |
+|-------|--------------|
+| **🔧 Apply Fixes** | Pick one or more games (TAB toggles, ENTER confirms) and install their fixes. Downloads any missing payloads first, backs up originals, then — if launch options changed — asks to restart Steam once at the end. |
+| **📋 Status** | Read-only health check: shows every game with the icons below. Never changes anything. |
+| **↩️ Revert a Game** | Puts a game back to stock from the `.gfm-orig` backups. Asks before each game. |
+| **🖥️ Install Shortcut** | Creates the desktop launcher (auto-updates recipes on every launch) and prints the Game Mode setup steps. |
+
+### Status icons
+
+| Icon | Meaning |
+|------|---------|
+| ✅ | Fix fully applied and verified (file contents actually checked, not guessed) |
+| ☐ | Game found, fix not applied (or payload not downloaded yet — apply fetches it) |
+| 🟡 | PARTIAL — some steps applied, some not. Common after a game update overwrote the mod, or launch options got cleared. Re-apply fixes it. |
+| ❓ | Game not found. Install it, or apply and type the path once (it's remembered). |
+
+## The games — what each fix does
+
+| Game | What the fix does | Manual steps left |
+|------|-------------------|-------------------|
+| **L.A. Noire** | V-Patch 2.0: uncaps 30 FPS, widescreen/ultrawide fixes. Sets the required `WINEDLLOVERRIDES` launch option itself. | None |
+| **Watch_Dogs** | Living City mod v2.9 (fuel, events, Black Market **weapon unlocks**) + your tuned config. Downloads the 274MB mod from this repo's release on first apply. | None |
+| **The Crew (TCU)** | Downloads the TCU patch from thecrewunlimited.com, installs the boot network service (needs sudo), stages the TCU launcher, sets launch options. **Add TheCrew.exe to Steam FIRST** — the tool finds the game through your shortcut. Keep the game folder on the SD card: the game is unobtainable and your save (`data.bin`) lives in it. | Force Proton on the shortcut (one-time) |
+| **Shift 2 Unleashed** | Xbox 360 controller button prompts (single pak swap). | None (untested recipe — first run will tell) |
+| **Force Unleashed 1** | Raises the 30 FPS cap to **40** (above 40 the grip physics break — a hard blocker in the Jedi Temple DLC; the manifest explains switching to 60). Downloads patched exes from PCGamingWiki. | None |
+| **Force Unleashed 2** | 60 FPS exe, skips the 7 logo intros, sets physics-taming launch options. Wet-clothes mod slot is ready but waiting on its ModDB file. | None |
+| **Transformers: WFC** | Stages the FPS-unlock trainer + a wrapper so it launches with the game, sets the launch option. Trainer is runtime memory patching — **press Num0 in game each session** (bind a back button). Untested under Proton. | Num0 per session; 60 FPS cap in QAM |
+
+## Controller support
+
+- **Desktop Mode** — works out of the box: Steam's desktop layout maps
   D-pad → arrows, A → Enter, B → Esc.
 - **Game Mode** — right-click the desktop shortcut → *Add to Steam*, then in
-  the shortcut's controller settings choose the official *Keyboard (WASD) and
-  Mouse* template (or map D-pad → arrow keys, A → Enter, B → Esc, and a
-  button for TAB to toggle multi-select entries).
+  its controller settings pick the official *Keyboard (WASD) and Mouse*
+  template (or map D-pad → arrows, A → Enter, B → Esc, plus a button for TAB
+  to toggle multi-select).
 
-## Commands
+## Terminal commands (same actions as the menu)
 
 | Command | What it does |
 |---------|--------------|
-| `python3 gfm.py` | interactive menu (uses gum if present, plain menus otherwise) |
-| `python3 gfm.py list` | every recipe + detected/applied status |
-| `python3 gfm.py apply [id ...]` | apply fixes (prompts for game path if not auto-found) |
-| `python3 gfm.py revert <id>` | restore originals from `.gfm-orig` backups |
-| `--dry-run` | show what would happen, touch nothing |
-| `--store PATH` / `--steam-root PATH` | overrides |
+| `python3 gfm.py` | the interactive menu |
+| `python3 gfm.py list` | the Status screen |
+| `python3 gfm.py apply [id ...]` | apply fixes — ids like `la-noire`, `the-crew`; none = pick from list |
+| `python3 gfm.py revert <id>` | back to stock |
+| `python3 gfm.py install` | desktop/Game Mode launcher |
+| `--dry-run` | print the full plan, touch nothing |
+| `--store PATH`, `--steam-root PATH` | overrides (mostly for development) |
 
-## Adding a game
+## Adding a new game
 
-1. Create `store/games/<id>/manifest.json` (copy `la-noire` as a template).
-2. Put mod files in `store/games/<id>/payload/`.
+1. Create `store/games/<id>/manifest.json` — copy `la-noire` (simple) or
+   `the-crew` (downloads + systemd) as a template.
+2. Mod files go in `store/games/<id>/payload/`; write where they came from in
+   the manifest's `notes`.
 3. Commit. No code changes needed.
 
-Step types available: `copy_files` (with `executable` flag for scripts),
-`swap_exe`, `systemd_unit` (user/system scope), `launch_options` (batched
-behind a single close-Steam → write → restart-Steam dance).
+Step types: `copy_files` (files/trees, `executable` flag for scripts),
+`swap_exe` (single-file swap), `remove_files` (reversible delete — intro
+videos), `launch_options` (Steam AND non-Steam shortcuts, batched behind one
+Steam restart), `systemd_unit` (boot services, user/system scope),
+`pak_edit` (edit inside zip-format game archives). Any step can be
+`"optional": true` (skip-with-warning instead of failing the recipe).
 
-Payload size note: GitHub blocks files >100MB — anything bigger needs Git LFS
-or stays SD-card-only.
+**Payload rules:** repo is public — payloads must be redistributable (keep
+licenses in the recipe's `docs/`). Actual game files / patched exes: fetch
+them from their original source via `remote_payloads` (TCU, Force Unleashed)
+or host big redistributable ones as GitHub release assets (Watch Dogs).
+GitHub blocks repo files >100MB either way.
 
-## Store resolution order
+## Where the store can live
 
-`--store` → `GFM_STORE` env → remembered in `~/.config/gfm/config.json` →
-`store/` next to the app (git clone) → SD card scan
-(`/run/media/*/steamos_restore/game_fixes`).
+Search order: `--store` → `GFM_STORE` env → remembered config
+(`~/.config/gfm/config.json`) → `store/` next to the app (the git clone) →
+SD card (`/run/media/*/steamos_restore/game_fixes`).
 
 ## Development
 
-Stdlib-only Python 3.11+. Core logic (`core/`) has no UI code; frontends
-implement `ui/base.py` so a GUI can drop in later.
+Stdlib-only Python 3.11+; developed on Windows, targets SteamOS. Core logic
+(`core/`) has no UI code; frontends implement `ui/base.py` so a GUI can drop
+in later. Note the gum UI only runs where gum exists (the Deck) — the plain
+fallback is what you get on a dev box.
 
 ```bash
-python tests/smoke_test.py   # end-to-end test with a fake Steam library
+python tests/smoke_test.py   # 51-check end-to-end suite, fake Steam library
 ```
