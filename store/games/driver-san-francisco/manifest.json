@@ -1,0 +1,36 @@
+{
+  "id": "driver-san-francisco",
+  "name": "Driver: San Francisco",
+  "aliases": ["Driver San Francisco", "DriverSF"],
+  "steam_appid": 33440,
+  "detect": {
+    "install_dir_names": ["Driver San Francisco"],
+    "marker_files": ["Driver.exe"]
+  },
+  "remote_payloads": [
+    {
+      "path": "payload/downloads/dxvk.tar.gz",
+      "url": "https://github.com/doitsujin/dxvk/releases/download/v3.0.1/dxvk-3.0.1.tar.gz",
+      "sha256": "bebb6284db590535b7b005c102ebf6850c98842cff0fded9aacb74babae14c49",
+      "size": 17873057,
+      "extract_to": "payload/dxvk"
+    }
+  ],
+  "steps": [
+    {
+      "type": "remove_files",
+      "targets": [
+        "Common/fmv/DriverSplash.bik",
+        "Common/fmv/ubisoft.bik"
+      ]
+    },
+    {
+      "type": "copy_files",
+      "from": "payload/dxvk/dxvk-3.0.1/x32/d3d9.dll",
+      "to": "{game_dir}",
+      "backup_originals": true
+    }
+  ],
+  "post_apply_message": "Driver San Francisco — 2 intro Bink files (DriverSplash + ubisoft) renamed to .gfm-orig, and DXVK's d3d9.dll dropped next to Driver.exe. That combo fixes the story-mode crash-to-desktop bug PCGW documents for SteamOS. About the 'no launcher' thing: the game exe works standalone (PCGW confirms Steam is not required when launched from the executable) — no cracks needed. If your shortcut points at DriverSanFranciscoLauncher.exe and it hangs, change it to point directly at Driver.exe. Ubisoft Connect servers are dead since Oct 2022 so DLC/multiplayer is offline-only; single-player works fine.",
+  "notes": "Delisted from Steam Dec 2016, Ubisoft Connect online services shut down Oct 2022 — but the Steam single-player installs still work. Two legit fixes bundled: (1) intro skip per PCGW; (2) DXVK d3d9.dll drop is PCGW's documented Linux/SteamOS fix for story-mode CTD (the bundled Ubisoft d3d9 is buggy under Proton, DXVK's shim overrides it). DXVK v3.0.1 pinned (later versions may have D3D9 regressions with old games). No SilentPatch for this game exists yet."
+}

@@ -1,0 +1,22 @@
+{
+  "id": "de-blob-2",
+  "name": "de Blob 2",
+  "aliases": ["deBlob2", "De Blob 2"],
+  "steam_appid": 563190,
+  "detect": {
+    "install_dir_names": ["de Blob 2"],
+    "marker_files": ["deBlob2.exe"]
+  },
+  "steps": [
+    {
+      "type": "remove_files",
+      "targets": [
+        "Data/Movies/logoMovie.bik.ogv",
+        "Data/Movies/sizzle.bik.ogv",
+        "Data/Movies/THQNORDIC_LOGO_Color_white.bik.ogv"
+      ]
+    }
+  ],
+  "post_apply_message": "de Blob 2 — 3 intro videos renamed to .gfm-orig. Same odd .bik.ogv extension as de Blob 1. Game runs at desktop resolution, but pillarboxed 16:9 in gameplay per PCGW — no widescreen fix documented, so this recipe only covers intros.",
+  "notes": "Intro skip only. Filenames from PCGW: logoMovie, sizzle (marketing reel), THQNORDIC logo. Sister recipe to de-blob."
+}

@@ -1,0 +1,13 @@
+{
+  "id": "spongebob-bfbb-rehydrated",
+  "name": "SpongeBob SquarePants: Battle for Bikini Bottom - Rehydrated",
+  "aliases": ["SpongeBob BFBB Rehydrated", "BFBB Rehydrated", "SpongeBob Rehydrated"],
+  "steam_appid": 969990,
+  "detect": {
+    "install_dir_names": ["SpongeBob SquarePants Battle for Bikini Bottom - Rehydrated"],
+    "marker_files": ["Pineapple.exe"]
+  },
+  "steps": [],
+  "post_apply_message": "STUB RECIPE — SpongeBob BFBB Rehydrated is here so scan/reconciliation know about it, but no fixes are actually applied yet. Intro-skip filenames are undocumented on PCGamingWiki; when you're on the Deck run: ls 'Pineapple/Content/Movies/' inside the game folder and paste the output back, and I'll turn this into a real intro-skip recipe. Nothing else to do here for now.",
+  "notes": "Stub. UE4 game, internal name 'Pineapple' (Purple Lamp Studios/THQ Nordic). PCGW's Essential Improvements section is bare — no documented intro-skip filenames as of 2026-07-07. Common UE4 layout would put intros at Pineapple/Content/Movies/*.mp4 or *.bik but I refuse to guess. Tony to `ls` and share, then this becomes a normal remove_files recipe."
+}

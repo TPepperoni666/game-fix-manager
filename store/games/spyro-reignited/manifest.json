@@ -1,0 +1,25 @@
+{
+  "id": "spyro-reignited",
+  "name": "Spyro Reignited Trilogy",
+  "aliases": ["Spyro Reignited", "Spyro Trilogy"],
+  "steam_appid": 996580,
+  "detect": {
+    "install_dir_names": ["Spyro Reignited Trilogy"],
+    "marker_files": ["Falcon.exe"]
+  },
+  "steps": [
+    {
+      "type": "remove_files",
+      "targets": [
+        "Falcon/Content/Movies/BumperATVI.mp4",
+        "Falcon/Content/Movies/BumperATVI_Gamma.mp4",
+        "Falcon/Content/Movies/BumperTFB.mp4",
+        "Falcon/Content/Movies/BumperTFB_Gamma.mp4",
+        "Falcon/Content/Movies/BumperUnreal.mp4",
+        "Falcon/Content/Movies/BumperUnreal_Gamma.mp4"
+      ]
+    }
+  ],
+  "post_apply_message": "Spyro Reignited — 6 intro Bumpers renamed to .gfm-orig (ATVI, Toys for Bob, Unreal — Standard + Gamma pair for each). Boot straight to menu next launch. Reversible.",
+  "notes": "Intro skip only. UE4 game, internal name 'Falcon' (Toys for Bob's codename). Filenames from PCGW. The 6 files are 3 logos × 2 variants (base + Gamma-corrected). If your monitor/Deck uses one variant, removing both is fine — the game falls through to menu."
+}

@@ -1,0 +1,22 @@
+{
+  "id": "de-blob",
+  "name": "de Blob",
+  "aliases": ["deBlob", "De Blob"],
+  "steam_appid": 532320,
+  "detect": {
+    "install_dir_names": ["de Blob"],
+    "marker_files": ["deBlob.exe"]
+  },
+  "steps": [
+    {
+      "type": "remove_files",
+      "targets": [
+        "Data/Movies/00_ChromaCity.bik.ogv",
+        "Data/Movies/logoMovie.bik.ogv",
+        "Data/Movies/THQNORDIC_LOGO_Color_white.bik.ogv"
+      ]
+    }
+  ],
+  "post_apply_message": "de Blob — 3 intro videos renamed to .gfm-orig. Note the odd .bik.ogv extension (THQ Nordic port pattern). PCGW does not document a widescreen fix (game runs pillarboxed 16:9 at desktop resolution) — this recipe only covers the intros.",
+  "notes": "Intro skip only. Wii port, filenames end in .bik.ogv (repackaged Bink as Ogg Vorbis). PCGW confirms no widescreen fix exists — the game engine is stuck at 16:9 pillarboxed. If someone releases a widescreen ASI later, add it as a copy_files step. Filenames from PCGW."
+}
