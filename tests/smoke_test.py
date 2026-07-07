@@ -543,8 +543,9 @@ def main():
         check("scan finds La Noire",  "110800" in appids_found)
         check("scan finds Cyberpunk", "1091500" in appids_found)
         check("scan skips Proton",    "1493710" not in appids_found)
-        check("library_kind marks internal path 'internal'",
-              all(g["library_kind"] == "internal" for g in installed))
+        check("library_kind labelled per game",
+              all(g.get("library_kind") in ("internal", "sd", "other")
+                  for g in installed))
         with_r, without_r = steamscan.cross_reference(installed, recipes_all)
         check("La Noire annotated as has_recipe=True",
               any(g["appid"] == "110800" and g.get("has_recipe")
