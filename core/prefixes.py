@@ -60,6 +60,28 @@ def load_gbm_csv(path: Path | None = None) -> dict[str, str]:
     return result
 
 
+def load_gbm_backup_map(sd_roots: list[Path] | None = None) -> dict[str, str]:
+    """{appid_str: safe_name} derived from what's actually in
+    <SD>/steamos_restore/prefix_backups/<name>/<appid>/.
+    Stronger than the CSV because the folder layout IS the manifest —
+    every folder is a confirmed pairing GBM wrote to disk itself."""
+    from . import store  # deferred import — store may import us
+    if sd_roots is None:
+        sd_roots = store.sd_card_roots()
+    result: dict[str, str] = {}
+    for sd in sd_roots:
+        root = sd / "steamos_restore" / "prefix_backups"
+        if not root.is_dir():
+            continue
+        for name_dir in root.iterdir():
+            if not name_dir.is_dir():
+                continue
+            for id_dir in name_dir.iterdir():
+                if id_dir.is_dir() and id_dir.name.isdigit():
+                    result[id_dir.name] = name_dir.name
+    return result
+
+
 def compatdata_prefixes(steam_root: Path) -> list[Path]:
     """Every compatdata/<numeric-id> folder across all Steam libraries."""
     out: list[Path] = []
@@ -106,40 +128,60 @@ def _recipe_id_set(recipe) -> set[str]:
     return {_norm(p) for p in parts if p}
 
 
-def identify_prefix(pfx: Path, recipe, gbm_map: dict[str, str]) -> str | None:
-    """If this prefix plausibly belongs to this recipe, return the signal
-    that matched ('csv' or 'drive_c'). None means no match."""
+def identify_prefix(pfx: Path, recipe, gbm_map: dict[str, str],
+                    backup_map: dict[str, str] | None = None
+                    ) -> tuple[str, str] | None:
+    """If this prefix plausibly belongs to this recipe, return
+    (signal, friendly_name). Signals, in confidence order:
+      'backup'  — appid found in GBM's SD backup folder layout
+      'csv'     — appid found in GBM's non_steam_games.csv
+      'drive_c' — install-dir folder name found under drive_c
+    None means no match."""
     appid = pfx.name
     recipe_ids = _recipe_id_set(recipe)
 
-    csv_name = gbm_map.get(appid)
-    if csv_name and _norm(csv_name) in recipe_ids:
-        return "csv"
+    if backup_map:
+        name = backup_map.get(appid)
+        if name and _norm(name) in recipe_ids:
+            return "backup", name
 
-    if _recipe_ids_hit_drive_c(pfx, recipe_ids):
-        return "drive_c"
+    name = gbm_map.get(appid)
+    if name and _norm(name) in recipe_ids:
+        return "csv", name
+
+    hits = {n for n in scan_drive_c(pfx) if _norm(n) in recipe_ids}
+    if hits:
+        return "drive_c", ", ".join(sorted(hits))
 
     return None
 
 
-def _recipe_ids_hit_drive_c(pfx: Path, recipe_ids: set[str]) -> bool:
-    return bool(recipe_ids & {_norm(n) for n in scan_drive_c(pfx)})
+def describe_prefix(pfx: Path, gbm_map: dict[str, str],
+                    backup_map: dict[str, str]) -> str:
+    """Best-effort friendly label for a prefix, ignoring recipes. Used to
+    give unmatched prefixes a name in browse/pick UIs."""
+    name = backup_map.get(pfx.name) or gbm_map.get(pfx.name)
+    if name:
+        return name
+    hits = sorted(scan_drive_c(pfx))
+    return f"drive_c: {', '.join(hits[:3])}" if hits else "unknown"
 
 
 def find_candidates(steam_root: Path, recipe, gbm_map: dict[str, str],
-                    exclude_appids: set[int]) -> list[tuple[Path, str]]:
-    """Candidate prefixes that plausibly belong to this recipe.
-    Excludes prefixes belonging to Steam games (appmanifest present) and
-    any explicitly-excluded appids (e.g. shortcuts we're rewiring FROM)."""
-    matches: list[tuple[Path, str]] = []
+                    backup_map: dict[str, str] | None,
+                    exclude_appids: set[int]
+                    ) -> list[tuple[Path, str, str]]:
+    """Candidate prefixes for this recipe. Returns (pfx, signal, name).
+    Excludes Steam-owned prefixes and explicitly-excluded appids."""
+    matches: list[tuple[Path, str, str]] = []
     for pfx in compatdata_prefixes(steam_root):
         if int(pfx.name) in exclude_appids:
             continue
         if is_steam_owned(pfx.name, steam_root):
             continue
-        signal = identify_prefix(pfx, recipe, gbm_map)
-        if signal:
-            matches.append((pfx, signal))
+        result = identify_prefix(pfx, recipe, gbm_map, backup_map)
+        if result:
+            matches.append((pfx, result[0], result[1]))
     return matches
 
 

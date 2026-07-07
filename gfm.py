@@ -200,7 +200,10 @@ class App:
             return
         self.ui.header("🔗 RECONCILE PREFIXES")
         gbm_map = prefixes.load_gbm_csv()
-        self.ui.msg(f"GBM CSV: {len(gbm_map)} known appid→name mappings", "dim")
+        backup_map = prefixes.load_gbm_backup_map()
+        self.ui.msg(
+            f"GBM sources: {len(backup_map)} SD backups, "
+            f"{len(gbm_map)} CSV entries", "dim")
 
         # shortcut appids we're processing (never adopt one of THESE as target)
         all_shortcut_ids: set[int] = set()
@@ -211,7 +214,8 @@ class App:
             except shortcutsvdf.ShortcutsError:
                 pass
 
-        plan: list[tuple] = []  # (recipe, current_appid, target_appid, signal)
+        # plan: (recipe, current_appid, target_appid, signal, friendly_name)
+        plan: list[tuple] = []
         for recipe in self.recipes:
             try:
                 sc_ids = shortcutsvdf.find_appids(self.steam_root, recipe.all_names)
@@ -224,27 +228,28 @@ class App:
                 continue
 
             excl = (all_shortcut_ids - {current})  # don't steal from siblings
-            cands = prefixes.find_candidates(self.steam_root, recipe, gbm_map, excl)
+            cands = prefixes.find_candidates(
+                self.steam_root, recipe, gbm_map, backup_map, excl)
             if not cands:
                 self.ui.msg(f"  {recipe.name}: no candidate prefix found", "dim")
                 continue
             if len(cands) == 1:
-                target, signal = cands[0]
-                self.ui.msg(f"  {recipe.name}: candidate compatdata/{target.name} "
-                            f"(matched by {signal})", "info")
+                target, signal, name = cands[0]
+                self.ui.msg(
+                    f'  {recipe.name}: compatdata/{target.name}  '
+                    f'"{name}" ({signal})', "info")
             else:
                 self.ui.msg(f"  {recipe.name}: multiple candidates, please pick",
                             "warn")
+                labels = [f'compatdata/{p.name}  "{n}" ({s})'
+                          for p, s, n in cands]
                 picked = self.ui.choose(
-                    f"Which prefix is {recipe.name}?",
-                    [f"compatdata/{p.name}  [matched by {s}]" for p, s in cands])
+                    f"Which prefix is {recipe.name}?", labels)
                 if not picked:
                     continue
-                pick_line = picked[0]
-                target_id = pick_line.split("/", 1)[1].split(" ", 1)[0]
-                target = next(p for p, _ in cands if p.name == target_id)
-                signal = next(s for p, s in cands if p.name == target_id)
-            plan.append((recipe, current, int(target.name), signal))
+                idx = labels.index(picked[0])
+                target, signal, name = cands[idx]
+            plan.append((recipe, current, int(target.name), signal, name))
 
         if not plan:
             self.ui.msg("Nothing to reconcile — every shortcut already has a "
@@ -253,9 +258,10 @@ class App:
 
         self.ui.msg("", "dim")
         self.ui.msg("Plan:", "info")
-        for recipe, cur, tgt, sig in plan:
-            self.ui.msg(f"  {recipe.name}: shortcut appid {cur} → {tgt}  "
-                        f"({sig})", "dim")
+        for recipe, cur, tgt, sig, name in plan:
+            self.ui.msg(
+                f'  {recipe.name}: shortcut appid {cur} → {tgt}  '
+                f'"{name}" via {sig}', "dim")
         if not self.ui.confirm(
                 "Rewrite shortcut appids to match the existing prefixes? "
                 "Steam will close briefly.", danger=True):
@@ -265,7 +271,7 @@ class App:
         if was_running:
             steamvdf.close_steam(lambda m: self.ui.msg(m, "warn"))
 
-        for recipe, cur, tgt, _sig in plan:
+        for recipe, cur, tgt, _sig, _name in plan:
             n = shortcutsvdf.set_appid(self.steam_root, recipe.all_names, tgt)
             moved = steamvdf.remap_compat_tool(self.steam_root, cur, tgt)
             self.ui.msg(

@@ -412,13 +412,26 @@ def main():
         gbm_csv.write_text("111222333,The_Crew\n", encoding="utf-8")
         check("gbm csv loads", prefixes.load_gbm_csv(gbm_csv)
               == {"111222333": "The_Crew"})
-        # drive_c signal alone (without csv)
+        # Fake GBM SD backup layout — the STRONGEST identification signal.
+        sd = tmp / "sdcard"
+        bk = sd / "steamos_restore" / "prefix_backups" / "The_Crew" / "111222333"
+        bk.mkdir(parents=True)
+        (bk / "pfx").mkdir()  # backup folder just needs to exist
+        backup_map = prefixes.load_gbm_backup_map([sd])
+        check("gbm backup folder map loads",
+              backup_map == {"111222333": "The_Crew"})
+        # drive_c signal alone (without csv OR backup map)
         gbm_empty: dict[str, str] = {}
-        cands = prefixes.find_candidates(steam, crew, gbm_empty,
-                                         exclude_appids={0xDEADBEEF})
+        cands = prefixes.find_candidates(
+            steam, crew, gbm_empty, None, exclude_appids={0xDEADBEEF})
         check("drive_c scan identifies the orphan",
               len(cands) == 1 and cands[0][0].name == "111222333"
-              and cands[0][1] == "drive_c")
+              and cands[0][1] == "drive_c" and "TheCrew" in cands[0][2])
+        # Backup map wins over CSV wins over drive_c
+        cands = prefixes.find_candidates(
+            steam, crew, gbm_empty, backup_map, exclude_appids={0xDEADBEEF})
+        check("backup signal beats drive_c",
+              cands[0][1] == "backup" and cands[0][2] == "The_Crew")
         # Pre-existing CompatToolMapping under the CURRENT shortcut appid
         cfg_v = steam / "config" / "config.vdf"
         cfg_v.parent.mkdir(exist_ok=True)
