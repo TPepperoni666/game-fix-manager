@@ -197,6 +197,67 @@ class App:
                         "in the shortcut's controller settings.", "warn")
         return [by_label[p] for p in picked if p in by_label]
 
+    def cmd_update(self):
+        """Pull the latest recipes and code from GitHub. If code changed,
+        offer to restart the app in place; recipe-only changes reload
+        without a restart."""
+        app_dir = Path(__file__).resolve().parent
+        self.ui.header("⬆️  UPDATE")
+        if not (app_dir / ".git").is_dir():
+            self.ui.msg(f"Not a git checkout: {app_dir}", "warn")
+            self.ui.msg("This copy likely came from the SD mirror or a manual "
+                        "download — nothing to pull.", "dim")
+            self.ui.msg("To install a fresh checkout, run the one-liner from "
+                        "the README.", "dim")
+            return
+
+        def git(*args) -> subprocess.CompletedProcess:
+            return subprocess.run(
+                ["git", "-C", str(app_dir), *args],
+                capture_output=True, text=True)
+
+        old_head = git("rev-parse", "HEAD").stdout.strip()
+        self.ui.msg(f"Local commit: {old_head[:7]}", "dim")
+        self.ui.msg("Checking GitHub...", "dim")
+
+        pull = git("pull", "--ff-only")
+        if pull.returncode != 0:
+            err = (pull.stderr or pull.stdout).strip()
+            self.ui.msg("Update failed:", "error")
+            for line in err.splitlines()[:8]:
+                self.ui.msg(f"  {line}", "dim")
+            return
+
+        new_head = git("rev-parse", "HEAD").stdout.strip()
+        if old_head == new_head:
+            self.ui.msg("Already up to date.", "success")
+            return
+
+        # What actually changed?
+        log = git("log", "--oneline", "--no-decorate",
+                  f"{old_head}..{new_head}").stdout.strip()
+        changed = git("diff", "--name-only",
+                      f"{old_head}..{new_head}").stdout.splitlines()
+        code_changed = any(f.endswith(".py") for f in changed)
+
+        self.ui.msg(f"Updated {old_head[:7]} → {new_head[:7]}.", "success")
+        self.ui.msg("New commits:", "info")
+        for line in log.splitlines()[:8]:
+            self.ui.msg(f"  {line}", "dim")
+
+        if code_changed:
+            if self.ui.confirm("Code was updated — restart the app now?"):
+                os.execv(sys.executable,
+                         [sys.executable, str(app_dir / "gfm.py")])
+            else:
+                self.ui.msg("Restart later to pick up the code changes.",
+                            "warn")
+        else:
+            # Recipe-only: reload without restart so the new games appear.
+            self.recipes = manifest.load_all(self.store_root)
+            self.ui.msg(f"Recipes reloaded: {len(self.recipes)} in the store.",
+                        "success")
+
     def cmd_reconcile(self):
         """Wire non-Steam shortcuts to pre-existing compatdata prefixes.
         For each recipe whose shortcut points at an empty prefix while a
@@ -383,6 +444,7 @@ class App:
                 "↩️  Revert a Game",
                 "🔗 Reconcile Prefixes (adopt existing compatdata)",
                 "💾 Mirror Store (offline copy on SD/NAS)",
+                "⬆️  Update (git pull latest recipes + code)",
                 "🖥️  Install Shortcut (Desktop + Game Mode)",
                 "❌ Exit"])
             choice = choice[0] if choice else "❌ Exit"
@@ -400,6 +462,9 @@ class App:
             elif choice.startswith("💾"):
                 self.cmd_mirror(None)
                 self.ui.input("Press Enter to continue")
+            elif choice.startswith("⬆"):
+                self.cmd_update()
+                self.ui.input("Press Enter to continue")
             elif choice.startswith("🖥"):
                 self.cmd_install()
                 self.ui.input("Press Enter to continue")
@@ -411,7 +476,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", nargs="?",
                         choices=["list", "apply", "revert", "install", "mirror",
-                                 "reconcile"],
+                                 "reconcile", "update"],
                         help="omit for interactive menu")
     parser.add_argument("ids", nargs="*", help="recipe ids (e.g. la-noire)")
     parser.add_argument("--store", help="path to the fix store")
@@ -438,6 +503,8 @@ def main():
         app.cmd_mirror(args.dest)
     elif args.command == "reconcile":
         app.cmd_reconcile()
+    elif args.command == "update":
+        app.cmd_update()
     else:
         app.menu()
 

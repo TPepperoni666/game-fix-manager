@@ -31,6 +31,7 @@ then apply its fix. For couch use, pick **🖥️ Install Shortcut** once — se
 | **↩️ Revert a Game** | Puts a game back to stock from the `.gfm-orig` backups. Asks before each game. |
 | **🔗 Reconcile Prefixes** | For non-Steam shortcuts whose Steam-picked appid points at an empty prefix while your real prefix sits under an old appid in `compatdata/`. Identifies the right one — first from GBM's SD backup folder layout (`prefix_backups/<name>/<appid>/` is a confirmed name↔id pair), then from GBM's `non_steam_games.csv`, then from a `drive_c` folder scan — and displays the discovered name in the plan so you can see what it thinks each prefix is. Rewrites the shortcut's appid and its `CompatToolMapping` entry; nothing on disk moves. |
 | **💾 Mirror Store** | Downloads any payloads you don't have yet, then copies the complete store to the SD card (or a path you give it, e.g. the NAS). After this, a reimage can restore **every** game with no internet — the app finds the SD copy automatically when there's no git clone. Run it again any time; it only copies what changed. |
+| **⬆️ Update** | `git pull` the latest recipes + code. Shows the new commit summaries. If code changed, offers to restart the app in place; recipe-only updates reload without a restart. Same effect as the desktop shortcut's auto-pull, but you can do it any time from inside the app. |
 | **🖥️ Install Shortcut** | Creates the desktop launcher (auto-updates recipes on every launch) and prints the Game Mode setup steps. |
 
 ### Status icons
@@ -75,6 +76,7 @@ then apply its fix. For couch use, pick **🖥️ Install Shortcut** once — se
 | `python3 gfm.py install` | desktop/Game Mode launcher |
 | `python3 gfm.py mirror [--dest PATH]` | offline copy of the store (default: SD card) |
 | `python3 gfm.py reconcile` | wire shortcuts to existing compatdata prefixes |
+| `python3 gfm.py update` | git pull latest recipes + code |
 | `--dry-run` | print the full plan, touch nothing |
 | `--store PATH`, `--steam-root PATH` | overrides (mostly for development) |
 
