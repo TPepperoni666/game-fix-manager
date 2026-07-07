@@ -1,0 +1,27 @@
+{
+  "id": "eclipse-jedi-survivor",
+  "name": "Star Wars Jedi: Survivor (Eclipse perf)",
+  "aliases": [
+    "STAR WARS Jedi Survivor",
+    "Jedi Survivor",
+    "SwGame"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "STAR WARS Jedi Survivor"
+    ],
+    "marker_files": [
+      "SwGame/Binaries/Win64/JediSurvivor.exe"
+    ]
+  },
+  "steps": [
+    {
+      "type": "copy_files",
+      "from": "payload/mod",
+      "to": "{game_dir}",
+      "backup_originals": true
+    }
+  ],
+  "post_apply_message": "Eclipse perf mod applied (or will be, once staged). Recommended Steam Deck settings: 1280x800, FSR Quality, shadows off, no ray tracing (kills performance). Use the SDWEAK launcher.\n\nEclipse's tested Deck hardware setup: GE-Proton (10-15 or newer), TDP 18, GPU clock 1800, CPU/GPU undervolt -50 in BIOS, SDWEAK enabled. IMPORTANT: this mod targets a SPECIFIC game build (Patch 9 / build 15643690). If Steam updates the game past that, the modded exe may crash — Revert this recipe (restores the original exe from .gfm-orig) and wait for an updated mod. The mod is NOT in git (it contains a modified copyrighted game exe); stage it into your local-payloads folder first — see notes.",
+  "notes": "Eclipse Steam Deck graphics-optimisation mod. Mod files are NOT committed (modified copyrighted game exe + large paks) — they live in your local-payloads folder off git. To stage: extract the Eclipse .rar, then copy the CONTENTS of its inner 'STAR WARS Jedi Survivor' folder into <local-payloads>/eclipse-jedi-survivor/payload/mod/ so you end up with payload/mod/SwGame/Binaries/Win64/JediSurvivor.exe. Then Apply copies that over the game dir, backing up replaced files. Source: Eclipse on Nexus (starwarsjedisurvivor/mods/465)."
+}

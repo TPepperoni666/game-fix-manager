@@ -1,0 +1,26 @@
+{
+  "id": "eclipse-wuchang",
+  "name": "Wuchang: Fallen Feathers (Eclipse perf)",
+  "aliases": [
+    "Wuchang Fallen Feathers",
+    "Wuchang"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "Wuchang Fallen Feathers"
+    ],
+    "marker_files": [
+      "Project_Plague/Content/Paks/pakchunk0-Windows_0_p.pak"
+    ]
+  },
+  "steps": [
+    {
+      "type": "copy_files",
+      "from": "payload/mod",
+      "to": "{game_dir}",
+      "backup_originals": true
+    }
+  ],
+  "post_apply_message": "Eclipse perf mod applied (or will be, once staged). Recommended Steam Deck settings: 1280x800, TSR scaling, all settings minimum. This mod is PAK-ONLY (no exe swap). The .rar has bare .pak files — place them under payload/mod/Project_Plague/Content/Paks/.\n\nEclipse's tested Deck hardware setup: GE-Proton (10-15 or newer), TDP 18, GPU clock 1800, CPU/GPU undervolt -50 in BIOS, SDWEAK enabled. IMPORTANT: this mod targets a SPECIFIC game build (1.4.1 / build 19447727). If Steam updates the game past that, the modded exe may crash — Revert this recipe (restores the original exe from .gfm-orig) and wait for an updated mod. The mod is NOT in git (it contains a modified copyrighted game exe); stage it into your local-payloads folder first — see notes.",
+  "notes": "Eclipse Steam Deck graphics-optimisation mod. Mod files are NOT committed (modified copyrighted game exe + large paks) — they live in your local-payloads folder off git. To stage: extract the Eclipse .rar, then copy the CONTENTS of its inner '(flat — paks only)' folder into <local-payloads>/eclipse-wuchang/payload/mod/ so you end up with payload/mod/Project_Plague/Content/Paks/Project_Plague-Windows_1_p.pak. Then Apply copies that over the game dir, backing up replaced files. Source: Eclipse on Nexus (wuchangfallenfeathers/mods/341)."
+}

@@ -21,3 +21,7 @@ store/games/force-unleashed-2/payload/fix/
 store/games/barnyard/payload/asiloader/
 store/games/driver-san-francisco/payload/downloads/
 store/games/driver-san-francisco/payload/dxvk/
+
+# Eclipse perf mods — modified copyrighted game exes, local-payloads only,
+# never committed. Recipes are manifest-only; files live off git.
+store/games/eclipse-*/payload/

@@ -1,0 +1,27 @@
+{
+  "id": "eclipse-silent-hill-2",
+  "name": "Silent Hill 2 (Eclipse perf)",
+  "aliases": [
+    "Silent Hill 2",
+    "SILENT HILL 2",
+    "SHProto"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "Silent Hill 2"
+    ],
+    "marker_files": [
+      "SHProto/Binaries/Win64/SHProto-Win64-Shipping.exe"
+    ]
+  },
+  "steps": [
+    {
+      "type": "copy_files",
+      "from": "payload/mod",
+      "to": "{game_dir}",
+      "backup_originals": true
+    }
+  ],
+  "post_apply_message": "Eclipse perf mod applied (or will be, once staged). Recommended Steam Deck settings: Enable SSAO and SSR (strongly recommended), all other settings minimum, native resolution (or TSR for more FPS). Reflections are the 'Shader Quality' option: Low = SSR, Medium/High = Lumen.\n\nEclipse's tested Deck hardware setup: GE-Proton (10-15 or newer), TDP 18, GPU clock 1800, CPU/GPU undervolt -50 in BIOS, SDWEAK enabled. IMPORTANT: this mod targets a SPECIFIC game build (1.1.258.834 / build 17080069). If Steam updates the game past that, the modded exe may crash — Revert this recipe (restores the original exe from .gfm-orig) and wait for an updated mod. The mod is NOT in git (it contains a modified copyrighted game exe); stage it into your local-payloads folder first — see notes.",
+  "notes": "Eclipse Steam Deck graphics-optimisation mod. Mod files are NOT committed (modified copyrighted game exe + large paks) — they live in your local-payloads folder off git. To stage: extract the Eclipse .rar, then copy the CONTENTS of its inner 'Silent Hill 2' folder into <local-payloads>/eclipse-silent-hill-2/payload/mod/ so you end up with payload/mod/SHProto/Binaries/Win64/SHProto-Win64-Shipping.exe. Then Apply copies that over the game dir, backing up replaced files. Source: Eclipse on Nexus (silenthill2/mods/372)."
+}

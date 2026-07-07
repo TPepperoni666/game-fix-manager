@@ -1,0 +1,27 @@
+{
+  "id": "eclipse-indiana-jones",
+  "name": "Indiana Jones and the Great Circle (Eclipse perf)",
+  "aliases": [
+    "Indiana Jones and the Great Circle",
+    "The Great Circle",
+    "Indiana Jones"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "The Great Circle"
+    ],
+    "marker_files": [
+      "TheGreatCircle.exe"
+    ]
+  },
+  "steps": [
+    {
+      "type": "copy_files",
+      "from": "payload/mod",
+      "to": "{game_dir}",
+      "backup_originals": true
+    }
+  ],
+  "post_apply_message": "Eclipse perf mod applied (or will be, once staged). Recommended Steam Deck settings: 1280x800, fullscreen, FOV 90, V-Sync off, motion blur off, chromatic aberration off, sharpening 70, film grain 0, texture pool LOW, decal distance low, reflections low. Use the 'For licence' folder (you own it, not the cracked variant). idTech engine — no d3d12 proxy. OPTIONAL after applying: delete files with 'hq' in the name and hqdb_marker.txt from the game's base/ folder to save disk.\n\nEclipse's tested Deck hardware setup: GE-Proton (10-15 or newer), TDP 18, GPU clock 1800, CPU/GPU undervolt -50 in BIOS, SDWEAK enabled. IMPORTANT: this mod targets a SPECIFIC game build (1.0.12.0). If Steam updates the game past that, the modded exe may crash — Revert this recipe (restores the original exe from .gfm-orig) and wait for an updated mod. The mod is NOT in git (it contains a modified copyrighted game exe); stage it into your local-payloads folder first — see notes.",
+  "notes": "Eclipse Steam Deck graphics-optimisation mod. Mod files are NOT committed (modified copyrighted game exe + large paks) — they live in your local-payloads folder off git. To stage: extract the Eclipse .rar, then copy the CONTENTS of its inner 'For licence/Indiana Jones and the Great Circle' folder into <local-payloads>/eclipse-indiana-jones/payload/mod/ so you end up with payload/mod/TheGreatCircle.exe. Then Apply copies that over the game dir, backing up replaced files. Source: Eclipse on Nexus (indianajonesandthegreatcircle/mods/59)."
+}

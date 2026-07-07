@@ -1,0 +1,26 @@
+{
+  "id": "eclipse-mafia-old-country",
+  "name": "Mafia: The Old Country (Eclipse perf)",
+  "aliases": [
+    "Mafia The Old Country",
+    "Mafia Old Country"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "Mafia The Old Country"
+    ],
+    "marker_files": [
+      "MafiaTheOldCountry/Binaries/Win64/MafiaTheOldCountry.exe"
+    ]
+  },
+  "steps": [
+    {
+      "type": "copy_files",
+      "from": "payload/mod",
+      "to": "{game_dir}",
+      "backup_originals": true
+    }
+  ],
+  "post_apply_message": "Eclipse perf mod applied (or will be, once staged). Recommended Steam Deck settings: 1280x800, TSR 'medium' preset, no extra graphics mods. ~30 FPS in the city. Custom renderer (no Lumen). This game specifically may need the d3d12-proxy copied to BOTH the game root AND the Win64 folder.\n\nEclipse's tested Deck hardware setup: GE-Proton (10-15 or newer), TDP 18, GPU clock 1800, CPU/GPU undervolt -50 in BIOS, SDWEAK enabled. IMPORTANT: this mod targets a SPECIFIC game build (build 20951841). If Steam updates the game past that, the modded exe may crash — Revert this recipe (restores the original exe from .gfm-orig) and wait for an updated mod. The mod is NOT in git (it contains a modified copyrighted game exe); stage it into your local-payloads folder first — see notes.",
+  "notes": "Eclipse Steam Deck graphics-optimisation mod. Mod files are NOT committed (modified copyrighted game exe + large paks) — they live in your local-payloads folder off git. To stage: extract the Eclipse .rar, then copy the CONTENTS of its inner 'Mafia The Old Country' folder into <local-payloads>/eclipse-mafia-old-country/payload/mod/ so you end up with payload/mod/MafiaTheOldCountry/Binaries/Win64/MafiaTheOldCountry.exe. Then Apply copies that over the game dir, backing up replaced files. Source: Eclipse on Nexus (mafiatheoldcountry/mods/46)."
+}

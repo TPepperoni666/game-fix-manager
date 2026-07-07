@@ -1,0 +1,26 @@
+{
+  "id": "eclipse-alan-wake-2",
+  "name": "Alan Wake 2 (Eclipse perf)",
+  "aliases": [
+    "Alan Wake 2",
+    "AlanWake2"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "Alan Wake 2"
+    ],
+    "marker_files": [
+      "AlanWake2.exe"
+    ]
+  },
+  "steps": [
+    {
+      "type": "copy_files",
+      "from": "payload/mod",
+      "to": "{game_dir}",
+      "backup_originals": true
+    }
+  ],
+  "post_apply_message": "Eclipse perf mod applied (or will be, once staged). Recommended Steam Deck settings: 1280x800, all settings minimum, FSR/TSR upscaling. Alan Wake 2 uses the Northlight engine (not Unreal) — no d3d12 proxy needed.\n\nEclipse's tested Deck hardware setup: GE-Proton (10-15 or newer), TDP 18, GPU clock 1800, CPU/GPU undervolt -50 in BIOS, SDWEAK enabled. IMPORTANT: this mod targets a SPECIFIC game build (Nexus build). If Steam updates the game past that, the modded exe may crash — Revert this recipe (restores the original exe from .gfm-orig) and wait for an updated mod. The mod is NOT in git (it contains a modified copyrighted game exe); stage it into your local-payloads folder first — see notes.",
+  "notes": "Eclipse Steam Deck graphics-optimisation mod. Mod files are NOT committed (modified copyrighted game exe + large paks) — they live in your local-payloads folder off git. To stage: extract the Eclipse .rar, then copy the CONTENTS of its inner 'Alan Wake 2' folder into <local-payloads>/eclipse-alan-wake-2/payload/mod/ so you end up with payload/mod/AlanWake2.exe. Then Apply copies that over the game dir, backing up replaced files. Source: Eclipse on Nexus (alanwake2/mods/75)."
+}

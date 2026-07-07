@@ -1,0 +1,27 @@
+{
+  "id": "eclipse-clair-obscur",
+  "name": "Clair Obscur: Expedition 33 (Eclipse perf)",
+  "aliases": [
+    "Clair Obscur Expedition 33",
+    "Clair Obscur",
+    "Expedition 33"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "Clair Obscur Expedition 33"
+    ],
+    "marker_files": [
+      "Sandfall/Binaries/Win64/SandFall-Win64-Shipping.exe"
+    ]
+  },
+  "steps": [
+    {
+      "type": "copy_files",
+      "from": "payload/mod",
+      "to": "{game_dir}",
+      "backup_originals": true
+    }
+  ],
+  "post_apply_message": "Eclipse perf mod applied (or will be, once staged). Recommended Steam Deck settings: 1280x800, TSR 75%, shadows and reflections off, no frame limit. Uses dynamic GI — don't disable upscaling or you'll stutter.\n\nEclipse's tested Deck hardware setup: GE-Proton (10-15 or newer), TDP 18, GPU clock 1800, CPU/GPU undervolt -50 in BIOS, SDWEAK enabled. IMPORTANT: this mod targets a SPECIFIC game build (1.5.4 / 63936). If Steam updates the game past that, the modded exe may crash — Revert this recipe (restores the original exe from .gfm-orig) and wait for an updated mod. The mod is NOT in git (it contains a modified copyrighted game exe); stage it into your local-payloads folder first — see notes.",
+  "notes": "Eclipse Steam Deck graphics-optimisation mod. Mod files are NOT committed (modified copyrighted game exe + large paks) — they live in your local-payloads folder off git. To stage: extract the Eclipse .rar, then copy the CONTENTS of its inner 'Clair Obscur Expedition 33' folder into <local-payloads>/eclipse-clair-obscur/payload/mod/ so you end up with payload/mod/Sandfall/Binaries/Win64/SandFall-Win64-Shipping.exe. Then Apply copies that over the game dir, backing up replaced files. Source: Eclipse on Nexus (clairobscurexpedition33/mods/498)."
+}

@@ -1,0 +1,27 @@
+{
+  "id": "eclipse-mgs-delta",
+  "name": "MGS Delta: Snake Eater (Eclipse perf)",
+  "aliases": [
+    "Metal Gear Solid Delta Snake Eater",
+    "MGS Delta",
+    "MGSDelta"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "MGSDelta"
+    ],
+    "marker_files": [
+      "MGSDelta/Binaries/Win64/MGSDelta-Win64-Shipping.exe"
+    ]
+  },
+  "steps": [
+    {
+      "type": "copy_files",
+      "from": "payload/mod",
+      "to": "{game_dir}",
+      "backup_originals": true
+    }
+  ],
+  "post_apply_message": "Eclipse perf mod applied (or will be, once staged). Recommended Steam Deck settings: 1280x800, TSR enabled (NOT TAAU — unstable) at medium/high/ultra to taste. Shadows high or ultra (no perf cost). GI medium-high (Lumen unused here, only affects ambient).\n\nEclipse's tested Deck hardware setup: GE-Proton (10-15 or newer), TDP 18, GPU clock 1800, CPU/GPU undervolt -50 in BIOS, SDWEAK enabled. IMPORTANT: this mod targets a SPECIFIC game build (1.2.4 / build 21521628). If Steam updates the game past that, the modded exe may crash — Revert this recipe (restores the original exe from .gfm-orig) and wait for an updated mod. The mod is NOT in git (it contains a modified copyrighted game exe); stage it into your local-payloads folder first — see notes.",
+  "notes": "Eclipse Steam Deck graphics-optimisation mod. Mod files are NOT committed (modified copyrighted game exe + large paks) — they live in your local-payloads folder off git. To stage: extract the Eclipse .rar, then copy the CONTENTS of its inner 'Metal Gear Solid Delta Snake Eater' folder into <local-payloads>/eclipse-mgs-delta/payload/mod/ so you end up with payload/mod/MGSDelta/Binaries/Win64/MGSDelta-Win64-Shipping.exe. Then Apply copies that over the game dir, backing up replaced files. Source: Eclipse on Nexus (metalgearsoliddeltasnakeeater/mods/181)."
+}
