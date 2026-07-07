@@ -191,6 +191,61 @@ def set_launch_options(steam_root: Path, appid: int, value: str) -> int:
     return updated
 
 
+# --- config.vdf: CompatToolMapping ----------------------------------------
+
+_COMPAT_PATH = ("Software", "Valve", "Steam", "CompatToolMapping")
+
+
+def _config_vdf(steam_root: Path) -> Path:
+    return steam_root / "config" / "config.vdf"
+
+
+def _compat_node(tree: dict, create: bool = False) -> dict | None:
+    root = next(iter(tree.values()), None)  # InstallConfigStore
+    if not isinstance(root, dict):
+        return None
+    node = root
+    for name in _COMPAT_PATH:
+        node = _child_ci(node, name, create=create)
+        if node is None:
+            return None
+    return node
+
+
+def get_compat_tool(steam_root: Path, appid: int) -> dict | None:
+    """Read CompatToolMapping[appid] from config.vdf, or None."""
+    cfg = _config_vdf(steam_root)
+    if not cfg.is_file():
+        return None
+    tree = vdf_loads(cfg.read_text(encoding="utf-8", errors="surrogateescape"))
+    node = _compat_node(tree)
+    if not node:
+        return None
+    entry = node.get(str(appid))
+    return entry if isinstance(entry, dict) else None
+
+
+def remap_compat_tool(steam_root: Path, old_appid: int, new_appid: int) -> bool:
+    """Move CompatToolMapping[old_appid] to [new_appid] in config.vdf.
+    Steam must be closed. Returns True if a mapping moved."""
+    cfg = _config_vdf(steam_root)
+    if not cfg.is_file():
+        return False
+    text = cfg.read_text(encoding="utf-8", errors="surrogateescape")
+    tree = vdf_loads(text)
+    node = _compat_node(tree, create=False)
+    if node is None:
+        return False
+    mapping = node.pop(str(old_appid), None)
+    if mapping is None:
+        return False
+    node[str(new_appid)] = mapping
+    shutil.copy2(cfg, cfg.with_suffix(".vdf.gfm-bak"))
+    cfg.write_text(vdf_dumps(tree) + "\n", encoding="utf-8",
+                   errors="surrogateescape")
+    return True
+
+
 # --- Steam process control (Linux; the Deck path) ---------------------------
 
 def steam_running() -> bool:

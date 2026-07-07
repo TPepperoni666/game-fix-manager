@@ -168,6 +168,32 @@ def get_launch_options(steam_root: Path, names: list[str]) -> dict[str, str]:
     return result
 
 
+def set_appid(steam_root: Path, names: list[str], new_appid: int) -> int:
+    """Rewrite the appid of every shortcut whose AppName matches. Steam
+    must be closed. Used when adopting an existing compatdata prefix —
+    the shortcut jumps to that prefix's appid rather than the prefix
+    being renamed to Steam's chosen id. Returns files updated."""
+    names_norm = {_norm(n) for n in names}
+    new_appid = int(new_appid) & 0xFFFFFFFF
+    updated = 0
+    for f in _shortcut_files(steam_root):
+        raw = f.read_bytes()
+        root = loads(raw)
+        changed = False
+        for entry in _entries(root):
+            if not _matches(entry, names_norm):
+                continue
+            key, t, current = _get_ci(entry, "appid")
+            if t == TYPE_INT and current != new_appid:
+                entry[key or "appid"] = (TYPE_INT, new_appid)
+                changed = True
+        if changed:
+            shutil.copy2(f, f.with_suffix(".vdf.gfm-bak"))
+            f.write_bytes(dumps(root))
+            updated += 1
+    return updated
+
+
 def set_launch_options(steam_root: Path, names: list[str], value: str) -> int:
     """Set LaunchOptions on every matching shortcut. Steam must be closed.
     Returns number of files updated."""

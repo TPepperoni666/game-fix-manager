@@ -399,6 +399,59 @@ def main():
         check("managed values removed on revert",
               "ControllerEnabled" not in regtext and '"Untouched"="yes"' in regtext)
 
+        print("== prefix reconcile: adopt-existing (shortcut appid rewrite) ==")
+        from core import prefixes
+        # Fixture: an ORPHAN prefix for "The Crew Unlimited" at the old appid
+        # 111222333 (populated with a marker), and the shortcut created above
+        # points at 0xDEADBEEF = 3735928559 — currently no prefix there.
+        orphan = steam / "steamapps" / "compatdata" / "111222333" / "pfx" / "drive_c" / "Program Files" / "TheCrew"
+        orphan.mkdir(parents=True)
+        (orphan / "TheCrew.exe").write_bytes(b"EXE")
+        # GBM CSV that names the orphan
+        gbm_csv = tmp / "non_steam_games.csv"
+        gbm_csv.write_text("111222333,The_Crew\n", encoding="utf-8")
+        check("gbm csv loads", prefixes.load_gbm_csv(gbm_csv)
+              == {"111222333": "The_Crew"})
+        # drive_c signal alone (without csv)
+        gbm_empty: dict[str, str] = {}
+        cands = prefixes.find_candidates(steam, crew, gbm_empty,
+                                         exclude_appids={0xDEADBEEF})
+        check("drive_c scan identifies the orphan",
+              len(cands) == 1 and cands[0][0].name == "111222333"
+              and cands[0][1] == "drive_c")
+        # Pre-existing CompatToolMapping under the CURRENT shortcut appid
+        cfg_v = steam / "config" / "config.vdf"
+        cfg_v.parent.mkdir(exist_ok=True)
+        cfg_v.write_text(
+            '"InstallConfigStore"\n{\n\t"Software"\n\t{\n\t\t"Valve"\n\t\t{\n'
+            '\t\t\t"Steam"\n\t\t\t{\n\t\t\t\t"CompatToolMapping"\n\t\t\t\t{\n'
+            f'\t\t\t\t\t"{0xDEADBEEF}"\n\t\t\t\t\t{{\n'
+            '\t\t\t\t\t\t"name"\t\t"proton_9"\n'
+            '\t\t\t\t\t\t"config"\t\t""\n'
+            '\t\t\t\t\t\t"priority"\t\t"250"\n'
+            '\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n',
+            encoding="utf-8")
+        check("compat mapping present pre-reconcile",
+              steamvdf.get_compat_tool(steam, 0xDEADBEEF)["name"] == "proton_9")
+
+        # Rewrite: shortcut appid + config compat mapping
+        n = shortcutsvdf.set_appid(steam, crew.all_names, 111222333)
+        check("shortcut appid rewritten in one file", n == 1)
+        again = shortcutsvdf.loads((scdir / "shortcuts.vdf").read_bytes())
+        entry = again["shortcuts"][1]["0"][1]
+        check("shortcut now points at orphan appid",
+              entry["appid"][1] == 111222333)
+        check("shortcut backup written",
+              (scdir / "shortcuts.vdf.gfm-bak").is_file())
+        moved = steamvdf.remap_compat_tool(steam, 0xDEADBEEF, 111222333)
+        check("compat mapping moved to new appid", moved
+              and steamvdf.get_compat_tool(steam, 111222333)["name"] == "proton_9"
+              and steamvdf.get_compat_tool(steam, 0xDEADBEEF) is None)
+        # And detect.find_prefix now finds it via the (updated) shortcut
+        check("detect finds the adopted prefix",
+              detect.find_prefix(crew, steam)
+              == steam / "steamapps" / "compatdata" / "111222333" / "pfx")
+
         print("== store mirror (incremental offline copy) ==")
         from core import store as store_mod
         mirror_dest = tmp / "sdcard" / "steamos_restore" / "game_fixes"

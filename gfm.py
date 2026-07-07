@@ -18,7 +18,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from core import detect, engine, fetch, manifest, shortcutsvdf, steamvdf, store
+from core import (detect, engine, fetch, manifest, prefixes, shortcutsvdf,
+                  steamvdf, store)
 from ui import get_ui
 
 STATUS_ICON = {engine.APPLIED: "✅", engine.NOT_APPLIED: "☐ ",
@@ -189,6 +190,94 @@ class App:
         picked = self.ui.choose(prompt, options, multi=True)
         return [by_label[p] for p in picked]
 
+    def cmd_reconcile(self):
+        """Wire non-Steam shortcuts to pre-existing compatdata prefixes.
+        For each recipe whose shortcut points at an empty prefix while a
+        populated candidate sits elsewhere in compatdata, rewrite the
+        shortcut's appid (and its CompatToolMapping) to the candidate."""
+        if self.steam_root is None:
+            self.ui.msg("No Steam root — nothing to reconcile.", "warn")
+            return
+        self.ui.header("🔗 RECONCILE PREFIXES")
+        gbm_map = prefixes.load_gbm_csv()
+        self.ui.msg(f"GBM CSV: {len(gbm_map)} known appid→name mappings", "dim")
+
+        # shortcut appids we're processing (never adopt one of THESE as target)
+        all_shortcut_ids: set[int] = set()
+        for r in self.recipes:
+            try:
+                all_shortcut_ids.update(
+                    shortcutsvdf.find_appids(self.steam_root, r.all_names))
+            except shortcutsvdf.ShortcutsError:
+                pass
+
+        plan: list[tuple] = []  # (recipe, current_appid, target_appid, signal)
+        for recipe in self.recipes:
+            try:
+                sc_ids = shortcutsvdf.find_appids(self.steam_root, recipe.all_names)
+            except shortcutsvdf.ShortcutsError:
+                continue
+            if not sc_ids:
+                continue
+            current = sc_ids[0]
+            if prefixes.shortcut_has_live_prefix(self.steam_root, current):
+                continue
+
+            excl = (all_shortcut_ids - {current})  # don't steal from siblings
+            cands = prefixes.find_candidates(self.steam_root, recipe, gbm_map, excl)
+            if not cands:
+                self.ui.msg(f"  {recipe.name}: no candidate prefix found", "dim")
+                continue
+            if len(cands) == 1:
+                target, signal = cands[0]
+                self.ui.msg(f"  {recipe.name}: candidate compatdata/{target.name} "
+                            f"(matched by {signal})", "info")
+            else:
+                self.ui.msg(f"  {recipe.name}: multiple candidates, please pick",
+                            "warn")
+                picked = self.ui.choose(
+                    f"Which prefix is {recipe.name}?",
+                    [f"compatdata/{p.name}  [matched by {s}]" for p, s in cands])
+                if not picked:
+                    continue
+                pick_line = picked[0]
+                target_id = pick_line.split("/", 1)[1].split(" ", 1)[0]
+                target = next(p for p, _ in cands if p.name == target_id)
+                signal = next(s for p, s in cands if p.name == target_id)
+            plan.append((recipe, current, int(target.name), signal))
+
+        if not plan:
+            self.ui.msg("Nothing to reconcile — every shortcut already has a "
+                        "live prefix (or no candidate exists).", "success")
+            return
+
+        self.ui.msg("", "dim")
+        self.ui.msg("Plan:", "info")
+        for recipe, cur, tgt, sig in plan:
+            self.ui.msg(f"  {recipe.name}: shortcut appid {cur} → {tgt}  "
+                        f"({sig})", "dim")
+        if not self.ui.confirm(
+                "Rewrite shortcut appids to match the existing prefixes? "
+                "Steam will close briefly.", danger=True):
+            return
+
+        was_running = steamvdf.steam_running()
+        if was_running:
+            steamvdf.close_steam(lambda m: self.ui.msg(m, "warn"))
+
+        for recipe, cur, tgt, _sig in plan:
+            n = shortcutsvdf.set_appid(self.steam_root, recipe.all_names, tgt)
+            moved = steamvdf.remap_compat_tool(self.steam_root, cur, tgt)
+            self.ui.msg(
+                f"  {recipe.name}: shortcut updated ({n} file(s)); "
+                f"compat mapping {'remapped' if moved else 'no entry'}",
+                "success")
+
+        if was_running:
+            steamvdf.start_steam(lambda m: self.ui.msg(m, "warn"))
+        self.ui.msg("Done. Launch each game from Steam to confirm your "
+                    "existing setup carried over.", "success")
+
     def cmd_mirror(self, dest_arg: str | None):
         """Make the SD card (or any path) a complete offline copy of the
         store: pre-fetch every remote payload, then incremental copy."""
@@ -279,6 +368,7 @@ class App:
                 "🔧 Apply Fixes",
                 "📋 Status",
                 "↩️  Revert a Game",
+                "🔗 Reconcile Prefixes (adopt existing compatdata)",
                 "💾 Mirror Store (offline copy on SD/NAS)",
                 "🖥️  Install Shortcut (Desktop + Game Mode)",
                 "❌ Exit"])
@@ -291,6 +381,9 @@ class App:
                 self.ui.input("Press Enter to continue")
             elif choice.startswith("↩"):
                 self.cmd_revert([])
+            elif choice.startswith("🔗"):
+                self.cmd_reconcile()
+                self.ui.input("Press Enter to continue")
             elif choice.startswith("💾"):
                 self.cmd_mirror(None)
                 self.ui.input("Press Enter to continue")
@@ -304,7 +397,8 @@ class App:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", nargs="?",
-                        choices=["list", "apply", "revert", "install", "mirror"],
+                        choices=["list", "apply", "revert", "install", "mirror",
+                                 "reconcile"],
                         help="omit for interactive menu")
     parser.add_argument("ids", nargs="*", help="recipe ids (e.g. la-noire)")
     parser.add_argument("--store", help="path to the fix store")
@@ -329,6 +423,8 @@ def main():
         app.cmd_install()
     elif args.command == "mirror":
         app.cmd_mirror(args.dest)
+    elif args.command == "reconcile":
+        app.cmd_reconcile()
     else:
         app.menu()
 

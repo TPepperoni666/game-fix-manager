@@ -29,6 +29,7 @@ then apply its fix. For couch use, pick **🖥️ Install Shortcut** once — se
 | **🔧 Apply Fixes** | Pick one or more games (TAB toggles, ENTER confirms) and install their fixes. Downloads any missing payloads first, backs up originals, then — if launch options changed — asks to restart Steam once at the end. |
 | **📋 Status** | Read-only health check: shows every game with the icons below. Never changes anything. |
 | **↩️ Revert a Game** | Puts a game back to stock from the `.gfm-orig` backups. Asks before each game. |
+| **🔗 Reconcile Prefixes** | For non-Steam shortcuts whose Steam-picked appid points at an empty prefix while your real prefix sits under an old appid in `compatdata/`. Identifies the right one (GBM CSV, then a `drive_c` folder scan), then rewrites the shortcut's appid and its `CompatToolMapping` entry to point at the existing prefix — so your saves/registry/mods are back in play. Steam closes for the write; nothing on disk moves. |
 | **💾 Mirror Store** | Downloads any payloads you don't have yet, then copies the complete store to the SD card (or a path you give it, e.g. the NAS). After this, a reimage can restore **every** game with no internet — the app finds the SD copy automatically when there's no git clone. Run it again any time; it only copies what changed. |
 | **🖥️ Install Shortcut** | Creates the desktop launcher (auto-updates recipes on every launch) and prints the Game Mode setup steps. |
 
@@ -73,6 +74,7 @@ then apply its fix. For couch use, pick **🖥️ Install Shortcut** once — se
 | `python3 gfm.py revert <id>` | back to stock |
 | `python3 gfm.py install` | desktop/Game Mode launcher |
 | `python3 gfm.py mirror [--dest PATH]` | offline copy of the store (default: SD card) |
+| `python3 gfm.py reconcile` | wire shortcuts to existing compatdata prefixes |
 | `--dry-run` | print the full plan, touch nothing |
 | `--store PATH`, `--steam-root PATH` | overrides (mostly for development) |
 
