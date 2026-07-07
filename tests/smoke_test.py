@@ -557,10 +557,11 @@ def main():
         check("cross_reference counts add up",
               with_r + without_r == len(installed))
         # Merge into map — must not clobber the SD-games section
+        from core import sdmap as _sdmap_mod
         existing_map = {"games": {"la-noire": {"path": "/x"}}}
         map_out = tmp / "combined_map.json"
-        merged = sdmap.write_steam_section(installed, dest=map_out,
-                                            existing=existing_map)
+        merged = _sdmap_mod.write_steam_section(installed, dest=map_out,
+                                                 existing=existing_map)
         check("steam merge preserves sd games section",
               merged["games"]["la-noire"]["path"] == "/x"
               and "steam_games" in merged
