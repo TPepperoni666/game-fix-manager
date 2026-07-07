@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from . import shortcutsvdf
+from . import sdmap, shortcutsvdf
 from .manifest import Recipe
 
 _KV_RE = re.compile(r'"([^"]+)"\s+"([^"]*)"')
@@ -111,9 +111,15 @@ def find_prefix(recipe: Recipe, steam_root: Path | None) -> Path | None:
 
 def find_game_dir(recipe: Recipe, steam_root: Path | None,
                   remembered: dict[str, str]) -> Path | None:
+    # 1) Local override — user typed a path once, it's authoritative for them.
     saved = remembered.get(recipe.id)
     if saved and Path(saved).is_dir():
         return Path(saved)
+    # 2) SD map — the tool's authoritative source. If the game is there,
+    # use that path and skip every fallback. No probabilistic anything.
+    mapped = sdmap.get_game_path(recipe.id)
+    if mapped is not None:
+        return mapped
     if steam_root is None:
         return None
     libs = library_folders(steam_root)

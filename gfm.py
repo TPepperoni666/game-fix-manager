@@ -18,7 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from core import (detect, engine, fetch, manifest, prefixes, sdscan,
+from core import (detect, engine, fetch, manifest, prefixes, sdmap, sdscan,
                   shortcutsvdf, steamvdf, store)
 from ui import get_ui
 
@@ -302,20 +302,43 @@ class App:
                         "recipe, then re-scan.)", "dim")
         self.ui.msg("", "dim")
 
-        if not matched:
+        if not matched and not unmatched:
             self.ui.msg("Nothing to save.", "warn")
             return
-        if not self.ui.confirm(
-                f"Save {len(matched)} path(s) to ~/.config/gfm/config.json?"):
+
+        # Preview the diff against what's already on disk
+        dest = sdmap.default_write_path()
+        if dest is None:
+            self.ui.msg("No SD card mounted — can't save the map. Insert "
+                        "the card and re-scan.", "error")
+            return
+        existing = sdmap.load_first()
+        preview = sdmap.write(matched, unmatched, games_dir,
+                              dest=dest.with_suffix(".preview.json"),
+                              existing=existing)
+        # Immediately delete the preview file — we only wanted the payload
+        dest.with_suffix(".preview.json").unlink(missing_ok=True)
+        d = sdmap.diff(existing, preview)
+        if d["added"]:
+            self.ui.msg(f"New: {', '.join(d['added'])}", "info")
+        if d["changed"]:
+            self.ui.msg(f"Path changed: {', '.join(d['changed'])}", "warn")
+        if d["removed"]:
+            self.ui.msg(f"Removed: {', '.join(d['removed'])}", "warn")
+        if not (d["added"] or d["changed"] or d["removed"]) and not unmatched:
+            self.ui.msg("Map already up to date — nothing changed.", "success")
             return
 
-        game_paths = self.cfg.setdefault("game_paths", {})
-        for recipe, folder, _sig in matched:
-            game_paths[recipe.id] = str(folder)
-        store.save_config(self.cfg)
+        self.ui.msg(f"Will write: {dest}", "dim")
+        if not self.ui.confirm("Save the SD map to that path?"):
+            return
+        sdmap.write(matched, unmatched, games_dir, dest=dest,
+                    existing=existing)
         self.ui.msg(
-            f"Saved. {len(matched)} game(s) now auto-locate to their SD "
-            "folder — Apply won't ask you for a path.", "success")
+            f"Saved. {len(matched)} game(s) mapped, {len(unmatched)} "
+            "folder(s) unmatched.", "success")
+        self.ui.msg("The tool now looks here first — no path prompts for "
+                    "mapped games.", "dim")
 
     def cmd_reconcile(self):
         """Wire non-Steam shortcuts to pre-existing compatdata prefixes.

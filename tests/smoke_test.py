@@ -522,6 +522,47 @@ def main():
               detect.find_prefix(crew, steam)
               == steam / "steamapps" / "compatdata" / "111222333" / "pfx")
 
+        print("== SD map: authoritative game path lookup ==")
+        from core import sdmap as _sdmap
+        # Fixture: SD card holding a sd_map.json that names La Noire
+        real_pfx = tmp / "sd_scan" / "primary" / "Games" / "L.A. Noire"
+        real_pfx.mkdir(parents=True)
+        map_file = tmp / "sd_scan" / "primary" / "steamos_restore" / "game_fixes" / "sd_map.json"
+        map_file.parent.mkdir(parents=True)
+        map_file.write_text(_json.dumps({
+            "games_dir": str(real_pfx.parent),
+            "games": {"la-noire": {"path": str(real_pfx),
+                                    "notes": "hand-verified"}}
+        }), encoding="utf-8")
+        # Redirect sd_card_roots to our fixture
+        import os as _os2
+        _os2.environ["GFM_SD_ROOTS"] = str(tmp / "sd_scan" / "primary")
+        # Monkey-patch store.sd_card_roots to consult the env var for tests
+        from core import store as _store
+        original = _store.sd_card_roots
+        _store.sd_card_roots = lambda: [Path(p) for p in _os2.environ.get(
+            "GFM_SD_ROOTS", "").split(_os2.pathsep) if p and Path(p).is_dir()]
+        try:
+            found = _sdmap.get_game_path("la-noire")
+            check("sd_map.json returns the mapped path", found == real_pfx)
+            check("unmapped game returns None",
+                  _sdmap.get_game_path("nonexistent-game") is None)
+            # Detection now prefers the map over shortcut / library scans
+            la_recipe = [r for r in manifest.load_all(tmp / "store")
+                         if r.id == "la-noire"][0]
+            check("detect.find_game_dir uses the map first",
+                  detect.find_game_dir(la_recipe, steam, {}) == real_pfx)
+            # And still respects a local remembered override
+            override_path = tmp / "override"
+            override_path.mkdir()
+            check("machine config override still wins over the map",
+                  detect.find_game_dir(la_recipe, steam,
+                                        {"la-noire": str(override_path)})
+                  == override_path)
+        finally:
+            _store.sd_card_roots = original
+            del _os2.environ["GFM_SD_ROOTS"]
+
         print("== SD Games/ folder scan (auto-populate paths) ==")
         from core import sdscan
         sd_games = tmp / "sd_scan" / "Games"
