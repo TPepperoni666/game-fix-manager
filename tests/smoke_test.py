@@ -399,6 +399,20 @@ def main():
         check("managed values removed on revert",
               "ControllerEnabled" not in regtext and '"Untouched"="yes"' in regtext)
 
+        print("== step-free (documentation-only) recipe ==")
+        doc_dir = tmp / "store" / "games" / "doc-game"
+        doc_dir.mkdir(parents=True)
+        (doc_dir / "manifest.json").write_text(
+            _json.dumps({"id": "doc-game", "name": "Doc Game"}),
+            encoding="utf-8")
+        doc = [r for r in manifest.load_all(tmp / "store")
+               if r.id == "doc-game"][0]
+        check("step-free recipe loads (steps optional)", doc.steps == [])
+        doc_ctx = engine.Ctx(doc, game_dir, dry_run=False, log=quiet)
+        engine.apply_recipe(doc, doc_ctx)  # must not raise
+        check("verify step-free = APPLIED",
+              engine.verify_recipe(doc, doc_ctx) == engine.APPLIED)
+
         print("== wine_registry: system hive + {game_dir_win} template ==")
         # New system.reg alongside user.reg — same prefix
         (pfx / "system.reg").write_text(

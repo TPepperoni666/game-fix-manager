@@ -50,9 +50,12 @@ def load_recipe(recipe_dir: Path) -> Recipe:
     except json.JSONDecodeError as e:
         raise ManifestError(f"{path}: invalid JSON — {e}") from e
 
-    steps = _require(data, "steps", path)
-    if not isinstance(steps, list) or not steps:
-        raise ManifestError(f"{path}: 'steps' must be a non-empty list")
+    # Steps are optional — a recipe with no steps is a documentation-only
+    # entry (declares the game exists so detection, reconciliation and
+    # mirroring know about it) and verifies as APPLIED.
+    steps = data.get("steps", [])
+    if not isinstance(steps, list):
+        raise ManifestError(f"{path}: 'steps' must be a list")
     for i, step in enumerate(steps):
         stype = step.get("type")
         if stype not in KNOWN_STEP_TYPES:

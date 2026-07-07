@@ -87,8 +87,11 @@ def verify_recipe(recipe: Recipe, ctx: Ctx) -> str:
         except StepError:
             if not s.get("optional"):
                 raise
-    if not statuses or all(s == APPLIED for s in statuses):
-        return APPLIED if statuses else NOT_APPLIED
+    # No steps to check → nothing to un-do, count as applied.
+    if not statuses:
+        return APPLIED
+    if all(s == APPLIED for s in statuses):
+        return APPLIED
     if all(s == NOT_APPLIED for s in statuses):
         return NOT_APPLIED
     return PARTIAL
