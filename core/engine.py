@@ -40,20 +40,51 @@ class Ctx:
     dry_run: bool = False
     log: Callable[[str], None] = print
     steam_root: Path | None = None
+    # Optional folder (NAS mount, SD card, wherever) holding local-only
+    # payloads that override the recipe's committed/fetched files. Layout:
+    # <local_payloads_dir>/<recipe_id>/<same rel path>. Lets copyrighted or
+    # custom binaries live off git entirely — a file here wins silently.
+    local_payloads_dir: Path | None = None
     # steps that need Steam closed queue work here; the caller batches every
     # queued write behind a single close-Steam/restart-Steam at the end
     deferred_vdf_writes: list = field(default_factory=list)
 
     def resolve_target(self, template: str) -> Path:
-        """Expand {game_dir} etc. in a manifest path and resolve it."""
-        out = template.replace("{game_dir}", str(self.game_dir))
+        """Expand path templates in a manifest 'to' field.
+        {game_dir}  — the game install directory
+        {prefix}    — the game's Proton prefix (…/compatdata/<id>/pfx)
+        {prefix_localappdata} — drive_c LocalAppData for steamuser
+        ~           — the user's home dir
+        Prefix templates need the game to have run once; a StepError is
+        raised (usually caught by an optional step) if no prefix exists yet.
+        """
+        out = template
+        if "{prefix" in out:
+            from . import detect
+            pfx = detect.find_prefix(self.recipe, self.steam_root)
+            if pfx is None:
+                raise StepError("no Proton prefix yet — run the game once via "
+                                "Steam first, then re-apply")
+            local_appdata = (pfx / "drive_c" / "users" / "steamuser"
+                             / "AppData" / "Local")
+            out = out.replace("{prefix_localappdata}", str(local_appdata))
+            out = out.replace("{prefix}", str(pfx))
+        out = out.replace("{game_dir}", str(self.game_dir))
         out = out.replace("~", str(Path.home()))
         return Path(out)
 
     def payload_path(self, rel: str) -> Path:
-        """A path inside the recipe folder (payload files)."""
+        """Resolve a payload reference. A local override at
+        <local_payloads_dir>/<recipe_id>/<rel> wins when present; otherwise
+        the recipe's own folder is used."""
+        if self.local_payloads_dir is not None:
+            base = (self.local_payloads_dir / self.recipe.id).resolve()
+            cand = (base / rel).resolve()
+            if (base == cand or base in cand.parents) and cand.exists():
+                return cand
         p = (self.recipe.dir / rel).resolve()
-        if self.recipe.dir.resolve() not in p.parents and p != self.recipe.dir.resolve():
+        rd = self.recipe.dir.resolve()
+        if rd not in p.parents and p != rd:
             raise StepError(f"payload path escapes recipe dir: {rel}")
         if not p.exists():
             raise StepError(f"payload missing: {p}")

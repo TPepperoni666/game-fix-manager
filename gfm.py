@@ -35,6 +35,8 @@ class App:
         self.cfg = store.load_config()
         self.store_root = store.resolve_store(args.store, self.cfg)
         self.steam_root = detect.find_steam_root(args.steam_root)
+        self.local_payloads = store.resolve_local_payloads(
+            getattr(args, "local_payloads", None), self.cfg)
         self.pending_vdf_writes: list = []
         self.recipes = manifest.load_all(self.store_root) if self.store_root else []
 
@@ -60,7 +62,8 @@ class App:
             status = "not_found"
         else:
             ctx = engine.Ctx(recipe, game_dir, dry_run=True, log=lambda _: None,
-                             steam_root=self.steam_root)
+                             steam_root=self.steam_root,
+                             local_payloads_dir=self.local_payloads)
             try:
                 status = engine.verify_recipe(recipe, ctx)
             except engine.StepError as e:
@@ -72,7 +75,8 @@ class App:
     def run_engine(self, recipe, game_dir, action) -> bool:
         ctx = engine.Ctx(recipe, game_dir, dry_run=self.args.dry_run,
                          log=lambda m: self.ui.msg(m, "dim"),
-                         steam_root=self.steam_root)
+                         steam_root=self.steam_root,
+                         local_payloads_dir=self.local_payloads)
         label = "DRY RUN " if self.args.dry_run else ""
         self.ui.msg(f"{label}{action.__name__.split('_')[0]}: {recipe.name} -> {game_dir}")
         try:
@@ -618,10 +622,17 @@ def main():
     parser.add_argument("--store", help="path to the fix store")
     parser.add_argument("--steam-root", help="override Steam root detection")
     parser.add_argument("--dest", help="mirror destination (default: SD card)")
+    parser.add_argument("--local-payloads",
+                        help="folder of local-only override payloads "
+                             "(NAS mount, SD, …); also persisted to config")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
     app = App(args)
+    # Persist an explicitly-passed local-payloads dir so it sticks
+    if getattr(args, "local_payloads", None) and app.local_payloads:
+        app.cfg["local_payloads_dir"] = str(app.local_payloads)
+        store.save_config(app.cfg)
     if app.store_root is None:
         print("No fix store found. Clone the repo, insert the SD card, or pass --store.",
               file=sys.stderr)

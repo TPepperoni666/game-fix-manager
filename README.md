@@ -103,6 +103,28 @@ them from their original source via `remote_payloads` (TCU, Force Unleashed)
 or host big redistributable ones as GitHub release assets (Watch Dogs).
 GitHub blocks repo files >100MB either way.
 
+## Local-only payloads (off-git overrides)
+
+Some payloads shouldn't live in a public repo (patched game exes, private
+mods) but are also too spicy or too big to fetch from a public URL. Point the
+tool at a folder of override files — a NAS mount, an SD folder, anywhere the
+Deck can read:
+
+```bash
+python3 gfm.py --local-payloads /mnt/nas-gfm apply <game>
+```
+
+(The path is saved to config after the first use.) Layout mirrors the recipe:
+`<local-payloads>/<recipe-id>/<same path the recipe references>`. Any file
+present there **wins silently** over the recipe's committed or fetched
+version — and a recipe can even reference a payload that exists *only* here,
+never in git. Auto-detected at `<SD>/steamos_restore/game_fixes/local_payloads/`
+if you keep it on the card.
+
+Path templates a recipe's `to:` field understands: `{game_dir}`, `~`,
+`{prefix}` (the game's Proton prefix), `{prefix_localappdata}` (drive_c
+LocalAppData — where UE4/UE5 games keep `Engine.ini`, so perf mods drop there).
+
 ## Where the store can live
 
 Search order: `--store` → `GFM_STORE` env → remembered config

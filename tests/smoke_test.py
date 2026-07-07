@@ -522,6 +522,80 @@ def main():
               detect.find_prefix(crew, steam)
               == steam / "steamapps" / "compatdata" / "111222333" / "pfx")
 
+        print("== local-payload override (off-git files win) ==")
+        # Recipe that swaps an exe from payload/patched/game.exe
+        ov_recipe_dir = tmp / "store" / "games" / "ov-game"
+        (ov_recipe_dir / "payload" / "patched").mkdir(parents=True)
+        (ov_recipe_dir / "payload" / "patched" / "game.exe").write_bytes(b"GIT VERSION")
+        ov_game = tmp / "ovgame"
+        ov_game.mkdir()
+        (ov_game / "game.exe").write_bytes(b"ORIGINAL")
+        (ov_recipe_dir / "manifest.json").write_text(_json.dumps({
+            "id": "ov-game", "name": "OV Game",
+            "steps": [{"type": "swap_exe",
+                       "payload": "payload/patched/game.exe",
+                       "target": "game.exe"}]}), encoding="utf-8")
+        ov = [r for r in manifest.load_all(tmp / "store") if r.id == "ov-game"][0]
+        # Without override: uses the git-committed payload
+        ctx_git = engine.Ctx(ov, ov_game, dry_run=False, log=quiet)
+        check("payload_path returns git file when no override",
+              ctx_git.payload_path("payload/patched/game.exe").read_bytes()
+              == b"GIT VERSION")
+        # With override: a local file wins
+        local_dir = tmp / "nas_payloads"
+        (local_dir / "ov-game" / "payload" / "patched").mkdir(parents=True)
+        (local_dir / "ov-game" / "payload" / "patched" / "game.exe").write_bytes(
+            b"LOCAL NAS VERSION")
+        ctx_ov = engine.Ctx(ov, ov_game, dry_run=False, log=quiet,
+                            local_payloads_dir=local_dir)
+        check("local override wins over git payload",
+              ctx_ov.payload_path("payload/patched/game.exe").read_bytes()
+              == b"LOCAL NAS VERSION")
+        engine.apply_recipe(ov, ctx_ov)
+        check("apply uses the local override file",
+              (ov_game / "game.exe").read_bytes() == b"LOCAL NAS VERSION")
+        # A recipe payload that ONLY exists locally (never in git) still resolves
+        local_only = tmp / "store" / "games" / "lo-only"
+        (local_only).mkdir(parents=True)
+        (local_only / "manifest.json").write_text(_json.dumps({
+            "id": "lo-only", "name": "Local Only",
+            "steps": [{"type": "swap_exe", "payload": "payload/crack.exe",
+                       "target": "game.exe"}]}), encoding="utf-8")
+        lo = [r for r in manifest.load_all(tmp / "store") if r.id == "lo-only"][0]
+        (local_dir / "lo-only" / "payload").mkdir(parents=True)
+        (local_dir / "lo-only" / "payload" / "crack.exe").write_bytes(b"CRACK")
+        ctx_lo = engine.Ctx(lo, ov_game, dry_run=False, log=quiet,
+                            local_payloads_dir=local_dir)
+        check("local-only payload resolves (not in git at all)",
+              ctx_lo.payload_path("payload/crack.exe").read_bytes() == b"CRACK")
+        # override path escape is refused
+        try:
+            ctx_ov.payload_path("../../../etc/passwd")
+            check("override path escape refused", False)
+        except (engine.StepError, Exception):
+            check("override path escape refused", True)
+
+        print("== {prefix} target template ==")
+        pt_recipe = tmp / "store" / "games" / "pt-game"
+        (pt_recipe / "payload").mkdir(parents=True)
+        (pt_recipe / "payload" / "Engine.ini").write_text("[Core]\nx=1\n")
+        (pt_recipe / "manifest.json").write_text(_json.dumps({
+            "id": "pt-game", "name": "PT Game", "steam_appid": 110800,
+            "steps": [{"type": "copy_files", "from": "payload",
+                       "to": "{prefix_localappdata}/MyGame/Saved/Config",
+                       "backup_originals": False}]}), encoding="utf-8")
+        pt = [r for r in manifest.load_all(tmp / "store") if r.id == "pt-game"][0]
+        # steam fixture already has compatdata for 110800? build the prefix
+        pt_pfx = steam / "steamapps" / "compatdata" / "110800" / "pfx"
+        pt_pfx.mkdir(parents=True, exist_ok=True)
+        (pt_pfx / "drive_c").mkdir(exist_ok=True)
+        pt_ctx = engine.Ctx(pt, game_dir, dry_run=False, log=quiet, steam_root=steam)
+        engine.apply_recipe(pt, pt_ctx)
+        landed = (pt_pfx / "drive_c" / "users" / "steamuser" / "AppData"
+                  / "Local" / "MyGame" / "Saved" / "Config" / "Engine.ini")
+        check("{prefix_localappdata} lands file inside the prefix",
+              landed.is_file() and landed.read_text().startswith("[Core]"))
+
         print("== Steam library scan + map merge ==")
         from core import steamscan
         # Add a fake AMS2 manifest that our La Noire fixture-steam already has

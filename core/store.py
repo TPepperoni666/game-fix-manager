@@ -87,6 +87,21 @@ def _sd_card_stores() -> list[Path]:
     return found
 
 
+def resolve_local_payloads(cli_arg: str | None, cfg: dict) -> Path | None:
+    """Where local-only override payloads live (NAS mount, SD folder, …).
+    Order: --local-payloads → GFM_LOCAL_PAYLOADS env → config → SD default.
+    Returns None if nothing is configured/present — overrides just don't fire."""
+    for cand in (cli_arg, os.environ.get("GFM_LOCAL_PAYLOADS"),
+                 cfg.get("local_payloads_dir")):
+        if cand and Path(cand).is_dir():
+            return Path(cand)
+    for sd in sd_card_roots():
+        cand = sd / "steamos_restore" / "game_fixes" / "local_payloads"
+        if cand.is_dir():
+            return cand
+    return None
+
+
 def resolve_store(cli_arg: str | None, cfg: dict) -> Path | None:
     for candidate in (cli_arg, os.environ.get("GFM_STORE"), cfg.get("store_root")):
         if candidate and Path(candidate).is_dir():
