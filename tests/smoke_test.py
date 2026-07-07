@@ -546,7 +546,8 @@ def main():
         check("library_kind labelled per game",
               all(g.get("library_kind") in ("internal", "sd", "other")
                   for g in installed))
-        with_r, without_r = steamscan.cross_reference(installed, recipes_all)
+        _steam_recipes = manifest.load_all(tmp / "store")
+        with_r, without_r = steamscan.cross_reference(installed, _steam_recipes)
         check("La Noire annotated as has_recipe=True",
               any(g["appid"] == "110800" and g.get("has_recipe")
                   for g in installed))
