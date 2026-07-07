@@ -522,6 +522,48 @@ def main():
               detect.find_prefix(crew, steam)
               == steam / "steamapps" / "compatdata" / "111222333" / "pfx")
 
+        print("== Steam library scan + map merge ==")
+        from core import steamscan
+        # Add a fake AMS2 manifest that our La Noire fixture-steam already has
+        # (110800). Also a game with no recipe: 1091500 Cyberpunk 2077.
+        (steam / "steamapps" / "appmanifest_1091500.acf").write_text(
+            '"AppState"\n{\n\t"appid"\t\t"1091500"\n'
+            '\t"name"\t\t"Cyberpunk 2077"\n'
+            '\t"installdir"\t\t"Cyberpunk 2077"\n}\n', encoding="utf-8")
+        (steam / "steamapps" / "common" / "Cyberpunk 2077").mkdir()
+        # Skip-name check: junk manifest for a Proton runtime
+        (steam / "steamapps" / "appmanifest_1493710.acf").write_text(
+            '"AppState"\n{\n\t"appid"\t\t"1493710"\n'
+            '\t"name"\t\t"Proton Experimental"\n'
+            '\t"installdir"\t\t"Proton - Experimental"\n}\n', encoding="utf-8")
+        (steam / "steamapps" / "common" / "Proton - Experimental").mkdir()
+
+        installed = steamscan.scan(steam)
+        appids_found = {g["appid"] for g in installed}
+        check("scan finds La Noire",  "110800" in appids_found)
+        check("scan finds Cyberpunk", "1091500" in appids_found)
+        check("scan skips Proton",    "1493710" not in appids_found)
+        check("library_kind marks internal path 'internal'",
+              all(g["library_kind"] == "internal" for g in installed))
+        with_r, without_r = steamscan.cross_reference(installed, recipes_all)
+        check("La Noire annotated as has_recipe=True",
+              any(g["appid"] == "110800" and g.get("has_recipe")
+                  for g in installed))
+        check("Cyberpunk annotated as has_recipe=False",
+              any(g["appid"] == "1091500" and not g["has_recipe"]
+                  for g in installed))
+        check("cross_reference counts add up",
+              with_r + without_r == len(installed))
+        # Merge into map — must not clobber the SD-games section
+        existing_map = {"games": {"la-noire": {"path": "/x"}}}
+        map_out = tmp / "combined_map.json"
+        merged = sdmap.write_steam_section(installed, dest=map_out,
+                                            existing=existing_map)
+        check("steam merge preserves sd games section",
+              merged["games"]["la-noire"]["path"] == "/x"
+              and "steam_games" in merged
+              and "110800" in merged["steam_games"])
+
         print("== SD map: authoritative game path lookup ==")
         from core import sdmap as _sdmap
         # Fixture: SD card holding a sd_map.json that names La Noire

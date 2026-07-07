@@ -97,6 +97,26 @@ def write(matched: list, unmatched: list, games_dir: Path,
     return payload
 
 
+def write_steam_section(games: list, dest: Path,
+                        existing: dict | None = None) -> dict:
+    """Merge/overwrite the steam_games section of the map. Games list is
+    what steamscan.scan() + cross_reference() produced. Preserves everything
+    else in the file (SD games, notes, unmatched folders)."""
+    import socket
+    import time
+    payload = dict(existing or {})
+    payload.setdefault("_meta", {}).update({
+        "host": socket.gethostname(),
+        "steam_scanned_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    })
+    payload["steam_games"] = {g["appid"]: {k: v for k, v in g.items()
+                                            if k != "appid"}
+                              for g in games}
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return payload
+
+
 def diff(before: dict, after: dict) -> dict:
     """Human-readable diff for the UI: added/changed/removed games."""
     b = before.get("games", {})

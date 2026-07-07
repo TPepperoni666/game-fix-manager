@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 from core import (detect, engine, fetch, manifest, prefixes, sdmap, sdscan,
-                  shortcutsvdf, steamvdf, store)
+                  shortcutsvdf, steamscan, steamvdf, store)
 from ui import get_ui
 
 STATUS_ICON = {engine.APPLIED: "✅", engine.NOT_APPLIED: "☐ ",
@@ -340,6 +340,52 @@ class App:
         self.ui.msg("The tool now looks here first — no path prompts for "
                     "mapped games.", "dim")
 
+    def cmd_scan_steam(self):
+        """Inventory every installed Steam game across every library
+        (internal SSD, SD card, external) into sd_map.json's steam_games
+        section. Cross-references recipes so it's obvious which owned games
+        already have fixes and which are candidates."""
+        self.ui.header("📚 SCAN STEAM LIBRARIES")
+        if self.steam_root is None:
+            self.ui.msg("No Steam root found — nothing to scan.", "warn")
+            return
+        self.ui.msg(f"Steam root: {self.steam_root}", "dim")
+
+        games = steamscan.scan(self.steam_root)
+        if not games:
+            self.ui.msg("No installed games detected across any library.",
+                        "warn")
+            return
+        with_r, without_r = steamscan.cross_reference(games, self.recipes)
+
+        libs_seen = sorted({g["library"] for g in games})
+        self.ui.msg(f"{len(games)} game(s) installed across "
+                    f"{len(libs_seen)} library location(s):", "info")
+        for lib in libs_seen:
+            n = sum(1 for g in games if g["library"] == lib)
+            self.ui.msg(f"  {lib}  ({n} game(s))", "dim")
+        self.ui.msg(f"{with_r} already have a recipe, "
+                    f"{without_r} do not.", "info")
+
+        if without_r and without_r <= 20:
+            self.ui.msg("Games without a recipe:", "dim")
+            for g in games:
+                if not g["has_recipe"]:
+                    self.ui.msg(f'  · {g["name"]}  (appid {g["appid"]})', "dim")
+
+        dest = sdmap.default_write_path()
+        if dest is None:
+            self.ui.msg("No SD card mounted — can't save the map. Insert "
+                        "the card and re-scan.", "error")
+            return
+        if not self.ui.confirm(f"Write the inventory to {dest}?"):
+            return
+        existing = sdmap.load_first()
+        sdmap.write_steam_section(games, dest=dest, existing=existing)
+        self.ui.msg(
+            "Saved. Claude can now see your full installed Steam library "
+            "and suggest recipes for owned games.", "success")
+
     def cmd_reconcile(self):
         """Wire non-Steam shortcuts to pre-existing compatdata prefixes.
         For each recipe whose shortcut points at an empty prefix while a
@@ -525,6 +571,7 @@ class App:
                 "📋 Status",
                 "↩️  Revert a Game",
                 "📁 Scan SD for Games (auto-populate paths)",
+                "📚 Scan Steam Libraries (inventory installed games)",
                 "🔗 Reconcile Prefixes (adopt existing compatdata)",
                 "💾 Mirror Store (offline copy on SD/NAS)",
                 "⬆️  Update (git pull latest recipes + code)",
@@ -541,6 +588,9 @@ class App:
                 self.cmd_revert([])
             elif choice.startswith("📁"):
                 self.cmd_scan_sd()
+                self.ui.input("Press Enter to continue")
+            elif choice.startswith("📚"):
+                self.cmd_scan_steam()
                 self.ui.input("Press Enter to continue")
             elif choice.startswith("🔗"):
                 self.cmd_reconcile()
@@ -562,7 +612,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", nargs="?",
                         choices=["list", "apply", "revert", "install", "mirror",
-                                 "reconcile", "update", "scan"],
+                                 "reconcile", "update", "scan", "scan-steam"],
                         help="omit for interactive menu")
     parser.add_argument("ids", nargs="*", help="recipe ids (e.g. la-noire)")
     parser.add_argument("--store", help="path to the fix store")
@@ -593,6 +643,8 @@ def main():
         app.cmd_update()
     elif args.command == "scan":
         app.cmd_scan_sd()
+    elif args.command == "scan-steam":
+        app.cmd_scan_steam()
     else:
         app.menu()
 
