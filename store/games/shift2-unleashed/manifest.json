@@ -12,7 +12,14 @@
       "type": "swap_exe",
       "payload": "payload/BOOTFLOW.bff",
       "target": "PakFiles/BOOTFLOW.bff"
+    },
+    {
+      "type": "remove_files",
+      "targets": [
+        "Movies/BootFlow_in.bik",
+        "Movies/BootFlow_out.bik"
+      ]
     }
   ],
-  "notes": "Xbox 360 controller button prompts by Garcias-Garage.de — single pak swap, 'Updated Version for Patch 01'. Original kept as BOOTFLOW.bff.gfm-orig. Game is delisted from Steam; appid 47920 is best-effort — if detection misses on the Deck, the path prompt covers it (and remembers). Not installed on the Windows PC (2026-07-06), so unverified against a real install; sha256 of payload: 3678f1bc9a79124f3d5c0ecd716103e72ab7e545d4fc54293284972fd91989d1."
+  "notes": "Two things: (1) Xbox 360 controller button prompts by Garcias-Garage.de — single pak swap, 'Updated Version for Patch 01'. (2) Intro-skip: renames BootFlow_in.bik / BootFlow_out.bik in Movies/ (names from PCGamingWiki). Both reversible via .gfm-orig. Game is delisted from Steam; appid 47920 is best-effort — if detection misses on the Deck, the path prompt covers it (and remembers). Not installed on the Windows PC (2026-07-06), so file paths unverified against a real install — Linux is case-sensitive so if Movies/ or the .bik casing differs, the intro-skip lines silently no-op; sha256 of BFF payload: 3678f1bc9a79124f3d5c0ecd716103e72ab7e545d4fc54293284972fd91989d1."
 }
