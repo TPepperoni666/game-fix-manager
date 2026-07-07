@@ -29,8 +29,19 @@
       "from": "payload/dxvk/dxvk-3.0.1/x32/d3d9.dll",
       "to": "{game_dir}",
       "backup_originals": true
+    },
+    {
+      "type": "copy_files",
+      "from": "payload/wrapper",
+      "to": "~/gfm-wrappers",
+      "backup_originals": false,
+      "executable": true
+    },
+    {
+      "type": "launch_options",
+      "value": "{home}/gfm-wrappers/dsf-launch.sh %command%"
     }
   ],
-  "post_apply_message": "Driver San Francisco — 2 intro Bink files (DriverSplash + ubisoft) renamed to .gfm-orig, and DXVK's d3d9.dll dropped next to Driver.exe. That combo fixes the story-mode crash-to-desktop bug PCGW documents for SteamOS. About the 'no launcher' thing: the game exe works standalone (PCGW confirms Steam is not required when launched from the executable) — no cracks needed. If your shortcut points at DriverSanFranciscoLauncher.exe and it hangs, change it to point directly at Driver.exe. Ubisoft Connect servers are dead since Oct 2022 so DLC/multiplayer is offline-only; single-player works fine.",
-  "notes": "Delisted from Steam Dec 2016, Ubisoft Connect online services shut down Oct 2022 — but the Steam single-player installs still work. Two legit fixes bundled: (1) intro skip per PCGW; (2) DXVK d3d9.dll drop is PCGW's documented Linux/SteamOS fix for story-mode CTD (the bundled Ubisoft d3d9 is buggy under Proton, DXVK's shim overrides it). DXVK v3.0.1 pinned (later versions may have D3D9 regressions with old games). No SilentPatch for this game exists yet."
+  "post_apply_message": "Driver San Francisco — three fixes applied:\n1. Intro Bink files (DriverSplash + ubisoft) renamed to .gfm-orig\n2. DXVK's d3d9.dll dropped next to Driver.exe (fixes the SteamOS story-mode crash-to-desktop)\n3. Launch wrapper installed at ~/gfm-wrappers/dsf-launch.sh — automatically bypasses the dead Ubisoft Game Launcher and runs Driver.exe directly. PCGW confirms the game is fully self-sufficient this way. Ubisoft Connect servers died Oct 2022, so DLC/multiplayer is offline-only regardless; single-player works fine.",
+  "notes": "Delisted from Steam Dec 2016, Ubisoft Connect online services shut down Oct 2022 — but the Steam single-player installs still work. Three legit fixes bundled: (1) intro skip per PCGW; (2) DXVK d3d9.dll drop is PCGW's documented Linux/SteamOS fix for story-mode CTD (the bundled Ubisoft d3d9 is buggy under Proton, DXVK's shim overrides it); (3) launcher-bypass wrapper (same waitforexitandrun-swap pattern as our TWFC wrapper) — reads %command%, replaces the last .exe arg with Driver.exe (tries both cases), execs the modified proton stack. PCGW confirms 'Steam not required when launched from the executable on Windows' — Ubisoft launcher's auth check just delays boot under dead servers. DXVK v3.0.1 pinned (later versions may have D3D9 regressions with old games). No SilentPatch for this game exists yet."
 }
