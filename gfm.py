@@ -18,8 +18,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from core import (detect, engine, fetch, manifest, prefixes, shortcutsvdf,
-                  steamvdf, store)
+from core import (detect, engine, fetch, manifest, prefixes, sdscan,
+                  shortcutsvdf, steamvdf, store)
 from ui import get_ui
 
 STATUS_ICON = {engine.APPLIED: "✅", engine.NOT_APPLIED: "☐ ",
@@ -254,6 +254,69 @@ class App:
             self.ui.msg(f"Recipes reloaded: {len(self.recipes)} in the store.",
                         "success")
 
+    def cmd_scan_sd(self):
+        """Scan the SD card's Games/ folder and pair each subfolder to a
+        recipe. On confirmation, writes the mappings into the machine
+        config's game_paths — so future Applies never prompt for a path."""
+        self.ui.header("📁 SCAN SD FOR GAMES")
+        games_dirs = sdscan.find_games_dirs()
+        if not games_dirs:
+            self.ui.msg("No 'Games' folder found on any mounted SD card.",
+                        "warn")
+            raw = self.ui.input("Enter a folder to scan (blank to cancel)")
+            if not raw:
+                return
+            games_dir = Path(raw)
+            if not games_dir.is_dir():
+                self.ui.msg(f"Not a directory: {games_dir}", "error")
+                return
+        elif len(games_dirs) == 1:
+            games_dir = games_dirs[0]
+            self.ui.msg(f"Scanning {games_dir}", "dim")
+        else:
+            picked = self.ui.choose(
+                "Multiple SD cards have Games/ folders — pick one:",
+                [str(g) for g in games_dirs])
+            if not picked:
+                return
+            games_dir = Path(picked[0])
+
+        result = sdscan.scan(games_dir, self.recipes)
+        matched, unmatched = result["matched"], result["unmatched"]
+
+        if not matched and not unmatched:
+            self.ui.msg("The Games folder is empty.", "warn")
+            return
+
+        self.ui.msg("", "dim")
+        if matched:
+            self.ui.msg(f"Matched {len(matched)}:", "success")
+            for recipe, folder, signal in matched:
+                self.ui.msg(f"  ✔ {recipe.name}  ←  {folder.name}  ({signal})",
+                            "dim")
+        if unmatched:
+            self.ui.msg(f"Unmatched {len(unmatched)}:", "warn")
+            for folder in unmatched:
+                self.ui.msg(f"  ? {folder.name}", "dim")
+            self.ui.msg("(Add a matching alias or install_dir_name to a "
+                        "recipe, then re-scan.)", "dim")
+        self.ui.msg("", "dim")
+
+        if not matched:
+            self.ui.msg("Nothing to save.", "warn")
+            return
+        if not self.ui.confirm(
+                f"Save {len(matched)} path(s) to ~/.config/gfm/config.json?"):
+            return
+
+        game_paths = self.cfg.setdefault("game_paths", {})
+        for recipe, folder, _sig in matched:
+            game_paths[recipe.id] = str(folder)
+        store.save_config(self.cfg)
+        self.ui.msg(
+            f"Saved. {len(matched)} game(s) now auto-locate to their SD "
+            "folder — Apply won't ask you for a path.", "success")
+
     def cmd_reconcile(self):
         """Wire non-Steam shortcuts to pre-existing compatdata prefixes.
         For each recipe whose shortcut points at an empty prefix while a
@@ -438,6 +501,7 @@ class App:
                 "🔧 Apply Fixes",
                 "📋 Status",
                 "↩️  Revert a Game",
+                "📁 Scan SD for Games (auto-populate paths)",
                 "🔗 Reconcile Prefixes (adopt existing compatdata)",
                 "💾 Mirror Store (offline copy on SD/NAS)",
                 "⬆️  Update (git pull latest recipes + code)",
@@ -452,6 +516,9 @@ class App:
                 self.ui.input("Press Enter to continue")
             elif choice.startswith("↩"):
                 self.cmd_revert([])
+            elif choice.startswith("📁"):
+                self.cmd_scan_sd()
+                self.ui.input("Press Enter to continue")
             elif choice.startswith("🔗"):
                 self.cmd_reconcile()
                 self.ui.input("Press Enter to continue")
@@ -472,7 +539,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", nargs="?",
                         choices=["list", "apply", "revert", "install", "mirror",
-                                 "reconcile", "update"],
+                                 "reconcile", "update", "scan"],
                         help="omit for interactive menu")
     parser.add_argument("ids", nargs="*", help="recipe ids (e.g. la-noire)")
     parser.add_argument("--store", help="path to the fix store")
@@ -501,6 +568,8 @@ def main():
         app.cmd_reconcile()
     elif args.command == "update":
         app.cmd_update()
+    elif args.command == "scan":
+        app.cmd_scan_sd()
     else:
         app.menu()
 

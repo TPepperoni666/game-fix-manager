@@ -522,6 +522,28 @@ def main():
               detect.find_prefix(crew, steam)
               == steam / "steamapps" / "compatdata" / "111222333" / "pfx")
 
+        print("== SD Games/ folder scan (auto-populate paths) ==")
+        from core import sdscan
+        sd_games = tmp / "sd_scan" / "Games"
+        (sd_games / "L.A. Noire").mkdir(parents=True)
+        (sd_games / "L.A. Noire" / "LaNoire.exe").write_bytes(b"EXE")
+        (sd_games / "TheCrew").mkdir()  # aliased folder name
+        (sd_games / "TheCrew" / "TheCrew.exe").write_bytes(b"EXE")
+        (sd_games / "some other game").mkdir()  # unmatched
+        recipes_all = manifest.load_all(tmp / "store")
+        result = sdscan.scan(sd_games, recipes_all)
+        matched_ids = {r.id for r, _, _ in result["matched"]}
+        check("matched La Noire by exact name",
+              "la-noire" in matched_ids)
+        check("matched The Crew via alias 'TheCrew'",
+              "crew-game" in matched_ids)
+        check("unmatched folder surfaced, not silently absorbed",
+              len(result["unmatched"]) == 1
+              and result["unmatched"][0].name == "some other game")
+        empty = sdscan.scan(tmp / "sd_scan" / "does_not_exist", recipes_all)
+        check("missing games dir handled cleanly",
+              empty == {"matched": [], "unmatched": []})
+
         print("== store mirror (incremental offline copy) ==")
         from core import store as store_mod
         mirror_dest = tmp / "sdcard" / "steamos_restore" / "game_fixes"

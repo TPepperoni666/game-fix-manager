@@ -8,19 +8,6 @@
   },
   "steps": [
     {
-      "type": "copy_files",
-      "from": "payload/trainer",
-      "to": "~/TWFC_Unlocker",
-      "backup_originals": false
-    },
-    {
-      "type": "copy_files",
-      "from": "payload/wrapper",
-      "to": "~/gfm-wrappers",
-      "backup_originals": false,
-      "executable": true
-    },
-    {
       "type": "remove_files",
       "targets": [
         "TransGame/Movies/FMV_intro_PC.bik",
@@ -30,12 +17,8 @@
         "TransGame/Movies/Logo_HighMoon_PC.bik",
         "TransGame/Movies/TF_InitialStartup.bik"
       ]
-    },
-    {
-      "type": "launch_options",
-      "value": "{home}/gfm-wrappers/twfc.sh %command%"
     }
   ],
-  "post_apply_message": "TWFC — per-session steps:\n1. In Steam Input, bind a spare button (e.g. a back paddle) to Keyboard > Numpad 0 (NOT the top-row 0 — the trainer hooks VK_NUMPAD0 specifically).\n2. In game the trainer window overlays; press the button to close its Info screen FIRST (hotkeys don't fire while Info is open).\n3. Press the bound button again to unlock the FPS cap.\n4. Cap the game at 60 FPS in the Quick Access Menu — the game glitches above 60.\nIntros: 6 .bik files under TransGame/Movies/ are renamed to .gfm-orig on apply, revertible if you ever want them back.",
-  "notes": "FPS cap unlocker (trainer) by Psych / psych.hopto.org, 2010 — readme permits free redistribution unaltered; see docs/TRAiNER.txt. The 30 FPS cap has NO static fix (no ini/exe/dll patch exists per PCGamingWiki research 2026-07-06), so this is runtime memory patching: the wrapper launches the trainer inside the game's Proton prefix by reusing Steam's own launch stack with the verb swapped to 'run'. Game is delisted; appid 42650. Trainer is a packed 32-bit exe — AV false positives expected. Intro-skip: 6 .bik file names taken from PCGamingWiki TWFC page (TransGame/Movies/); Linux is case-sensitive so if any filename doesn't match on Tony's install, remove_files silently no-ops that line and the intro still plays — confirm with 'ls TransGame/Movies' if suspicious. Trainer attach confirmed by Tony 2026-07-07 (trainer visible in Proton); Num0 delivery unverified until Steam Input Numpad 0 binding is set."
+  "post_apply_message": "TWFC — intros skipped (6 .bik files renamed to .gfm-orig, revertible). FPS unlock is NOT available: Psych's trainer runs under Proton but Wine's low-level keyboard hook (WH_KEYBOARD_LL) doesn't deliver Numpad 0 to it while the game has input focus — confirmed 2026-07-07. Game plays at its stock 30 FPS. If you cleaned up an earlier apply, delete ~/TWFC_Unlocker and ~/gfm-wrappers/twfc.sh, and clear the Steam launch options manually.",
+  "notes": "Intro-skip only recipe. FPS trainer removed after Deck test: Psych's 2010 trainer attaches and runs visibly under Proton, but Numpad 0 never reaches it (WH_KEYBOARD_LL hook delivery through Wine while game has focus — a long-standing Wine wart). Trainer + wrapper payloads still in git history if anyone finds a working delivery path or writes a static exe patch. Bink filenames from PCGamingWiki (TransGame/Movies/); Linux is case-sensitive so if any filename doesn't match on the actual install, that remove_files line silently no-ops. Game is delisted; Steam appid 42650."
 }
