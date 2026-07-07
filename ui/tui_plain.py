@@ -26,6 +26,12 @@ class PlainUI(UI):
         _print(f"{_STYLES.get(style, '')}{text}")
 
     def choose(self, header: str, options: list[str], multi: bool = False) -> list[str]:
+        if multi:
+            try:
+                from .multiselect import multiselect_arrows
+                return multiselect_arrows(header, options)
+            except NotImplementedError:
+                pass  # fall through to numbered input on Windows / non-TTY
         print(f"\n{header}")
         for i, opt in enumerate(options, 1):
             print(f"  {i}) {opt}")

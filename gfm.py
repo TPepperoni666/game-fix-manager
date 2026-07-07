@@ -186,15 +186,11 @@ class App:
             label = self.status_line(recipe, game_dir)
             options.append(label)
             by_label[label] = recipe
-        # TAB toggles each item in gum multi-select; the hint has to live
-        # INSIDE the header so it stays on-screen while the picker is up.
-        header = f"{prompt} — TAB to toggle each game, ENTER to confirm"
-        picked = self.ui.choose(header, options, multi=True)
+        # Multi-select uses arrow-key toggle (see ui/multiselect.py) —
+        # works out of the box on the Deck's default desktop layout.
+        picked = self.ui.choose(prompt, options, multi=True)
         if not picked:
-            self.ui.msg("No games selected. In multi-select, press TAB to "
-                        "toggle each game FIRST, then ENTER to confirm. On "
-                        "the Deck without a keyboard, bind TAB to a button "
-                        "in the shortcut's controller settings.", "warn")
+            self.ui.msg("No games selected.", "warn")
         return [by_label[p] for p in picked if p in by_label]
 
     def cmd_update(self):

@@ -48,6 +48,14 @@ class GumUI(UI):
                   capture=False)
 
     def choose(self, header: str, options: list[str], multi: bool = False) -> list[str]:
+        if multi:
+            # Own multi-select (arrow-key toggle) — works with the Deck's
+            # default desktop layout without SPACE / TAB bindings.
+            try:
+                from .multiselect import multiselect_arrows
+                return multiselect_arrows(header, options)
+            except NotImplementedError:
+                pass  # fall through to gum on Windows / non-TTY
         args = ["choose", *_GUM_OPTS, "--header", header]
         if multi:
             args.append("--no-limit")
