@@ -1,0 +1,15 @@
+{
+  "id": "simpsons-hit-and-run",
+  "name": "The Simpsons Hit & Run",
+  "aliases": ["The Simpsons - Hit & Run", "Simpsons Hit and Run",
+              "Simpsons: Hit & Run", "SHAR", "Hit and Run",
+              "Lucas Simpsons Hit & Run Mod Launcher"],
+  "detect": {
+    "install_dir_names": ["The Simpsons - Hit & Run",
+                          "The Simpsons Hit & Run"],
+    "marker_files": ["Game/Simpsons.exe"]
+  },
+  "steps": [],
+  "post_apply_message": "Simpsons Hit & Run — no engine steps needed; this recipe exists so detection, reconciliation and mirroring know about the game.\n\n1. Keep the whole 'The Simpsons - Hit & Run' folder on the SD card. Everything you care about lives inside it:\n   - Game/ — the base game and your live save (Game/Save1)\n   - Mods & Launcher/ — Lucas Simpsons H&R Mod Launcher + your 11 installed .lmlm mods (NeverBusted, UnlockAllRewards, Speedometer, HQ Dialogue, etc.)\n2. Add 'Mods & Launcher/Lucas Simpsons Hit & Run Mod Launcher.exe' to Steam (NOT Game/Simpsons.exe — the launcher applies the mods and starts the game). Force a Proton version.\n3. Launch it. Pick which mods to enable in the launcher UI, then Play. That's it.\n\nNote: Save1 is inside the Game/ folder and gets updated as you play — since the whole folder is on the SD card it survives reimages automatically. No prefix sync needed.",
+  "notes": "The mods (.lmlm files) are already installed in Mods & Launcher/Mods/ — the Lucas launcher handles activation at runtime, so GFM has nothing to write into the game files. This recipe is deliberately step-free: it exists for the tool's ledger (detection via shortcut aliases, reconciliation naming, mirror inclusion). Save file (Game/Save1) is a single ~7KB file that lives IN the game folder — SD-resident, so reimage-proof by location. If we ever want mod-enable state to persist across a fresh prefix, capture ~/.local/share/Steam/steamapps/compatdata/<id>/pfx/drive_c/users/steamuser/AppData/Roaming/Lucas/... — future work. Confirmed mods present in Tony's install (2026-07-07): Controller Button Icons, HQ Dialogue (FLAC, 375MB), More Costumes 3.0, NeverBusted, NoAudio, NoHUD, NoLicenseScreenDelay, NoTraffic, RepairCarOnReset, Speedometer, TextNames, UnlockAllRewards."
+}

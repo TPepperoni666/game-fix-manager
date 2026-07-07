@@ -2,13 +2,21 @@
 
 Manifest form:
   { "type": "wine_registry",
+    "hive": "user",                       # or "system" (HKLM), default "user"
     "key": "Software\\THQ\\Barnyard",
-    "values": { "ControllerEnabled": 1, "SomeString": "hello" } }
+    "values": { "ControllerEnabled": 1,
+                "PATH_APPLICATION": "{game_dir_win}" } }
 
-int -> dword, str -> string. HKEY_CURRENT_USER only (that's user.reg — the
-hive old games keep their settings in).
+int -> dword, str -> string. String values expand these templates at apply
+time: {game_dir}, {game_dir_win} (Linux path -> Z:\ escaped-backslash form),
+{home}. That's what makes the same recipe work on any install path — the
+game location comes from the shortcut, not the manifest.
 
-Wine's user.reg is a text file; sections look like:
+Hives map to:
+  user   -> user.reg    (HKCU)
+  system -> system.reg  (HKLM — WOW6432Node paths for 32-bit games)
+
+Both are text files with sections like:
   [Software\\THQ\\Barnyard] 1658323400
   "ControllerEnabled"=dword:00000001
 Backslashes in section names are doubled. Edits are safe while the game is
@@ -24,10 +32,13 @@ from __future__ import annotations
 
 import shutil
 import time
+from pathlib import Path
 
 from .. import detect
 from ..engine import (APPLIED, NOT_APPLIED, PARTIAL, Ctx, StepError,
                       register_step)
+
+_HIVES = {"user": "user.reg", "system": "system.reg"}
 
 
 def _fmt_value(name: str, data) -> str:
@@ -39,21 +50,42 @@ def _fmt_value(name: str, data) -> str:
     return f'"{name}"="{esc}"'
 
 
+def _wine_z_path(p: Path) -> str:
+    """Linux path -> Wine Z:\\...\\... string (backslashes only)."""
+    return "Z:" + str(p).replace("/", "\\")
+
+
+def _expand(value, ctx: Ctx):
+    if not isinstance(value, str):
+        return value
+    return (value
+            .replace("{game_dir_win}", _wine_z_path(ctx.game_dir))
+            .replace("{game_dir}", str(ctx.game_dir))
+            .replace("{home}", str(Path.home())))
+
+
 @register_step("wine_registry")
 class WineRegistry:
     def __init__(self, step: dict):
         self.key = step["key"]
         self.values = step["values"]
+        self.hive = step.get("hive", "user")
+        if self.hive not in _HIVES:
+            raise StepError(f"wine_registry: unknown hive '{self.hive}' "
+                            f"(expected user or system)")
 
     def _reg_file(self, ctx: Ctx):
         pfx = detect.find_prefix(ctx.recipe, ctx.steam_root)
         if pfx is None:
             raise StepError("no Proton prefix found — run the game once via "
                             "Steam first, then re-apply")
-        reg = pfx / "user.reg"
+        reg = pfx / _HIVES[self.hive]
         if not reg.is_file():
-            raise StepError(f"user.reg missing in prefix {pfx}")
+            raise StepError(f"{_HIVES[self.hive]} missing in prefix {pfx}")
         return reg
+
+    def _resolved_values(self, ctx: Ctx) -> dict:
+        return {n: _expand(d, ctx) for n, d in self.values.items()}
 
     def _header(self) -> str:
         return "[" + self.key.replace("\\", "\\\\") + "]"
@@ -86,7 +118,8 @@ class WineRegistry:
         reg = self._reg_file(ctx)
         lines = reg.read_text(encoding="utf-8",
                               errors="surrogateescape").splitlines()
-        wanted = {n: _fmt_value(n, d) for n, d in self.values.items()}
+        wanted = {n: _fmt_value(n, d)
+                  for n, d in self._resolved_values(ctx).items()}
         current = self._current(lines)
         if all(current[n] == w for n, w in wanted.items()):
             ctx.log(f"      = registry values already set in {self.key}")
@@ -122,7 +155,8 @@ class WineRegistry:
             return NOT_APPLIED
         lines = reg.read_text(encoding="utf-8",
                               errors="surrogateescape").splitlines()
-        wanted = {n: _fmt_value(n, d) for n, d in self.values.items()}
+        wanted = {n: _fmt_value(n, d)
+                  for n, d in self._resolved_values(ctx).items()}
         current = self._current(lines)
         done = sum(1 for n, w in wanted.items() if current[n] == w)
         if done == len(wanted):

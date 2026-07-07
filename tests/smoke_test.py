@@ -399,6 +399,49 @@ def main():
         check("managed values removed on revert",
               "ControllerEnabled" not in regtext and '"Untouched"="yes"' in regtext)
 
+        print("== wine_registry: system hive + {game_dir_win} template ==")
+        # New system.reg alongside user.reg — same prefix
+        (pfx / "system.reg").write_text(
+            "WINE REGISTRY Version 2\n"
+            "[Software\\\\Existing\\\\Key] 1600000000\n"
+            '"Untouched"="yes"\n', encoding="utf-8")
+        vsc_dir = tmp / "store" / "games" / "vsc-game"
+        (vsc_dir / "payload").mkdir(parents=True)
+        (vsc_dir / "manifest.json").write_text(_json.dumps({
+            "id": "vsc-game", "name": "VSC Game",
+            "aliases": ["The Crew Unlimited"],
+            "steps": [{
+                "type": "wine_registry", "hive": "system",
+                "key": "Software\\WOW6432Node\\Codemasters\\Race Driver 3",
+                "values": {
+                    "PATH_APPLICATION": "{game_dir_win}",
+                    "PATH_MAIN": "{game_dir_win}\\gamedata",
+                    "NAME_APPLICATION": "V8 Supercars 3",
+                    "SKU": "aus"}}]}), encoding="utf-8")
+        vsc = [r for r in manifest.load_all(tmp / "store")
+               if r.id == "vsc-game"][0]
+        toca_game = tmp / "run" / "media" / "deck" / "primary" / "V8 Supercars 3"
+        toca_game.mkdir(parents=True)
+        vsc_ctx = engine.Ctx(vsc, toca_game, dry_run=False,
+                             log=quiet, steam_root=steam)
+        engine.apply_recipe(vsc, vsc_ctx)
+        sysreg = (pfx / "system.reg").read_text(encoding="utf-8")
+        expected_win = "Z:" + str(toca_game).replace("/", "\\")
+        expected_esc = expected_win.replace("\\", "\\\\")
+        check("hklm written to system.reg (not user.reg)",
+              '"NAME_APPLICATION"="V8 Supercars 3"' in sysreg
+              and '"NAME_APPLICATION"' not in
+                  (pfx / "user.reg").read_text(encoding="utf-8"))
+        check("{game_dir_win} expands to Z:\\ path with escaped backslashes",
+              f'"PATH_APPLICATION"="{expected_esc}"' in sysreg
+              and f'"PATH_MAIN"="{expected_esc}\\\\gamedata"' in sysreg)
+        check("plain string SKU untouched by templates",
+              '"SKU"="aus"' in sysreg)
+        check("verify sees the templated values as applied",
+              engine.verify_recipe(vsc, vsc_ctx) == engine.APPLIED)
+        check("system.reg's untouched key preserved",
+              '"Untouched"="yes"' in sysreg)
+
         print("== prefix reconcile: adopt-existing (shortcut appid rewrite) ==")
         from core import prefixes
         # Fixture: an ORPHAN prefix for "The Crew Unlimited" at the old appid
