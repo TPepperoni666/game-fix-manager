@@ -78,7 +78,8 @@ def load_recipe(recipe_dir: Path) -> Recipe:
 
 
 def load_all(store_root: Path) -> list[Recipe]:
-    """Load every recipe under <store_root>/games/. Bad manifests raise."""
+    """Load every recipe under <store_root>/games/, sorted alphabetically by
+    display name. Bad manifests raise."""
     games_dir = store_root / "games"
     recipes = []
     if not games_dir.is_dir():
@@ -86,4 +87,5 @@ def load_all(store_root: Path) -> list[Recipe]:
     for d in sorted(games_dir.iterdir()):
         if d.is_dir() and (d / MANIFEST_NAME).is_file():
             recipes.append(load_recipe(d))
+    recipes.sort(key=lambda r: r.name.lower())
     return recipes

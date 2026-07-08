@@ -76,17 +76,30 @@ class Ctx:
     def payload_path(self, rel: str) -> Path:
         """Resolve a payload reference. A local override at
         <local_payloads_dir>/<recipe_id>/<rel> wins when present; otherwise
-        the recipe's own folder is used."""
+        the recipe's own folder is used. A down NAS mount (OSError on access)
+        is treated as 'override not present' — never crashes."""
+        mount_err = None
         if self.local_payloads_dir is not None:
-            base = (self.local_payloads_dir / self.recipe.id).resolve()
-            cand = (base / rel).resolve()
-            if (base == cand or base in cand.parents) and cand.exists():
-                return cand
+            try:
+                base = (self.local_payloads_dir / self.recipe.id).resolve()
+                cand = (base / rel).resolve()
+                if (base == cand or base in cand.parents) and cand.exists():
+                    return cand
+            except OSError as e:
+                mount_err = e  # local-payloads mount unreachable (dead NAS)
         p = (self.recipe.dir / rel).resolve()
         rd = self.recipe.dir.resolve()
         if rd not in p.parents and p != rd:
             raise StepError(f"payload path escapes recipe dir: {rel}")
-        if not p.exists():
+        try:
+            present = p.exists()
+        except OSError:
+            present = False
+        if not present:
+            if mount_err is not None:
+                raise StepError(
+                    f"payload not reachable — the local-payloads mount "
+                    f"({self.local_payloads_dir}) is down: {mount_err}")
             raise StepError(f"payload missing: {p}")
         return p
 
