@@ -62,6 +62,10 @@ def scan(steam_root: Path | None) -> list[dict]:
                 "install_dir": str(install_path),
                 "library": str(lib),
                 "library_kind": _library_kind(lib),
+                # Steam build id of the installed depot — lets us tell whether
+                # a build-pinned mod (e.g. Eclipse "…_b23222834_…") matches the
+                # game as installed, so its exe swap won't break saves.
+                "buildid": data.get("buildid", ""),
             })
     return out
 
