@@ -16,10 +16,13 @@ Writes Steam's CompatToolMapping in config.vdf — queued and flushed behind
 the one Steam-close batch, like launch_options. Works for Steam appids and
 non-Steam shortcuts alike (both keyed by appid).
 
-NOTE: the chosen Proton must be INSTALLED. Steam ships recent versions; old
-ones (3.x/4.x/5.x) install from the Library's Proton tools, GE builds via
-ProtonUp-Qt. If it isn't installed, Steam silently falls back — so recipes
-using an old/GE Proton should say so in post_apply_message.
+NOTE: OFFICIAL Proton versions AUTO-INSTALL on launch — Steam treats a forced
+official runner as a dependency and downloads it before running the game, so
+you don't need it pre-installed (even old 3.x/4.x/5.x, as long as the id is a
+valid official tool id). GE-Proton / custom builds are NOT Steam-managed:
+Steam can't fetch them, so they must already be in compatibilitytools.d
+(install via ProtonUp-Qt, or cache them on the NAS). Recipes pinning a GE
+build should say so in post_apply_message.
 """
 from __future__ import annotations
 
