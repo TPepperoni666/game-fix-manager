@@ -96,8 +96,11 @@ Step types: `copy_files` (files/trees, `executable` flag for scripts),
 `swap_exe` (single-file swap), `remove_files` (reversible delete — intro
 videos), `launch_options` (Steam AND non-Steam shortcuts, batched behind one
 Steam restart), `systemd_unit` (boot services, user/system scope),
-`pak_edit` (edit inside zip-format game archives). Any step can be
-`"optional": true` (skip-with-warning instead of failing the recipe).
+`pak_edit` (edit inside zip-format game archives), `wine_registry` (HKCU/HKLM
+values in the prefix, `{game_dir_win}` template), `proton_version` (force a
+Proton/compat tool, e.g. `proton_63` or a `GE-Proton10-15` build — batched
+with the Steam restart). Any step can be `"optional": true` (skip-with-warning
+instead of failing the recipe).
 
 **Payload rules:** repo is public — payloads must be redistributable (keep
 licenses in the recipe's `docs/`). Actual game files / patched exes: fetch

@@ -225,6 +225,35 @@ def get_compat_tool(steam_root: Path, appid: int) -> dict | None:
     return entry if isinstance(entry, dict) else None
 
 
+def set_compat_tool(steam_root: Path, appid: int, tool_name: str,
+                    priority: str = "250") -> bool:
+    """Force a Proton/compat tool for appid in config.vdf (Steam closed).
+    tool_name="" removes the mapping (back to Steam's default). Works for
+    both Steam appids and non-Steam shortcut appids — CompatToolMapping is
+    keyed by appid regardless. Returns True if the file changed."""
+    cfg = _config_vdf(steam_root)
+    if not cfg.is_file():
+        return False
+    text = cfg.read_text(encoding="utf-8", errors="surrogateescape")
+    tree = vdf_loads(text)
+    node = _compat_node(tree, create=bool(tool_name))
+    if node is None:
+        return False
+    key = str(appid)
+    if not tool_name:
+        if node.pop(key, None) is None:
+            return False
+    else:
+        entry = node.get(key)
+        if isinstance(entry, dict) and entry.get("name") == tool_name:
+            return False  # already set
+        node[key] = {"name": tool_name, "config": "", "priority": str(priority)}
+    shutil.copy2(cfg, cfg.with_suffix(".vdf.gfm-bak"))
+    cfg.write_text(vdf_dumps(tree) + "\n", encoding="utf-8",
+                   errors="surrogateescape")
+    return True
+
+
 def remap_compat_tool(steam_root: Path, old_appid: int, new_appid: int) -> bool:
     """Move CompatToolMapping[old_appid] to [new_appid] in config.vdf.
     Steam must be closed. Returns True if a mapping moved."""

@@ -95,29 +95,40 @@ class App:
             return
         self.pending_vdf_writes = []
         names = ", ".join(sorted({w["game"] for w in writes}))
-        self.ui.msg(f"Launch options queued for: {names}", "warn")
+        self.ui.msg(f"Steam config changes queued for: {names}", "warn")
         was_running = steamvdf.steam_running()
         if was_running:
             if not self.ui.confirm(
-                    "Steam must close briefly to write launch options "
+                    "Steam must close briefly to write these changes "
                     "(controller drops out until it's back). Do it now?"):
-                self.ui.msg("Skipped — re-run apply later to set launch options.", "warn")
+                self.ui.msg("Skipped — re-run apply later to write them.", "warn")
                 return
             steamvdf.close_steam(lambda m: self.ui.msg(m, "warn"))
         total = 0
         for w in writes:
-            if w.get("kind") == "shortcut":
+            kind = w.get("kind")
+            if kind == "compat":
+                changed = steamvdf.set_compat_tool(
+                    self.steam_root, w["appid"], w["tool"], w["priority"])
+                self.ui.msg(f'  {w["game"]}: Proton = '
+                            f'{w["tool"] or "(default)"}'
+                            f'{"" if changed else " (already set)"}', "dim")
+                total += int(changed)
+            elif kind == "shortcut":
                 n = shortcutsvdf.set_launch_options(self.steam_root,
                                                     w["names"], w["value"])
+                self.ui.msg(f'  {w["game"]}: LaunchOptions = '
+                            f'{w["value"] or "(cleared)"} ({n} file(s))', "dim")
+                total += n
             else:
                 n = steamvdf.set_launch_options(self.steam_root,
                                                 w["appid"], w["value"])
-            self.ui.msg(f'  {w["game"]}: LaunchOptions = {w["value"] or "(cleared)"} '
-                        f'({n} user file(s))', "dim")
-            total += n
+                self.ui.msg(f'  {w["game"]}: LaunchOptions = '
+                            f'{w["value"] or "(cleared)"} ({n} file(s))', "dim")
+                total += n
         if was_running:
             steamvdf.start_steam(lambda m: self.ui.msg(m, "warn"))
-        self.ui.msg(f"Launch options written ({total} file update(s)).", "success")
+        self.ui.msg(f"Steam config written ({total} change(s)).", "success")
 
     # --- commands ---
 

@@ -641,6 +641,40 @@ def main():
               and "steam_games" in merged
               and "110800" in merged["steam_games"])
 
+        print("== proton_version step (force compat tool) ==")
+        # reuse the config.vdf with CompatToolMapping created in the reconcile
+        # section; here we force a Proton on la-noire's steam appid 110800.
+        pv_dir = tmp / "store" / "games" / "pv-game"
+        (pv_dir / "payload").mkdir(parents=True)
+        (pv_dir / "manifest.json").write_text(_json.dumps({
+            "id": "pv-game", "name": "PV Game", "steam_appid": 110800,
+            "steps": [{"type": "proton_version", "tool": "proton_63"}]}),
+            encoding="utf-8")
+        pv = [r for r in manifest.load_all(tmp / "store") if r.id == "pv-game"][0]
+        pv_ctx = engine.Ctx(pv, game_dir, dry_run=False, log=quiet,
+                            steam_root=steam)
+        check("verify before: not applied",
+              engine.verify_recipe(pv, pv_ctx) == engine.NOT_APPLIED)
+        engine.apply_recipe(pv, pv_ctx)
+        w = pv_ctx.deferred_vdf_writes[0]
+        check("compat write queued", w["kind"] == "compat"
+              and w["tool"] == "proton_63" and w["appid"] == 110800)
+        changed = steamvdf.set_compat_tool(steam, w["appid"], w["tool"],
+                                           w["priority"])
+        check("compat tool written", changed
+              and steamvdf.get_compat_tool(steam, 110800)["name"] == "proton_63")
+        check("verify after: applied",
+              engine.verify_recipe(pv, pv_ctx) == engine.APPLIED)
+        check("idempotent second write",
+              not steamvdf.set_compat_tool(steam, 110800, "proton_63"))
+        # revert clears it back to default
+        pv_ctx.deferred_vdf_writes.clear()
+        engine.revert_recipe(pv, pv_ctx)
+        rw = pv_ctx.deferred_vdf_writes[0]
+        steamvdf.set_compat_tool(steam, rw["appid"], rw["tool"], rw["priority"])
+        check("revert removes the mapping",
+              steamvdf.get_compat_tool(steam, 110800) is None)
+
         print("== SD map: authoritative game path lookup ==")
         from core import sdmap as _sdmap
         # Fixture: SD card holding a sd_map.json that names La Noire
