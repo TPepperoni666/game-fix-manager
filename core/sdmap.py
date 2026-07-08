@@ -34,6 +34,18 @@ from . import store
 MAP_REL_PATH = "steamos_restore/game_fixes/sd_map.json"
 
 
+def log_path() -> Path:
+    """Where to write gfm.log — next to the map (so it Syncthing-mirrors to
+    the workstation for debugging), else the config dir as a fallback."""
+    dest = default_write_path()
+    if dest is not None:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        return dest.parent / "gfm.log"
+    from . import store
+    store.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    return store.CONFIG_DIR / "gfm.log"
+
+
 def find_map_files() -> list[Path]:
     """Every sd_map.json present across the mounted SD cards."""
     return [p for sd in store.sd_card_roots()

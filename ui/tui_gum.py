@@ -56,7 +56,11 @@ class GumUI(UI):
                 return multiselect_arrows(header, options)
             except NotImplementedError:
                 pass  # fall through to gum on Windows / non-TTY
-        args = ["choose", *_GUM_OPTS, "--header", header]
+        # Cap the visible window so long lists (45+ recipes) scroll inside a
+        # fixed viewport instead of overflowing the screen. gum scrolls with
+        # the D-pad; the header stays pinned.
+        height = str(min(len(options) + 1, 15))
+        args = ["choose", *_GUM_OPTS, "--header", header, "--height", height]
         if multi:
             args.append("--no-limit")
         out = self._run([*args, *options])

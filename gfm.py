@@ -16,6 +16,8 @@ import argparse
 import os
 import subprocess
 import sys
+import time
+import traceback
 from pathlib import Path
 
 from core import (detect, engine, fetch, manifest, prefixes, sdmap, sdscan,
@@ -32,6 +34,7 @@ class App:
     def __init__(self, args):
         self.args = args
         self.ui = get_ui()
+        self._open_log()          # before anything that might log
         self.cfg = store.load_config()
         self.store_root = store.resolve_store(args.store, self.cfg)
         self.steam_root = detect.find_steam_root(args.steam_root)
@@ -39,6 +42,36 @@ class App:
             getattr(args, "local_payloads", None), self.cfg)
         self.pending_vdf_writes: list = []
         self.recipes = manifest.load_all(self.store_root) if self.store_root else []
+        self.log(f"start: cmd={getattr(args, 'command', None)} "
+                 f"store={self.store_root} steam={self.steam_root} "
+                 f"local_payloads={self.local_payloads} "
+                 f"recipes={len(self.recipes)}")
+
+    # --- logging (writes next to the map so it Syncthing-mirrors) ---
+
+    def _open_log(self):
+        self._logf = None
+        try:
+            self._logf = open(sdmap.log_path(), "a", encoding="utf-8",
+                              errors="replace")
+        except Exception:
+            return
+        self.log("=" * 60)
+        # Tee every UI message into the log too
+        _orig = self.ui.msg
+
+        def teed(text, style="info"):
+            self.log(f"[{style}] {text}")
+            _orig(text, style)
+        self.ui.msg = teed
+
+    def log(self, text: str):
+        if getattr(self, "_logf", None):
+            try:
+                self._logf.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {text}\n")
+                self._logf.flush()
+            except Exception:
+                pass
 
     # --- shared helpers ---
 
@@ -143,70 +176,88 @@ class App:
             game_dir = self.game_dir_for(recipe, interactive=False)
             self.ui.msg(self.status_line(recipe, game_dir))
 
-    def cmd_apply(self, ids: list[str]):
-        targets = self._pick(ids, "Select games to fix")
-        for recipe in targets:
-            game_dir = self.game_dir_for(recipe, interactive=True)
-            if game_dir is None:
-                self.ui.msg(f"Skipping {recipe.name} — not located.", "warn")
-                continue
-            if recipe.remote_payloads:
-                if self.args.dry_run:
-                    missing = [i for i in recipe.remote_payloads
-                               if not (recipe.dir / i["path"]).is_file()
-                               or (i.get("extract_to")
-                                   and not (recipe.dir / i["extract_to"]).is_dir())]
-                    if missing:
-                        for i in missing:
-                            self.ui.msg(f'DRY RUN would download {i["url"]} '
-                                        f'({i.get("size", 0) // (1 << 20)} MB)', "dim")
-                        self.ui.msg(f"{recipe.name}: rest of the plan needs the "
-                                    "payload — run a real apply to fetch it.", "warn")
-                        continue
-                else:
-                    try:
-                        fetch.ensure_remote_payloads(
-                            recipe, log=lambda m: self.ui.msg(m, "dim"))
-                    except fetch.FetchError as e:
-                        self.ui.msg(f"{recipe.name}: {e}", "error")
-                        continue
-            ok = self.run_engine(recipe, game_dir, engine.apply_recipe)
-            if ok and recipe.post_apply_message:
-                self.ui.msg("── Manual step needed " + "─" * 20, "warn")
-                for line in recipe.post_apply_message.splitlines():
-                    self.ui.msg(line, "warn")
-        self.flush_vdf_writes()
+    def _recipes_by_ids(self, ids: list[str]):
+        by_id = {r.id: r for r in self.recipes}
+        missing = [i for i in ids if i not in by_id]
+        if missing:
+            self.ui.msg(f"Unknown recipe id(s): {', '.join(missing)}", "error")
+            sys.exit(1)
+        return [by_id[i] for i in ids]
 
-    def cmd_revert(self, ids: list[str]):
-        targets = self._pick(ids, "Select games to revert")
-        for recipe in targets:
-            game_dir = self.game_dir_for(recipe, interactive=True)
-            if game_dir is None:
-                continue
-            if self.ui.confirm(f"Revert fixes for {recipe.name}?", danger=True):
-                self.run_engine(recipe, game_dir, engine.revert_recipe)
-        self.flush_vdf_writes()
-
-    def _pick(self, ids: list[str], prompt: str):
-        if ids:
-            by_id = {r.id: r for r in self.recipes}
-            missing = [i for i in ids if i not in by_id]
-            if missing:
-                self.ui.msg(f"Unknown recipe id(s): {', '.join(missing)}", "error")
-                sys.exit(1)
-            return [by_id[i] for i in ids]
+    def _pick_one(self, prompt: str):
+        """Single-select from the recipe list (+ a Back entry). Returns one
+        recipe, or None to finish. Uses gum's native single-select — no custom
+        TUI, handles the long list with its own scrolling, and needs only
+        D-pad + A on the Deck."""
         options, by_label = [], {}
         for recipe in self.recipes:
             game_dir = self.game_dir_for(recipe, interactive=False)
             label = self.status_line(recipe, game_dir)
             options.append(label)
             by_label[label] = recipe
-        # Multi-select uses arrow-key toggle (see ui/multiselect.py) —
-        # works out of the box on the Deck's default desktop layout.
-        picked = self.ui.choose(prompt, options, multi=True)
-        if not picked:
-            self.ui.msg("No games selected.", "warn")
-        return [by_label[p] for p in picked if p in by_label]
+        back = "⬅️  Done / back to menu"
+        options.append(back)
+        picked = self.ui.choose(prompt, options)   # single-select
+        if not picked or picked[0] == back:
+            return None
+        return by_label.get(picked[0])
+
+    def _apply_one(self, recipe) -> None:
+        self.log(f"apply {recipe.id}")
+        game_dir = self.game_dir_for(recipe, interactive=True)
+        if game_dir is None:
+            self.ui.msg(f"Skipping {recipe.name} — not located.", "warn")
+            return
+        if recipe.remote_payloads:
+            if self.args.dry_run:
+                for i in recipe.remote_payloads:
+                    self.ui.msg(f'DRY RUN would fetch {i["url"]} '
+                                f'({i.get("size", 0) // (1 << 20)} MB)', "dim")
+                self.ui.msg(f"{recipe.name}: real apply needed to fetch.", "warn")
+                return
+            try:
+                fetch.ensure_remote_payloads(
+                    recipe, log=lambda m: self.ui.msg(m, "dim"))
+            except fetch.FetchError as e:
+                self.ui.msg(f"{recipe.name}: {e}", "error")
+                return
+        ok = self.run_engine(recipe, game_dir, engine.apply_recipe)
+        if ok and recipe.post_apply_message:
+            self.ui.msg("── Manual step needed " + "─" * 20, "warn")
+            for line in recipe.post_apply_message.splitlines():
+                self.ui.msg(line, "warn")
+
+    def cmd_apply(self, ids: list[str]):
+        if ids:
+            for recipe in self._recipes_by_ids(ids):
+                self._apply_one(recipe)
+            self.flush_vdf_writes()
+            return
+        # Interactive: pick one, apply, back to list (status refreshes), repeat.
+        while True:
+            recipe = self._pick_one("Pick a game to fix (A = select, then Done)")
+            if recipe is None:
+                break
+            self._apply_one(recipe)
+            self.ui.input("Press Enter to continue")
+        self.flush_vdf_writes()
+
+    def cmd_revert(self, ids: list[str]):
+        if ids:
+            for recipe in self._recipes_by_ids(ids):
+                gd = self.game_dir_for(recipe, interactive=True)
+                if gd and self.ui.confirm(f"Revert {recipe.name}?", danger=True):
+                    self.run_engine(recipe, gd, engine.revert_recipe)
+            self.flush_vdf_writes()
+            return
+        while True:
+            recipe = self._pick_one("Pick a game to revert (A = select, then Done)")
+            if recipe is None:
+                break
+            gd = self.game_dir_for(recipe, interactive=True)
+            if gd and self.ui.confirm(f"Revert {recipe.name}?", danger=True):
+                self.run_engine(recipe, gd, engine.revert_recipe)
+        self.flush_vdf_writes()
 
     def cmd_update(self):
         """Pull the latest recipes and code from GitHub. If code changed,
@@ -352,8 +403,30 @@ class App:
         self.ui.msg("", "dim")
         self.ui.msg(f"Done. Automount installed and GFM pointed at "
                     f"{mount_point}.", "success")
-        self.ui.msg("It mounts on first access and after every reboot. "
-                    "Re-run this after a reimage.", "dim")
+
+        # Verify: accessing the mount point triggers the automount. Report
+        # what's actually visible so you know it worked, not just "it said so".
+        self.ui.msg("Testing the mount (first access triggers it)...", "dim")
+        mp = Path(mount_point)
+        try:
+            entries = [p.name for p in mp.iterdir()]
+        except Exception as e:
+            entries = None
+            self.log(f"mount test error: {e}")
+        if entries is None:
+            self.ui.msg("Mount not reachable yet. Check the NAS is on, the "
+                        "share/creds are right, and that cifs-utils is "
+                        "installed. See the log for details.", "error")
+        elif not entries:
+            self.ui.msg("Mounted, but the share looks EMPTY. Have you staged "
+                        "the payloads onto it yet? (tools/stage-eclipse.py "
+                        "writes them there from your PC.)", "warn")
+        else:
+            eclipse = sum(1 for e in entries if e.startswith("eclipse-"))
+            self.ui.msg(f"Mount OK — {len(entries)} folder(s) visible "
+                        f"({eclipse} eclipse payloads). You're set.", "success")
+        self.ui.msg("It re-mounts on access and after every reboot. Re-run "
+                    "this after a reimage.", "dim")
 
     def cmd_scan_sd(self):
         """Scan the SD card's Games/ folder and pair each subfolder to a
@@ -740,28 +813,28 @@ def main():
               file=sys.stderr)
         sys.exit(1)
 
-    if args.command == "list":
-        app.cmd_list()
-    elif args.command == "apply":
-        app.cmd_apply(args.ids)
-    elif args.command == "revert":
-        app.cmd_revert(args.ids)
-    elif args.command == "install":
-        app.cmd_install()
-    elif args.command == "mirror":
-        app.cmd_mirror(args.dest)
-    elif args.command == "reconcile":
-        app.cmd_reconcile()
-    elif args.command == "update":
-        app.cmd_update()
-    elif args.command == "scan":
-        app.cmd_scan_sd()
-    elif args.command == "scan-steam":
-        app.cmd_scan_steam()
-    elif args.command == "setup-nas":
-        app.cmd_setup_nas()
-    else:
-        app.menu()
+    dispatch = {
+        "list": lambda: app.cmd_list(),
+        "apply": lambda: app.cmd_apply(args.ids),
+        "revert": lambda: app.cmd_revert(args.ids),
+        "install": lambda: app.cmd_install(),
+        "mirror": lambda: app.cmd_mirror(args.dest),
+        "reconcile": lambda: app.cmd_reconcile(),
+        "update": lambda: app.cmd_update(),
+        "scan": lambda: app.cmd_scan_sd(),
+        "scan-steam": lambda: app.cmd_scan_steam(),
+        "setup-nas": lambda: app.cmd_setup_nas(),
+    }
+    try:
+        dispatch.get(args.command, app.menu)()
+    except KeyboardInterrupt:
+        app.log("interrupted by user")
+    except Exception:
+        app.log("UNCAUGHT EXCEPTION:\n" + traceback.format_exc())
+        app.ui.msg("Something went wrong — details written to the log "
+                   f"({sdmap.log_path()}).", "error")
+        app.ui.msg(traceback.format_exc().splitlines()[-1], "dim")
+        raise
 
 
 if __name__ == "__main__":
