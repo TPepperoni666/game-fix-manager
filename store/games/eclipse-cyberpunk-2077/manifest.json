@@ -5,6 +5,7 @@
     "Cyberpunk 2077",
     "Cyberpunk2077"
   ],
+  "steam_appid": 1091500,
   "detect": {
     "install_dir_names": [
       "Cyberpunk 2077"

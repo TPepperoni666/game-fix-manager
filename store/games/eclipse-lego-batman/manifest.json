@@ -5,6 +5,7 @@
     "LEGO Batman Legacy of the Dark Knight",
     "LEGO Batman"
   ],
+  "steam_appid": 2215200,
   "detect": {
     "install_dir_names": [
       "LEGO Batman Legacy of the Dark Knight"
