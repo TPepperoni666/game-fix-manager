@@ -1,0 +1,110 @@
+{
+  "eclipse-alan-wake-2": {
+    "rar_match": "Alan_Wake",
+    "stage_from": "Alan Wake 2"
+  },
+  "eclipse-clair-obscur": {
+    "rar_match": "Clair_Obscur",
+    "stage_from": "Clair Obscur Expedition 33"
+  },
+  "eclipse-cronos": {
+    "rar_match": "Cronos",
+    "stage_from": "Cronos The New Dawn"
+  },
+  "eclipse-hell-is-us": {
+    "rar_match": "Hell-Is-Us",
+    "stage_from": "Hell is Us"
+  },
+  "eclipse-mafia-old-country": {
+    "rar_match": "Mafia",
+    "stage_from": "Mafia The Old Country"
+  },
+  "eclipse-mgs-delta": {
+    "rar_match": "MGS",
+    "stage_from": "Metal Gear Solid Delta Snake Eater"
+  },
+  "eclipse-silent-hill-2": {
+    "rar_match": "Silent_Hill",
+    "stage_from": "Silent Hill 2"
+  },
+  "eclipse-stalker-2": {
+    "rar_match": "STALKER",
+    "stage_from": "v1/S.T.A.L.K.E.R. 2 Heart of Chornobyl"
+  },
+  "eclipse-jedi-survivor": {
+    "rar_match": "Jedi",
+    "stage_from": "STAR WARS Jedi Survivor"
+  },
+  "eclipse-indiana-jones": {
+    "rar_match": "Indiana_Jones",
+    "stage_from": "For licence/Indiana Jones and the Great Circle"
+  },
+  "eclipse-cyberpunk-2077": {
+    "rar_match": "Cyberpunk",
+    "stage_from": "v1/Cyberpunk 2077"
+  },
+  "eclipse-death-stranding-2": {
+    "rar_match": "DS_2",
+    "stage_from": "Death Stranding 2 On The Beach"
+  },
+  "eclipse-starfield": {
+    "rar_match": "Starfield",
+    "stage_from": "For Licence v1/Starfield"
+  },
+  "eclipse-spider-man-2": {
+    "rar_match": "Spider-Man",
+    "stage_from": "v1/For Licence/Marvel's Spider-Man 2"
+  },
+  "eclipse-hogwarts-legacy": {
+    "rar_match": "Hogwarts",
+    "stage_from": "For Steam Licence/Hogwarts Legacy"
+  },
+  "eclipse-doom-dark-ages": {
+    "rar_match": "DOOM",
+    "stage_from": "For Licence/DOOMTheDarkAges"
+  },
+  "eclipse-lego-batman": {
+    "rar_match": "LEGO",
+    "stage_from": "For Licence/LEGO Batman Legacy of the Dark Knight"
+  },
+  "eclipse-ff7-rebirth": {
+    "rar_match": "Rebirth",
+    "stage_from": "FINAL FANTASY VII REBIRTH"
+  },
+  "eclipse-ff7-remake": {
+    "rar_match": "Final Fantasy 7 Remake",
+    "stage_from": "FINAL FANTASY VII REMAKE"
+  },
+  "eclipse-callisto-protocol": {
+    "rar_match": "Callisto",
+    "stage_from": "For Licence/The Callisto Protocol"
+  },
+  "eclipse-mindseye": {
+    "rar_match": "Mindseye",
+    "stage_from": "MindsEye"
+  },
+  "eclipse-styx-blades": {
+    "rar_match": "Styx",
+    "stage_from": "Styx Blades of Greed"
+  },
+  "eclipse-stellar-blade": {
+    "rar_match": "Stellar Blade",
+    "stage_from": "StellarBlade"
+  },
+  "eclipse-oblivion-remastered": {
+    "rar_match": "Oblivion",
+    "stage_from": "The Elder Scrolls IV Oblivion Remastered"
+  },
+  "eclipse-gothic-1-remake": {
+    "rar_match": "GOTHIC",
+    "stage_from": "Gothic 1 Remake"
+  },
+  "eclipse-avowed": {
+    "rar_match": "Avowed",
+    "stage_from": "Avowed"
+  },
+  "eclipse-wuchang": {
+    "rar_match": "Wuchang 1.7",
+    "stage_from": "v1/For License/Wuchang Fallen Feathers"
+  }
+}

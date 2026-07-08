@@ -1,102 +1,108 @@
 #!/usr/bin/env python3
-"""Stage Eclipse mod .rar files into a local-payloads folder.
+"""Stage Eclipse mod archives into a local-payloads folder.
 
-Eclipse perf mods contain modified copyrighted game exes, so they never go
-in the git store — they live in your local-payloads folder (NAS/SD). This
-script extracts each Eclipse .rar and lays it out where the recipes expect:
+Eclipse perf mods contain modified copyrighted game exes/paks, so they never
+go in the git store — they live in your local-payloads folder (NAS/SD). This
+script extracts each Eclipse archive and lays it out where the recipes expect:
   <local-payloads>/<recipe-id>/payload/mod/<game-dir mirror>
 
-Usage:
-  python tools/stage-eclipse.py <rar-folder> <local-payloads-folder>
+The per-game mapping (which archive → which recipe → which inner variant
+folder to copy from, e.g. "For Licence") is read from
+store/eclipse_index.json, generated alongside the recipes so the two never
+drift.
 
-Needs 7z (Windows: 7-Zip; Linux: p7zip) for .rar extraction. Run it wherever
-the .rar files and the (synced/mounted) local-payloads folder are both
+Usage:
+  python tools/stage-eclipse.py <archive-folder> <local-payloads-folder>
+
+Needs 7z (Windows: 7-Zip; Linux: p7zip) for .rar/.zip extraction. Run it
+wherever the archives and the (synced/mounted) local-payloads folder are both
 reachable — e.g. your Windows box if local-payloads is a Syncthing folder.
 """
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-# rar filename fragment -> (recipe id, inner game-folder path to copy FROM)
-MAP = {
-    "Alan_Wake": ("eclipse-alan-wake-2", "Alan Wake 2"),
-    "Clair_Obscur": ("eclipse-clair-obscur", "Clair Obscur Expedition 33"),
-    "Cronos": ("eclipse-cronos", "Cronos The New Dawn"),
-    "Hell-Is-Us": ("eclipse-hell-is-us", "Hell is Us"),
-    "Indiana_Jones": ("eclipse-indiana-jones",
-                      "For licence/Indiana Jones and the Great Circle"),
-    "Mafia": ("eclipse-mafia-old-country", "Mafia The Old Country"),
-    "MGS": ("eclipse-mgs-delta", "Metal Gear Solid Delta Snake Eater"),
-    "Silent_Hill": ("eclipse-silent-hill-2", "Silent Hill 2"),
-    "STALKER": ("eclipse-stalker-2", "v2/S.T.A.L.K.E.R. 2 Heart of Chornobyl"),
-    "Jedi": ("eclipse-jedi-survivor", "STAR WARS Jedi Survivor"),
-    "Wuchang": ("eclipse-wuchang", None),  # flat — paks placed specially
-}
-WUCHANG_SUBPATH = "Project_Plague/Content/Paks"
+INDEX = Path(__file__).resolve().parent.parent / "store" / "eclipse_index.json"
 
 
 def _sevenzip() -> str:
-    for c in ("7z", r"C:\Program Files\7-Zip\7z.exe",
+    for c in ("7z", "7zz", r"C:\Program Files\7-Zip\7z.exe",
               r"C:\Program Files (x86)\7-Zip\7z.exe"):
         if shutil.which(c) or Path(c).is_file():
             return c
     sys.exit("7z not found — install 7-Zip (Windows) or p7zip (Linux).")
 
 
-def _match(rar_name: str):
-    for frag, target in MAP.items():
-        if frag.lower() in rar_name.lower():
-            return target
-    return None, None
-
-
 def main():
     if len(sys.argv) != 3:
         sys.exit(__doc__)
-    rar_dir, out_dir = Path(sys.argv[1]), Path(sys.argv[2])
+    arc_dir, out_dir = Path(sys.argv[1]), Path(sys.argv[2])
+    index = json.loads(INDEX.read_text(encoding="utf-8"))
     sevenzip = _sevenzip()
-    rars = sorted(rar_dir.glob("ECLIPSE*.rar"))
-    if not rars:
-        sys.exit(f"No ECLIPSE*.rar in {rar_dir}")
 
-    for rar in rars:
-        rid, inner = _match(rar.name)
-        if rid is None:
-            print(f"SKIP (unmapped): {rar.name}")
+    archives = [p for p in sorted(arc_dir.iterdir())
+                if p.suffix.lower() in (".rar", ".zip", ".7z")]
+    if not archives:
+        sys.exit(f"No .rar/.zip/.7z archives in {arc_dir}")
+
+    staged = skipped = 0
+    for arc in archives:
+        # Match this archive to a recipe by its rar_match fragment
+        hit = None
+        for rid, meta in index.items():
+            if meta["rar_match"].lower() in arc.name.lower():
+                hit = (rid, meta)
+                break
+        if hit is None:
+            print(f"SKIP (no recipe matches): {arc.name}")
+            skipped += 1
             continue
-        print(f"\n{rar.name}\n  -> {rid}")
+        rid, meta = hit
         dest = out_dir / rid / "payload" / "mod"
+        print(f"\n{arc.name}\n  -> {rid}")
         with tempfile.TemporaryDirectory() as tmp:
-            subprocess.run([sevenzip, "x", str(rar), f"-o{tmp}", "-y"],
-                           stdout=subprocess.DEVNULL, check=True)
-            top = next(Path(tmp).iterdir())  # the single mod folder
-            if rid == "eclipse-wuchang":
-                src = top  # bare paks at the top level
-                dst = dest / WUCHANG_SUBPATH
-            else:
-                src = top / inner
-                dst = dest
+            r = subprocess.run([sevenzip, "x", str(arc), f"-o{tmp}", "-y"],
+                               stdout=subprocess.DEVNULL,
+                               stderr=subprocess.PIPE, text=True)
+            if r.returncode != 0:
+                print(f"  ! extract failed: {(r.stderr or '').strip()[:120]}")
+                skipped += 1
+                continue
+            # The archive has a single top folder; stage_from is relative to it
+            tops = [p for p in Path(tmp).iterdir() if p.is_dir()]
+            top = tops[0] if len(tops) == 1 else Path(tmp)
+            src = top / meta["stage_from"]
             if not src.is_dir():
-                print(f"  ! expected folder not found: {src}")
+                # some archives extract stage_from directly at top level
+                alt = Path(tmp) / meta["stage_from"]
+                src = alt if alt.is_dir() else src
+            if not src.is_dir():
+                print(f"  ! expected folder not found: {meta['stage_from']}")
+                skipped += 1
                 continue
             if dest.exists():
                 shutil.rmtree(dest)
-            dst.mkdir(parents=True, exist_ok=True)
+            dest.mkdir(parents=True, exist_ok=True)
             for item in src.iterdir():
-                if item.name.lower() == "readme.txt":
+                if item.name.lower().startswith("readme") or \
+                        item.suffix.lower() == ".txt":
                     continue
-                target = dst / item.name
+                target = dest / item.name
                 if item.is_dir():
                     shutil.copytree(item, target, dirs_exist_ok=True)
                 else:
                     shutil.copy2(item, target)
             print(f"  staged -> {dest}")
-    print("\nDone. Point GFM at this folder with:  --local-payloads "
-          f"{out_dir}")
+            staged += 1
+
+    print(f"\nDone: {staged} staged, {skipped} skipped.")
+    if staged:
+        print(f"Point GFM at it:  python3 gfm.py --local-payloads {out_dir}")
 
 
 if __name__ == "__main__":

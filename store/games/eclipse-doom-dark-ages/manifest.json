@@ -1,0 +1,30 @@
+{
+  "id": "eclipse-doom-dark-ages",
+  "name": "DOOM: The Dark Ages (Eclipse perf)",
+  "aliases": [
+    "DOOM The Dark Ages",
+    "DOOMTheDarkAges"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "DOOMTheDarkAges"
+    ],
+    "marker_files": [
+      "DOOMTheDarkAges.exe"
+    ]
+  },
+  "steps": [
+    {
+      "type": "copy_files",
+      "from": "payload/mod",
+      "to": "{game_dir}",
+      "backup_originals": true
+    },
+    {
+      "type": "launch_options",
+      "value": "+com_skipIntroVideo 1 +r_geomCacheRayTracing 0 +r_lodScaleRaytracing 0.1 +r_minLODRaytracing 4 +image_lodbias 0 +r_enableDedicatedAllocation 0 +r_enableTransferQueues 1 +r_hdrBloom 0 +r_shadowsDistanceFadeMultiplier 0.35 +r_zfar 30.0 +r_enableFullResSSS 0 +r_omms 0 +r_postProcessHQ 0 +r_supportTLASUpdates 0 +r_allowTLASUpdates 0 %command%"
+    }
+  ],
+  "post_apply_message": "Eclipse perf mod. Recommended Deck settings: idTech, exe + base/candidate.cfg. 16:10, 1280x800, V-Sync off, sharpening 2.0. Sets the big CVAR launch string automatically. Eclipse's tested Deck setup: GE-Proton (10-15+), TDP 18, GPU 1800, undervolt -50, SDWEAK. Mod targets a specific game build — if the game updates past it the modded exe can crash; Revert restores stock, then wait for a mod update. Files are NOT in git; stage into local-payloads first.",
+  "notes": "Eclipse Steam Deck graphics-opt mod. Manifest-only on git; mod files (modified game exe/paks) live in local-payloads off git. Stage with tools/stage-eclipse.py, which copies the 'For Licence/DOOMTheDarkAges' variant from the .rar into payload/mod/. Then Apply copies over the game dir, backing up replaced files."
+}

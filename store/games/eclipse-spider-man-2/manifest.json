@@ -1,0 +1,27 @@
+{
+  "id": "eclipse-spider-man-2",
+  "name": "Marvel's Spider-Man 2 (Eclipse perf)",
+  "aliases": [
+    "Marvel's Spider-Man 2",
+    "Spider-Man 2",
+    "Spider-Man2"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "Marvel's Spider-Man 2"
+    ],
+    "marker_files": [
+      "Spider-Man2.exe"
+    ]
+  },
+  "steps": [
+    {
+      "type": "copy_files",
+      "from": "payload/mod",
+      "to": "{game_dir}",
+      "backup_originals": true
+    }
+  ],
+  "post_apply_message": "Eclipse perf mod. Recommended Deck settings: Ships stub dstorage.dll. v1/v2 variants. 1280x800, minimum + FSR. Eclipse's tested Deck setup: GE-Proton (10-15+), TDP 18, GPU 1800, undervolt -50, SDWEAK. Mod targets a specific game build — if the game updates past it the modded exe can crash; Revert restores stock, then wait for a mod update. Files are NOT in git; stage into local-payloads first.",
+  "notes": "Eclipse Steam Deck graphics-opt mod. Manifest-only on git; mod files (modified game exe/paks) live in local-payloads off git. Stage with tools/stage-eclipse.py, which copies the 'v1/For Licence/Marvel's Spider-Man 2' variant from the .rar into payload/mod/. Then Apply copies over the game dir, backing up replaced files."
+}

@@ -1,0 +1,61 @@
+{
+  "id": "eclipse-hogwarts-legacy",
+  "name": "Hogwarts Legacy (Eclipse perf)",
+  "aliases": [
+    "Hogwarts Legacy"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "Hogwarts Legacy"
+    ],
+    "marker_files": [
+      "Phoenix/Binaries/Win64/HogwartsLegacy.exe"
+    ]
+  },
+  "steps": [
+    {
+      "type": "copy_files",
+      "from": "payload/mod",
+      "to": "{game_dir}",
+      "backup_originals": true
+    },
+    {
+      "type": "remove_files",
+      "targets": [
+        "Phoenix/Content/Paks/pakchunk0optional-WindowsNoEditor.pak"
+      ]
+    },
+    {
+      "type": "remove_files",
+      "targets": [
+        "Phoenix/Content/Paks/pakchunk0optional-WindowsNoEditor.ucas"
+      ]
+    },
+    {
+      "type": "remove_files",
+      "targets": [
+        "Phoenix/Content/Paks/pakchunk0optional-WindowsNoEditor.utoc"
+      ]
+    },
+    {
+      "type": "remove_files",
+      "targets": [
+        "Phoenix/Content/Paks/pakchunk10optional-WindowsNoEditor.pak"
+      ]
+    },
+    {
+      "type": "remove_files",
+      "targets": [
+        "Phoenix/Content/Paks/pakchunk10optional-WindowsNoEditor.ucas"
+      ]
+    },
+    {
+      "type": "remove_files",
+      "targets": [
+        "Phoenix/Content/Paks/pakchunk10optional-WindowsNoEditor.utoc"
+      ]
+    }
+  ],
+  "post_apply_message": "Eclipse perf mod. Recommended Deck settings: Steam licence variant staged (EGS/Cracked also in rar). Deletes the optional HD-texture paks (~24.8GB saved). 1280x800, minimum. Eclipse's tested Deck setup: GE-Proton (10-15+), TDP 18, GPU 1800, undervolt -50, SDWEAK. Mod targets a specific game build — if the game updates past it the modded exe can crash; Revert restores stock, then wait for a mod update. Files are NOT in git; stage into local-payloads first.",
+  "notes": "Eclipse Steam Deck graphics-opt mod. Manifest-only on git; mod files (modified game exe/paks) live in local-payloads off git. Stage with tools/stage-eclipse.py, which copies the 'For Steam Licence/Hogwarts Legacy' variant from the .rar into payload/mod/. Then Apply copies over the game dir, backing up replaced files."
+}
