@@ -70,6 +70,10 @@ class GumUI(UI):
              f"--selected.background={color}", "--selected.foreground=0"])
         return result.returncode == 0
 
-    def input(self, prompt: str, default: str = "") -> str:
-        return self._run(["input", "--placeholder", prompt, "--width", "50",
-                          "--value", default])
+    def input(self, prompt: str, default: str = "",
+              password: bool = False) -> str:
+        args = ["input", "--placeholder", prompt, "--width", "50",
+                "--value", default]
+        if password:
+            args.append("--password")
+        return self._run(args)

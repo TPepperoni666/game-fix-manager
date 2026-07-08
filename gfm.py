@@ -258,6 +258,92 @@ class App:
             self.ui.msg(f"Recipes reloaded: {len(self.recipes)} in the store.",
                         "success")
 
+    def cmd_setup_nas(self):
+        """Install a systemd automount for the NAS payload share and point
+        GFM at it — all from inside the tool. Deck/Linux only."""
+        import subprocess
+        import tempfile
+        if os.name == "nt":
+            self.ui.msg("NAS mount setup is Deck/Linux only.", "warn")
+            return
+        self.ui.header("🔌 CONNECT NAS PAYLOADS")
+        self.ui.msg("Sets up an on-demand SMB automount that survives reboots "
+                    "and won't hang boot when the NAS is offline.", "dim")
+        self.ui.msg("", "dim")
+
+        host = self.ui.input("NAS host / IP", "192.168.1.33")
+        share = self.ui.input("SMB share name", "Game Fixes")
+        mount_point = self.ui.input("Mount point",
+                                    str(Path.home() / "mnt" / "game-fixes"))
+        if not host or not share or not mount_point:
+            self.ui.msg("Cancelled.", "warn")
+            return
+        user = self.ui.input("SMB username (blank = guest)")
+        password = self.ui.input("SMB password", password=True) if user else ""
+
+        if not __import__("shutil").which("mount.cifs") and \
+                not Path("/sbin/mount.cifs").exists():
+            self.ui.msg("Note: mount.cifs not found — if the mount later fails "
+                        "with 'wrong fs type', install cifs-utils "
+                        "(sudo steamos-readonly disable first on SteamOS).",
+                        "warn")
+
+        if not self.ui.confirm("Install the automount now? (needs sudo)",
+                               danger=True):
+            return
+
+        def sudo_write(path: str, content: str, mode: str | None = None):
+            tmp = Path(tempfile.gettempdir()) / ("gfm-" + Path(path).name)
+            tmp.write_text(content, encoding="utf-8")
+            subprocess.run(["sudo", "cp", str(tmp), path], check=True)
+            if mode:
+                subprocess.run(["sudo", "chmod", mode, path], check=True)
+            tmp.unlink(missing_ok=True)
+
+        cred_file = "/etc/gfm-smb.cred"
+        if user:
+            sudo_write(cred_file, f"username={user}\npassword={password}\n",
+                       mode="600")
+            cred_opt = f"credentials={cred_file}"
+        else:
+            cred_opt = "guest"
+
+        Path(mount_point).mkdir(parents=True, exist_ok=True)
+        uid, gid = os.getuid(), os.getgid()
+
+        def esc(suffix):
+            return subprocess.run(
+                ["systemd-escape", "-p", f"--suffix={suffix}", mount_point],
+                capture_output=True, text=True, check=True).stdout.strip()
+        mount_unit, auto_unit = esc("mount"), esc("automount")
+
+        sudo_write(f"/etc/systemd/system/{mount_unit}",
+                   "[Unit]\nDescription=Game Fixes SMB share (GFM local "
+                   "payloads)\nAfter=network-online.target\n"
+                   "Wants=network-online.target\n\n[Mount]\n"
+                   f"What=//{host}/{share}\nWhere={mount_point}\nType=cifs\n"
+                   f"Options={cred_opt},uid={uid},gid={gid},ro,iocharset=utf8,"
+                   "vers=3.0,_netdev,nofail\nTimeoutSec=20\n")
+        sudo_write(f"/etc/systemd/system/{auto_unit}",
+                   "[Unit]\nDescription=Automount for Game Fixes SMB share\n\n"
+                   f"[Automount]\nWhere={mount_point}\nTimeoutIdleSec=300\n\n"
+                   "[Install]\nWantedBy=multi-user.target\n")
+
+        subprocess.run(["sudo", "systemctl", "daemon-reload"], check=True)
+        subprocess.run(["sudo", "systemctl", "enable", "--now", auto_unit],
+                       check=True)
+
+        # Wire GFM to use it — persist to config
+        self.cfg["local_payloads_dir"] = mount_point
+        self.local_payloads = Path(mount_point)
+        store.save_config(self.cfg)
+
+        self.ui.msg("", "dim")
+        self.ui.msg(f"Done. Automount installed and GFM pointed at "
+                    f"{mount_point}.", "success")
+        self.ui.msg("It mounts on first access and after every reboot. "
+                    "Re-run this after a reimage.", "dim")
+
     def cmd_scan_sd(self):
         """Scan the SD card's Games/ folder and pair each subfolder to a
         recipe. On confirmation, writes the mappings into the machine
@@ -576,6 +662,7 @@ class App:
                 "↩️  Revert a Game",
                 "📁 Scan SD for Games (auto-populate paths)",
                 "📚 Scan Steam Libraries (inventory installed games)",
+                "🔌 Connect NAS Payloads (SMB automount)",
                 "🔗 Reconcile Prefixes (adopt existing compatdata)",
                 "💾 Mirror Store (offline copy on SD/NAS)",
                 "⬆️  Update (git pull latest recipes + code)",
@@ -595,6 +682,9 @@ class App:
                 self.ui.input("Press Enter to continue")
             elif choice.startswith("📚"):
                 self.cmd_scan_steam()
+                self.ui.input("Press Enter to continue")
+            elif choice.startswith("🔌"):
+                self.cmd_setup_nas()
                 self.ui.input("Press Enter to continue")
             elif choice.startswith("🔗"):
                 self.cmd_reconcile()
@@ -616,7 +706,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", nargs="?",
                         choices=["list", "apply", "revert", "install", "mirror",
-                                 "reconcile", "update", "scan", "scan-steam"],
+                                 "reconcile", "update", "scan", "scan-steam",
+                                 "setup-nas"],
                         help="omit for interactive menu")
     parser.add_argument("ids", nargs="*", help="recipe ids (e.g. la-noire)")
     parser.add_argument("--store", help="path to the fix store")
@@ -656,6 +747,8 @@ def main():
         app.cmd_scan_sd()
     elif args.command == "scan-steam":
         app.cmd_scan_steam()
+    elif args.command == "setup-nas":
+        app.cmd_setup_nas()
     else:
         app.menu()
 

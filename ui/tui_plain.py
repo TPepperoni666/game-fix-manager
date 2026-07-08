@@ -52,6 +52,10 @@ class PlainUI(UI):
         tag = "[DANGER] " if danger else ""
         return input(f"{tag}{question} [y/N]: ").strip().lower() in ("y", "yes")
 
-    def input(self, prompt: str, default: str = "") -> str:
+    def input(self, prompt: str, default: str = "",
+              password: bool = False) -> str:
+        if password:
+            import getpass
+            return getpass.getpass(f"{prompt}: ")
         suffix = f" [{default}]" if default else ""
         return input(f"{prompt}{suffix}: ").strip() or default
