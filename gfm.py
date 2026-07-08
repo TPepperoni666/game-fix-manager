@@ -184,15 +184,19 @@ class App:
             sys.exit(1)
         return [by_id[i] for i in ids]
 
-    def _pick_one(self, prompt: str):
+    def _pick_one(self, title: str, prompt: str):
         """Single-select from the recipe list (+ a Back entry). Returns one
-        recipe, or None to finish. Uses gum's native single-select — no custom
-        TUI, handles the long list with its own scrolling, and needs only
-        D-pad + A on the Deck."""
+        recipe, or None to finish. Clears the screen first (via header) so it
+        never stacks under previous apply output. The list is LIGHT — just
+        name + a not-found marker — so it stays fast; it deliberately skips
+        the applied-status hash check (which would re-read NAS payloads on
+        every redraw). Full applied status lives in the Status command."""
+        self.ui.header(title)
         options, by_label = [], {}
         for recipe in self.recipes:
             game_dir = self.game_dir_for(recipe, interactive=False)
-            label = self.status_line(recipe, game_dir)
+            mark = "❓ " if (recipe.requires_game and game_dir is None) else "  "
+            label = f"{mark}{recipe.name}"
             options.append(label)
             by_label[label] = recipe
         back = "⬅️  Done / back to menu"
@@ -233,11 +237,14 @@ class App:
                 self._apply_one(recipe)
             self.flush_vdf_writes()
             return
-        # Interactive: pick one, apply, back to list (status refreshes), repeat.
+        # Interactive: pick one, apply, back to list, repeat. header() clears
+        # the screen at each phase so apply output never stacks under a menu.
         while True:
-            recipe = self._pick_one("Pick a game to fix (A = select, then Done)")
+            recipe = self._pick_one("🔧 APPLY FIXES",
+                                    "Pick a game (A = select, then Done)")
             if recipe is None:
                 break
+            self.ui.header(f"Applying: {recipe.name}")
             self._apply_one(recipe)
             self.ui.input("Press Enter to continue")
         self.flush_vdf_writes()
@@ -251,12 +258,15 @@ class App:
             self.flush_vdf_writes()
             return
         while True:
-            recipe = self._pick_one("Pick a game to revert (A = select, then Done)")
+            recipe = self._pick_one("↩️  REVERT A GAME",
+                                    "Pick a game (A = select, then Done)")
             if recipe is None:
                 break
+            self.ui.header(f"Reverting: {recipe.name}")
             gd = self.game_dir_for(recipe, interactive=True)
             if gd and self.ui.confirm(f"Revert {recipe.name}?", danger=True):
                 self.run_engine(recipe, gd, engine.revert_recipe)
+            self.ui.input("Press Enter to continue")
         self.flush_vdf_writes()
 
     def cmd_update(self):
