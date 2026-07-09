@@ -194,6 +194,96 @@ def set_appid(steam_root: Path, names: list[str], new_appid: int) -> int:
     return updated
 
 
+def _user_config_dirs(steam_root: Path) -> list[Path]:
+    """userdata/<id>/config dirs for real logged-in users (id != 0)."""
+    userdata = steam_root / "userdata"
+    if not userdata.is_dir():
+        return []
+    return [d / "config" for d in sorted(userdata.iterdir())
+            if d.name.isdigit() and d.name != "0"]
+
+
+def _set_field(entry: dict, name: str, t: int, val) -> None:
+    """Set a shortcut field case-insensitively (preserving existing casing)."""
+    k, _, _ = _get_ci(entry, name)
+    entry[k or name] = (t, val)
+
+
+def _new_entry(appname: str, exe: str, start_dir: str,
+               launch_options: str, appid: int | None) -> dict:
+    """A complete non-Steam shortcut entry. Exe/StartDir are quoted the way
+    Steam stores them. Missing fields would let Steam re-derive an appid, so
+    we write the full set including a forced appid when given."""
+    entry: dict = {}
+    if appid is not None:
+        entry["appid"] = (TYPE_INT, int(appid) & 0xFFFFFFFF)
+    entry.update({
+        "AppName": (TYPE_STR, appname),
+        "Exe": (TYPE_STR, f'"{exe}"'),
+        "StartDir": (TYPE_STR, f'"{start_dir}"'),
+        "icon": (TYPE_STR, ""),
+        "ShortcutPath": (TYPE_STR, ""),
+        "LaunchOptions": (TYPE_STR, launch_options),
+        "IsHidden": (TYPE_INT, 0),
+        "AllowDesktopConfig": (TYPE_INT, 1),
+        "AllowOverlay": (TYPE_INT, 1),
+        "OpenVR": (TYPE_INT, 0),
+        "Devkit": (TYPE_INT, 0),
+        "DevkitGameID": (TYPE_STR, ""),
+        "DevkitOverrideAppID": (TYPE_INT, 0),
+        "LastPlayTime": (TYPE_INT, 0),
+        "FlatpakAppID": (TYPE_STR, ""),
+        "tags": (TYPE_MAP, {}),
+    })
+    return entry
+
+
+def ensure_shortcut(steam_root: Path, appname: str, exe: str, start_dir: str,
+                    launch_options: str = "", appid: int | None = None,
+                    aliases: list[str] | None = None) -> int:
+    """Create (or update) a non-Steam shortcut in every user's shortcuts.vdf.
+    Steam must be closed. Idempotent: an existing entry whose AppName matches
+    appname/aliases is updated in place (Exe/StartDir/LaunchOptions/appid);
+    otherwise a new entry is appended. Forcing `appid` to a gospel value makes
+    Steam use that same id for the game's compatdata prefix, so a restored
+    prefix lines up. Backs up each file to *.vdf.gfm-bak first. Returns files
+    written."""
+    names_norm = {_norm(appname)} | {_norm(a) for a in (aliases or [])}
+    dirs = _user_config_dirs(steam_root)
+    if not dirs:
+        raise ShortcutsError(
+            "no Steam user directory (userdata/<id>) — has Steam run and "
+            "logged in on this machine?")
+    written = 0
+    for cfg in dirs:
+        f = cfg / "shortcuts.vdf"
+        root = loads(f.read_bytes()) if f.is_file() else {"shortcuts": (TYPE_MAP, {})}
+        skey, _, shortcuts = _get_ci(root, "shortcuts")
+        if not isinstance(shortcuts, dict):
+            shortcuts = {}
+            root[skey or "shortcuts"] = (TYPE_MAP, shortcuts)
+        existing = next((e for _t, e in
+                         ((t, v) for t, v in shortcuts.values())
+                         if _t == TYPE_MAP and _matches(e, names_norm)), None)
+        if existing is not None:
+            _set_field(existing, "Exe", TYPE_STR, f'"{exe}"')
+            _set_field(existing, "StartDir", TYPE_STR, f'"{start_dir}"')
+            _set_field(existing, "LaunchOptions", TYPE_STR, launch_options)
+            if appid is not None:
+                _set_field(existing, "appid", TYPE_INT, int(appid) & 0xFFFFFFFF)
+        else:
+            idxs = [int(k) for k in shortcuts if str(k).isdigit()]
+            nkey = str(max(idxs) + 1 if idxs else 0)
+            shortcuts[nkey] = (TYPE_MAP, _new_entry(
+                appname, exe, start_dir, launch_options, appid))
+        cfg.mkdir(parents=True, exist_ok=True)
+        if f.is_file():
+            shutil.copy2(f, f.with_suffix(".vdf.gfm-bak"))
+        f.write_bytes(dumps(root))
+        written += 1
+    return written
+
+
 def set_launch_options(steam_root: Path, names: list[str], value: str) -> int:
     """Set LaunchOptions on every matching shortcut. Steam must be closed.
     Returns number of files updated."""

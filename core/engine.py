@@ -150,5 +150,5 @@ def revert_recipe(recipe: Recipe, ctx: Ctx) -> None:
 
 # Import step modules for their registration side effects.
 from .steps import (copy_files, launch_options, pak_edit,  # noqa: E402,F401
-                    proton_version, remove_files, swap_exe, symlink,
-                    systemd_unit, wine_registry)
+                    proton_version, remove_files, steam_shortcut, swap_exe,
+                    symlink, systemd_unit, wine_registry)

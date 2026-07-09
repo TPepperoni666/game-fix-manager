@@ -8,10 +8,12 @@
   },
   "steps": [
     {
-      "type": "proton_version",
-      "tool": "proton_9"
+      "type": "steam_shortcut",
+      "exe": "Deadpool.exe",
+      "start_dir": "{game_dir}",
+      "proton": "proton_9"
     }
   ],
-  "post_apply_message": "Deadpool (non-Steam, delisted 2017) — setup:\n1. Game folder on the SD card. Add 'Deadpool.exe' to Steam as a non-Steam game (the readme's launch target; the real engine exe is Binaries/DP.exe if the launcher misbehaves under Proton).\n2. This fix forces Proton 9 (the version the Deck community confirms works). If you added the shortcut after applying, re-apply so the Proton setting lands on it.\n3. DO NOT add any framerate-unlock launch option — Deadpool soft-locks with an unlocked framerate (e.g. Chapter 5 before the toilet scene). Leave it at default.\n4. Only preset graphics options exist (Coalesced.ini is encrypted); pick a preset in-game.\nIf you get missing-DLL errors, Proton usually covers them — but the crack ships vcredist_x86 + DirectX (DXSETUP) in _Redist if needed.",
+  "post_apply_message": "Deadpool (non-Steam, delisted 2017) — setup:\n1. Game folder on the SD card (GFM detects it).\n2. Apply this fix — it AUTO-ADDS the Steam shortcut for you (Deadpool.exe, start dir = game folder, gospel appid) and forces Proton 9 (the version the Deck community confirms works). No manual 'add to Steam' needed. Steam closes briefly to write it.\n3. DO NOT add any framerate-unlock launch option — Deadpool soft-locks with an unlocked framerate (e.g. Chapter 5 before the toilet scene). Leave it at default.\n4. Only preset graphics options exist (Coalesced.ini is encrypted); pick a preset in-game.\nThe readme's launch target is Deadpool.exe (Binaries/DP.exe is the engine exe if the launcher misbehaves under Proton). If you hit missing-DLL errors, the crack ships vcredist_x86 + DirectX (DXSETUP) in _Redist.",
   "notes": "Deadpool (High Moon, 2013), delisted from Steam Nov 2017 (Marvel licence). Tony's copy is a cracked non-Steam build (ChemicalFlood repack; NAS \\192.168.1.33\\Rom_Library\\roms\\win\\Deadpool.zip). Runs on Deck via forced Proton 9 (ProtonDB/community). Launch exe per the crack's _HOW TO RUN GAME!!.txt = Deadpool.exe (Binaries/DP.exe is the 20MB engine exe). Key gotcha: framerate unlock causes a progression soft-lock — keep default fps. No resolution config (encrypted Coalesced.ini, presets only), so no 1920x1200 ini step. Recipe is just the Proton pin + docs; add the game as a non-Steam shortcut first so proton_version can key off it."
 }

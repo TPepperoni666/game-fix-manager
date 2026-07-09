@@ -147,6 +147,14 @@ class App:
                             f'{w["tool"] or "(default)"}'
                             f'{"" if changed else " (already set)"}', "dim")
                 total += int(changed)
+            elif kind == "add_shortcut":
+                n = shortcutsvdf.ensure_shortcut(
+                    self.steam_root, w["appname"], w["exe"], w["start_dir"],
+                    w.get("launch_options", ""), w.get("appid"),
+                    w.get("aliases"))
+                self.ui.msg(f'  {w["game"]}: Steam shortcut written '
+                            f'({n} file(s))', "dim")
+                total += n
             elif kind == "shortcut":
                 n = shortcutsvdf.set_launch_options(self.steam_root,
                                                     w["names"], w["value"])
