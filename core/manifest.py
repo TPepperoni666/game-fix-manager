@@ -8,7 +8,7 @@ from pathlib import Path
 MANIFEST_NAME = "manifest.json"
 KNOWN_STEP_TYPES = {"copy_files", "swap_exe", "launch_options", "systemd_unit",
                     "remove_files", "pak_edit", "wine_registry",
-                    "proton_version", "run_script"}
+                    "proton_version", "symlink", "run_script"}
 
 
 class ManifestError(Exception):
