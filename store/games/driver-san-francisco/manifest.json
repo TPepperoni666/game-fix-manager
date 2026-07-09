@@ -32,6 +32,12 @@
     },
     {
       "type": "copy_files",
+      "from": "payload/crack",
+      "to": "{game_dir}",
+      "backup_originals": true
+    },
+    {
+      "type": "copy_files",
       "from": "payload/wrapper",
       "to": "~/gfm-wrappers",
       "backup_originals": false,
@@ -40,8 +46,14 @@
     {
       "type": "launch_options",
       "value": "{home}/gfm-wrappers/dsf-launch.sh %command%"
+    },
+    {
+      "type": "symlink",
+      "optional": true,
+      "link": "{prefix}/drive_c/users/steamuser/Documents/Ubisoft/Driver San Francisco/SKIDROW",
+      "target": "TPepperoni666"
     }
   ],
-  "post_apply_message": "Driver San Francisco — three fixes applied:\n1. Intro Bink files (DriverSplash + ubisoft) renamed to .gfm-orig\n2. DXVK's d3d9.dll dropped next to Driver.exe (fixes the SteamOS story-mode crash-to-desktop)\n3. Launch wrapper installed at ~/gfm-wrappers/dsf-launch.sh — automatically bypasses the dead Ubisoft Game Launcher and runs Driver.exe directly. PCGW confirms the game is fully self-sufficient this way. Ubisoft Connect servers died Oct 2022, so DLC/multiplayer is offline-only regardless; single-player works fine.",
-  "notes": "Delisted from Steam Dec 2016, Ubisoft Connect online services shut down Oct 2022 — but the Steam single-player installs still work. Three legit fixes bundled: (1) intro skip per PCGW; (2) DXVK d3d9.dll drop is PCGW's documented Linux/SteamOS fix for story-mode CTD (the bundled Ubisoft d3d9 is buggy under Proton, DXVK's shim overrides it); (3) launcher-bypass wrapper (same waitforexitandrun-swap pattern as our TWFC wrapper) — reads %command%, replaces the last .exe arg with Driver.exe (tries both cases), execs the modified proton stack. PCGW confirms 'Steam not required when launched from the executable on Windows' — Ubisoft launcher's auth check just delays boot under dead servers. DXVK v3.0.1 pinned (later versions may have D3D9 regressions with old games). No SilentPatch for this game exists yet."
+  "post_apply_message": "Driver San Francisco — CRACK + save-mirror build:\n1. Intro Bink files (DriverSplash + ubisoft) renamed to .gfm-orig.\n2. DXVK d3d9.dll dropped next to Driver.exe (SteamOS story-mode CTD fix).\n3. SKIDROW crack files (Driver.exe + Uplay-emulator DLLs) copied over the game dir, originals backed up as .gfm-orig — this removes the Uplay/Ubisoft Connect requirement entirely (no launcher, no sign-in). Revert restores your stock Steam exe.\n4. Launch wrapper runs Driver.exe directly (skips the Ubisoft launcher).\n5. SAVE MIRROR (optional step): symlinks the crack's save folder 'SKIDROW' -> your real Uplay folder 'TPepperoni666', so the crack and the legit Steam build share ONE save. Needs the game to have run once (so Documents/Ubisoft/Driver San Francisco/TPepperoni666/ exists) — it already does from your Steam playthrough, so it links on apply.\n\nORDER: apply -> launch. If the save-mirror step reports skipped, your username folder name differs from 'TPepperoni666' — tell me and I'll adjust the target. If Steam still runs the Ubisoft launcher instead of the crack, make sure the dsf-launch.sh wrapper line is in the launch options.",
+  "notes": "Delisted from Steam Dec 2016; Ubisoft Connect ONLINE SERVICES (challenges/MP) shut down Oct 2022. Tony owns it on Steam (appid 33440) but the mandatory Uplay/Ubisoft Connect DRM (compiled into the stock Driver.exe) blocks launch under Proton. CRACK ROUTE 2026-07-09 (Tony supplied a SKIDROW v1.04 crack for the game he owns; DRM-circumvention gray area but owned game + dead servers): overlay the SKIDROW crack files onto the Steam install so no Uplay is needed. Crack payload = Driver.exe + skidrow.dll + uplay_r1_loader.dll + ubiorbitapi_r2_loader.dll + ubiorbitapi_r2.dll, staged OFF-GIT at <local-payloads>/driver-san-francisco/payload/crack/ (NAS 'Game Fixes' share) — copyrighted, never committed. SAVE-FOLDER FINDING: legit Uplay build saves to Documents/Ubisoft/Driver San Francisco/<Ubisoft-username>/savegames/autosave.dat (his = 'TPepperoni666', 19.2KB); SKIDROW crack saves under a 'SKIDROW' folder. New 'symlink' step links SKIDROW -> TPepperoni666 (directory symlink, survives atomic saves) so both exes share one save. Legit fixes retained: intro skip (PCGW), DXVK d3d9.dll story-mode CTD fix (v3.0.1 pinned), launcher-bypass wrapper (waitforexitandrun swap). If the crack file set is incomplete, Revert restores stock and we widen the overlay."
 }

@@ -13,11 +13,13 @@ Schema:
     "_meta": { "host": "steamdeck", "scanned_at": "...", "sd_root": "..." },
     "games_dir": "/run/media/deck/primary/Games",
     "games": {
-      "the-crew": { "path": "/run/media/deck/primary/Games/TheCrew" },
+      "the-crew": { "path": ".../Games/TheCrew",
+                    "exes": [ { "rel": "TheCrew.exe", "size": 123 } ] },
       "barnyard": { "path": "...", "notes": "optional freeform" }
     },
     "unmatched": [
-      { "path": "/run/media/deck/primary/Games/Some Folder" }
+      { "path": ".../Games/Some Folder",
+        "exes": [ { "rel": "game.exe", "size": 456 } ] }
     ]
   }
 """
@@ -89,11 +91,14 @@ def write(matched: list, unmatched: list, games_dir: Path,
     """Write the map. matched is [(recipe, folder, signal), ...],
     unmatched is [folder, ...]. Existing entries not touched by the scan
     are preserved (freeform notes survive)."""
+    from . import sdscan
     existing = existing or {}
     games = dict(existing.get("games", {}))
     for recipe, folder, signal in matched:
         prev = games.get(recipe.id, {})
-        games[recipe.id] = {**prev, "path": str(folder), "matched_by": signal}
+        games[recipe.id] = {**prev, "path": str(folder), "matched_by": signal,
+                            "exes": sdscan.find_exes(folder),
+                            "readmes": sdscan.find_readmes(folder)}
     payload = {
         "_meta": {
             "host": socket.gethostname(),
@@ -102,7 +107,9 @@ def write(matched: list, unmatched: list, games_dir: Path,
         },
         "games_dir": str(games_dir),
         "games": games,
-        "unmatched": [{"path": str(f)} for f in unmatched],
+        "unmatched": [{"path": str(f), "exes": sdscan.find_exes(f),
+                       "readmes": sdscan.find_readmes(f)}
+                      for f in unmatched],
     }
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

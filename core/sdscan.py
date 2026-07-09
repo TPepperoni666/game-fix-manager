@@ -12,6 +12,7 @@ Match order per folder:
 """
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -21,6 +22,97 @@ from .manifest import Recipe
 
 def _norm(s: str) -> str:
     return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
+# Executables that are never the game's launch target — installers,
+# redistributables, crash handlers. Matched against the exe's stem.
+_EXE_SKIP = re.compile(
+    r"(?i)^(unins|uninstall|setup|install|redist|vc_?redist|dxsetup|"
+    r"dxwebsetup|directx|dotnet|oalinst|crashreport|crashhandler|"
+    r"unitycrashhandler|benchmark)"
+)
+
+
+def find_exes(folder: Path, max_depth: int = 3, limit: int = 8) -> list[dict]:
+    """Candidate launch executables inside a game folder, best guess first.
+
+    Each entry is {'rel': '<posix path under folder>', 'size': <bytes>}.
+    Ranked shallow-then-big (the launch exe usually sits at/near the root and
+    is one of the larger binaries; UE-style Binaries/Win32|64/*.exe still
+    surface within max_depth). Installers/redists/crash handlers are skipped.
+
+    Purely informational: it gives the map a real exe for each SD game so
+    shortcut creation and recipe detect blocks have something to point at,
+    and it disambiguates folders that ship more than one exe (e.g. a patched
+    v1.1 alongside v1.0). Only meaningful where the game files are actually
+    mounted (the Deck), so an empty list just means "not scanned here"."""
+    if not folder.is_dir():
+        return []
+    base = len(folder.parts)
+    found: list[tuple[int, int, str]] = []  # (depth, -size, rel) for sorting
+    for dirpath, dirnames, filenames in os.walk(folder):
+        depth = len(Path(dirpath).parts) - base
+        if depth >= max_depth:
+            dirnames[:] = []  # don't descend past max_depth
+        for fn in filenames:
+            if not fn.lower().endswith(".exe"):
+                continue
+            if _EXE_SKIP.match(Path(fn).stem):
+                continue
+            p = Path(dirpath) / fn
+            try:
+                size = p.stat().st_size
+            except OSError:
+                continue
+            found.append((depth, -size, p.relative_to(folder).as_posix()))
+    found.sort()
+    return [{"rel": rel, "size": -negsize} for _d, negsize, rel in found[:limit]]
+
+
+# Filenames that tend to carry setup / crack / how-to-play instructions.
+_README_HINT = re.compile(
+    r"(?i)(how ?to ?play|read ?me|instruction|install|chemical|crack|setup)")
+_README_EXT = (".txt", ".nfo", ".md", ".rtf")
+
+
+def find_readmes(folder: Path, max_depth: int = 2, limit: int = 6,
+                 embed_under: int = 8192) -> list[dict]:
+    """Setup / how-to-play notes bundled with an SD game — especially the
+    cracked-game 'how to play' readmes that spell out which exe is the crack,
+    any reg fix, and disc/hardware-setup quirks (exactly the info that turned
+    V8 Supercars 3 from a guess into a correct recipe).
+
+    Each entry is {'rel', 'size'} plus 'text' when the file is small enough to
+    embed (<= embed_under bytes). Embedding means a single Deck scan carries
+    the instructions straight back into the map, so recipes get built from the
+    author's own notes instead of guesswork. Shallow + small files first."""
+    if not folder.is_dir():
+        return []
+    base = len(folder.parts)
+    hits: list[tuple[int, int, dict]] = []
+    for dirpath, dirnames, filenames in os.walk(folder):
+        depth = len(Path(dirpath).parts) - base
+        if depth >= max_depth:
+            dirnames[:] = []
+        for fn in filenames:
+            if not (fn.lower().endswith(_README_EXT)
+                    and _README_HINT.search(Path(fn).stem)):
+                continue
+            p = Path(dirpath) / fn
+            try:
+                size = p.stat().st_size
+            except OSError:
+                continue
+            entry = {"rel": p.relative_to(folder).as_posix(), "size": size}
+            if 0 < size <= embed_under:
+                try:
+                    entry["text"] = p.read_text(
+                        encoding="utf-8", errors="replace").strip()
+                except OSError:
+                    pass
+            hits.append((depth, size, entry))
+    hits.sort(key=lambda t: (t[0], t[1]))  # shallow, then small
+    return [e for _d, _s, e in hits[:limit]]
 
 
 def find_games_dirs(sd_roots: list[Path] | None = None) -> list[Path]:
