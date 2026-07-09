@@ -71,7 +71,7 @@ def find_exes(folder: Path, max_depth: int = 3, limit: int = 8) -> list[dict]:
 
 # Filenames that tend to carry setup / crack / how-to-play instructions.
 _README_HINT = re.compile(
-    r"(?i)(how ?to ?play|read ?me|instruction|install|chemical|crack|setup)")
+    r"(?i)(how ?to|read ?me|instruction|install|chemical|crack|setup|run ?game)")
 _README_EXT = (".txt", ".nfo", ".md", ".rtf")
 
 
