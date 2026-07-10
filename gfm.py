@@ -936,6 +936,9 @@ class App:
                 "💾 Mirror Store (offline copy on SD/NAS)",
                 "⬆️  Update (git pull latest recipes + code)",
                 "🖥️  Install Shortcut (Desktop + Game Mode)",
+                "🎨 Capture Shortcut Art + Settings",
+                "🧰 Stage GE-Proton Runner to NAS",
+                "🩺 Test The Crew Server",
                 "❌ Exit"])
             choice = choice[0] if choice else "❌ Exit"
             if choice.startswith("🔧"):
@@ -966,6 +969,15 @@ class App:
                 self.ui.input("Press Enter to continue")
             elif choice.startswith("🖥"):
                 self.cmd_install()
+                self.ui.input("Press Enter to continue")
+            elif choice.startswith("🎨"):
+                self.cmd_capture()
+                self.ui.input("Press Enter to continue")
+            elif choice.startswith("🧰"):
+                self.cmd_stage_runner()
+                self.ui.input("Press Enter to continue")
+            elif choice.startswith("🩺"):
+                self.cmd_test_crew()
                 self.ui.input("Press Enter to continue")
             else:
                 return
