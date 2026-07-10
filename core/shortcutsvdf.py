@@ -266,6 +266,9 @@ def ensure_shortcut(steam_root: Path, appname: str, exe: str, start_dir: str,
                          ((t, v) for t, v in shortcuts.values())
                          if _t == TYPE_MAP and _matches(e, names_norm)), None)
         if existing is not None:
+            # Adopt the canonical name too — so an old alias-named entry
+            # (e.g. "ToCA Race Driver 3") is renamed to the recipe name.
+            _set_field(existing, "AppName", TYPE_STR, appname)
             _set_field(existing, "Exe", TYPE_STR, f'"{exe}"')
             _set_field(existing, "StartDir", TYPE_STR, f'"{start_dir}"')
             _set_field(existing, "LaunchOptions", TYPE_STR, launch_options)
