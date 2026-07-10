@@ -7,38 +7,11 @@
     "install_dir_names": ["TheCrew", "The Crew"],
     "marker_files": ["the crew/thecrew.exe"]
   },
-  "remote_payloads": [
-    {
-      "path": "payload/downloads/TCUServer-1.4.5.0.7z",
-      "url": "https://thecrewunlimited.com/TCUNet/TCUServer/TCUServer-1.4.5.0.7z",
-      "sha256": "f3463c4e54d5c9f8f8e7a640a2bdab13090be13b3d6b1b1e60d5fe035315c7c8",
-      "size": 32062282,
-      "extract_to": "payload/patch"
-    }
-  ],
   "steps": [
     {
       "type": "install_runner",
       "optional": true,
       "name": "GE-Proton10-34"
-    },
-    {
-      "type": "copy_files",
-      "from": "payload/patch",
-      "to": "{game_dir}/the crew",
-      "backup_originals": true
-    },
-    {
-      "type": "copy_files",
-      "from": "payload/config",
-      "to": "{game_dir}/the crew",
-      "backup_originals": false
-    },
-    {
-      "type": "copy_files",
-      "from": "payload/tculauncher",
-      "to": "~/TCULauncher",
-      "backup_originals": false
     },
     {
       "type": "systemd_unit",
@@ -55,6 +28,6 @@
       "proton": "GE-Proton10-34"
     }
   ],
-  "post_apply_message": "Notes for TCU:\n1. Apply this fix — it AUTO-ADDS the Steam shortcut (TheCrew.exe, game folder as start dir, gospel appid, the dinput8 override, GE-Proton 10.34), installs the TCU offline-server patch, and sets up the network service. Steam closes briefly to write the shortcut. Stage GE-Proton 10.34 first via 'gfm stage-runner' (or ProtonUp-Qt) so the runner is there — if it isn't, everything else still applies and you can set Proton manually.\n2. If the systemd step failed with a sudo error, set a password (run: passwd) and re-apply.\n3. Keep the game folder on the SD card — the game is unobtainable (licenses revoked), and the SD card survives reimages. Your offline save (data.bin) lives IN that folder: back it up separately.\n4. Optional: TCU Launcher is staged at ~/TCULauncher for save management (Offline Server > Manage). Patching via the launcher is NOT needed.",
-  "notes": "The Crew servers died 2024; TCU (thecrewunlimited.com) revives it with a local offline server inside dinput8.dll. Patch 1.4.5.0 for game 1.2.0.0 is fetched DIRECTLY from TCU's servers (URL found in the launcher's own log) and extracted with bsdtar — nothing of theirs is rehosted, repo stays public. Patch = addon_items.xml, addon_missions.xml, tcu.manifest.cheats.xml, dinput8.dll; payload/config adds the launcher's install receipt (tcu.manifest.patch.xml, so the launcher sees it as patched) and server.ini (Tony's username). tcu-network.service (sysctl unprivileged port 443 + iptables DNAT of public-ubiservices.ubi.com to 127.0.0.1) replaces DAKOP's run-every-boot root script. To bump TCU versions: update url/sha256/size/filename here (launcher log shows the URL pattern). Verified against Tony's working Windows install, F:\\games\\The Crew, 2026-07-06. Launch options on Deck still to be confirmed on real hardware."
+  "post_apply_message": "The Crew (TCU offline) — this recipe does NOT touch the game files (Tony's TCU patch is already applied and working; we keep it as-is). It only:\n1. AUTO-ADDS the Steam shortcut ('the crew/thecrew.exe', game folder as start dir, gospel appid 3585568980, the dinput8 override that loads TCU's offline server, GE-Proton 10.34). Steam closes briefly to write it.\n2. Installs the LOCAL-SERVER WORKAROUND as a boot service (tcu-network.service): unprivileged port 443 + iptables DNAT of public-ubiservices.ubi.com to 127.0.0.1 (DAKResearcher's script, automated).\nStage GE-Proton 10.34 first with 'gfm stage-runner' so the runner is present (install_runner is optional, so if it's missing everything else still applies and you set Proton manually). If the systemd step fails with a sudo error, run 'passwd' once and re-apply. Verify anytime with 'gfm test-crew'. The offline save (data.bin) lives in the game folder — TODO: add it to the save-capture feature.",
+  "notes": "The Crew servers died 2024; TCU (thecrewunlimited.com) revives it via a local offline server inside dinput8.dll (already installed in Tony's game dir — 'the crew/' subfolder). REWORKED 2026-07-10 per Tony: DO NOT mod the game (dropped the TCUServer fetch + the patch/config/tculauncher copy_files) — it's working and we keep it. Recipe now = (1) install_runner GE-Proton10-34, (2) tcu-network.service = DAKResearcher's script automated (sysctl unprivileged port 443 + iptables DNAT public-ubiservices.ubi.com -> 127.0.0.1), (3) steam_shortcut auto-add. Game is NESTED at <folder>/the crew/thecrew.exe (lowercase subfolder), so exe/start_dir/marker all point there. Gospel appid = 3585568980 (Tony's new working non-Steam shortcut; old 3251365350 prefix went bad). Save = data.bin in the game folder (not the prefix) — needs the save-capture feature. Health check: gfm test-crew."
 }

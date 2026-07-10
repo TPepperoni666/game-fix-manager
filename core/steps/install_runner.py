@@ -17,6 +17,7 @@ games, and Steam needs a restart to notice new runners — the apply run's Steam
 bounce handles that)."""
 from __future__ import annotations
 
+import os
 import shutil
 
 from ..engine import APPLIED, NOT_APPLIED, Ctx, StepError, register_step
@@ -66,6 +67,28 @@ class InstallRunner:
                         tf.extractall(dest.parent)
             else:
                 shutil.copytree(folder, dest)
+            self._ensure_executable(dest)
+
+    @staticmethod
+    def _ensure_executable(dest) -> None:
+        """A runner staged from a Windows/Syncthing copy loses its Unix exec
+        bits (NTFS can't store them), so Steam couldn't launch it. Restore +x on
+        the proton launcher and anything under a bin/ dir (and .sh scripts)."""
+        p = dest / "proton"
+        try:
+            if p.is_file():
+                os.chmod(p, os.stat(p).st_mode | 0o755)
+        except OSError:
+            pass
+        for root_dir, _dirs, files in os.walk(dest):
+            in_bin = "/bin" in root_dir.replace(os.sep, "/")
+            for f in files:
+                if in_bin or f.endswith(".sh"):
+                    fp = os.path.join(root_dir, f)
+                    try:
+                        os.chmod(fp, os.stat(fp).st_mode | 0o111)
+                    except OSError:
+                        pass
 
     def verify(self, ctx: Ctx) -> str:
         dest = self._dest(ctx)
