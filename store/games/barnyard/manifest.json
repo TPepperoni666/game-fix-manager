@@ -42,7 +42,7 @@
       "exe": "Barnyard.exe",
       "start_dir": "{game_dir}",
       "launch_options": "WINEDLLOVERRIDES=\"dinput8=n,b\" %command%",
-      "proton": "proton_9"
+      "proton": "proton_7"
     },
     {
       "type": "wine_registry",
@@ -51,6 +51,6 @@
       "values": { "ControllerEnabled": 1 }
     }
   ],
-  "post_apply_message": "Barnyard setup order matters (retail game, non-Steam):\n1. Apply this fix — it AUTO-ADDS the Steam shortcut (Barnyard.exe, start dir = game folder, gospel appid, dinput8 override, Proton 9). Steam closes briefly to write it. No manual 'add to Steam' needed.\n2. RUN THE GAME ONCE, then quit — this creates the Proton prefix.\n3. Re-apply this fix — the registry step (controller enable) needs that prefix.\n4. Run Setup/Setup.exe once (via Proton) and set Screen Size to 800x600 — the widescreen fix takes over from there at 1920x1200 (16:10).\nIf Proton 9 misbehaves, switch it to GE-Proton in Steam. If the game folder name case differs from Data/Movies on your copy, tell GFM's author (intro-skip targets are case-sensitive on Linux).",
+  "post_apply_message": "Barnyard (retail game, non-Steam) — order matters:\n1. Apply this fix — it AUTO-ADDS the Steam shortcut (Barnyard.exe, start dir = game folder, gospel appid, dinput8 override, Proton 7.0-6). Steam closes briefly to write it.\n2. 'Failed to create the display, run the Barnyard setup program' = the display isn't configured yet. Fix: run Setup.exe (or Setup/Setup.exe) in the game folder VIA PROTON, pick a display mode / Screen Size 800x600, finish. That writes the display config the game needs; the widescreen ASI then takes over at 1920x1200. Proton 7.0-6 is the runner that inits the display cleanly here (not 9/GE).\n3. RUN THE GAME ONCE, then quit — creates the prefix.\n4. Re-apply this fix — the controller-enable registry step needs the prefix.\nWIDESCREEN: the 1920x1200 fix (AlphaYellow ASI) is ALREADY bundled — it only kicks in once (a) the display works and (b) the dinput8 ASI loader loads (that's the WINEDLLOVERRIDES in the launch options). So no separate mod needed — get the display working first. CONTROLLER: enabled via the THQ registry key (needs the prefix, hence the re-apply); if it still won't take the pad, set the shortcut's Steam Input layout to Gamepad. If the game folder name case differs from Data/Movies on your copy, tell GFM's author (intro-skip targets are case-sensitive on Linux).",
   "notes": "Fresh build 2026-07-07, per Tony's spec: 1920x1200 (16:10), controller enabled, intros skipped. Widescreen & FOV Fix by AlphaYellow (PCGW community file 3817 — download is behind a csrf/terms gate so the .asi is committed here with credit; ini preconfigured Width=1920 Height=1200 FOVFactor=1.0). ASI Loader dinput8.dll fetched pinned from ThirteenAG v9.7.2 (GitHub digest matches). ControllerEnabled=1 via new wine_registry step (HKCU lives in the prefix's user.reg; needs the prefix to exist, hence optional + re-apply flow). Game is retail CD-ROM only — bring your own install, non-Steam shortcut flow, keep on SD. Save games live IN the game dir (<game>/Save) so they ride along on the SD card. Windowed-mode reg key (RealForcedWindowed) deliberately skipped — gamescope handles fullscreen. dgVoodoo2 skipped — Proton's DXVK translates D3D8 natively. XInput Plus skipped — Steam Input covers remapping."
 }

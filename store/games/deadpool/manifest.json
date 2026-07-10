@@ -8,6 +8,10 @@
   },
   "steps": [
     {
+      "type": "install_runner",
+      "name": "GE-Proton10-34"
+    },
+    {
       "type": "steam_shortcut",
       "exe": "Deadpool.exe",
       "start_dir": "{game_dir}",
