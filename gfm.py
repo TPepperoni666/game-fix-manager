@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -215,6 +216,60 @@ class App:
         else:
             self.ui.msg(f"No custom art found for {recipe.name} (appid {appid}) "
                         "— set the art in Steam first, then capture.", "warn")
+        # Also snapshot localconfig.vdf — the source of the per-game display /
+        # perf settings (TDP, scaling, VRR, framerate). Kept whole for now so
+        # the surgical per-appid restore can be built against a real file.
+        from core import steamvdf
+        state = self.local_payloads / "_state"
+        snapped = 0
+        for cfg in steamvdf._localconfigs(self.steam_root):
+            uid = cfg.parent.parent.name
+            try:
+                state.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(cfg, state / f"localconfig-{uid}.vdf")
+                snapped += 1
+            except OSError as e:
+                self.ui.msg(f"  localconfig snapshot failed: {e}", "warn")
+        if snapped:
+            self.ui.msg(f"Snapshotted localconfig.vdf for {snapped} user(s) "
+                        f"-> {state} (perf/display source).", "dim")
+
+    def cmd_stage_runner(self):
+        """Copy a compatibilitytools.d runner (e.g. GE-Proton) to the NAS
+        _runners/ so install_runner can side-load it after a reimage."""
+        if self.steam_root is None:
+            self.ui.msg("Steam root not found.", "warn")
+            return
+        if self.local_payloads is None:
+            self.ui.msg("No local-payloads dir (NAS/SD) set to stage into.", "warn")
+            return
+        ctd = self.steam_root / "compatibilitytools.d"
+        runners = sorted(d.name for d in ctd.iterdir() if d.is_dir()) \
+            if ctd.is_dir() else []
+        if not runners:
+            self.ui.msg("No custom runners in compatibilitytools.d — install one "
+                        "via ProtonUp-Qt first.", "warn")
+            return
+        back = "⬅️  Cancel"
+        picked = self.ui.choose("Stage which runner to the NAS?", runners + [back])
+        if not picked or picked[0] == back:
+            return
+        name = picked[0]
+        dest = self.local_payloads / "_runners" / name
+        if dest.is_dir():
+            if not self.ui.confirm(f"{name} already staged — overwrite?"):
+                return
+            shutil.rmtree(dest)
+        self.ui.msg(f"Copying {name} to {dest} (can take a minute over the "
+                    "NAS)...", "dim")
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(ctd / name, dest)
+        except OSError as e:
+            self.ui.msg(f"Failed to stage {name}: {e}", "error")
+            return
+        self.ui.msg(f"Staged {name} -> {dest}. install_runner will side-load it "
+                    "after a reimage.", "success")
 
     def cmd_list(self):
         if not self.recipes:
@@ -852,7 +907,7 @@ def main():
     parser.add_argument("command", nargs="?",
                         choices=["list", "apply", "revert", "install", "mirror",
                                  "reconcile", "update", "scan", "scan-steam",
-                                 "capture", "setup-nas"],
+                                 "capture", "stage-runner", "setup-nas"],
                         help="omit for interactive menu")
     parser.add_argument("ids", nargs="*", help="recipe ids (e.g. la-noire)")
     parser.add_argument("--store", help="path to the fix store")
@@ -885,6 +940,7 @@ def main():
         "scan": lambda: app.cmd_scan_sd(),
         "scan-steam": lambda: app.cmd_scan_steam(),
         "capture": lambda: app.cmd_capture(),
+        "stage-runner": lambda: app.cmd_stage_runner(),
         "setup-nas": lambda: app.cmd_setup_nas(),
     }
     try:
