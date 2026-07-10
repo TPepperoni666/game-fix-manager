@@ -5,7 +5,7 @@
   "steam_appid": 241560,
   "detect": {
     "install_dir_names": ["TheCrew", "The Crew"],
-    "marker_files": ["TheCrew.exe"]
+    "marker_files": ["the crew/thecrew.exe"]
   },
   "remote_payloads": [
     {
@@ -25,13 +25,13 @@
     {
       "type": "copy_files",
       "from": "payload/patch",
-      "to": "{game_dir}",
+      "to": "{game_dir}/the crew",
       "backup_originals": true
     },
     {
       "type": "copy_files",
       "from": "payload/config",
-      "to": "{game_dir}",
+      "to": "{game_dir}/the crew",
       "backup_originals": false
     },
     {
@@ -49,8 +49,8 @@
     },
     {
       "type": "steam_shortcut",
-      "exe": "TheCrew.exe",
-      "start_dir": "{game_dir}",
+      "exe": "the crew/thecrew.exe",
+      "start_dir": "{game_dir}/the crew",
       "launch_options": "WINEDLLOVERRIDES=\"dinput8=n,b\" %command%",
       "proton": "GE-Proton10-34"
     }
