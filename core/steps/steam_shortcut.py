@@ -36,6 +36,9 @@ class SteamShortcut:
         self.launch_options = step.get("launch_options", "")
         self.proton = step.get("proton")
         self.appid = step.get("appid")
+        # Restore captured custom shortcut art (from `gfm capture`) if any
+        # was saved for this game. Default on — a no-op when none exists.
+        self.restore_art = step.get("restore_art", True)
 
     def _appid(self, ctx: Ctx) -> int | None:
         if self.appid is not None:
@@ -78,6 +81,17 @@ class SteamShortcut:
                 "kind": "compat", "game": ctx.recipe.name,
                 "appid": appid, "tool": self.proton, "priority": "250",
             })
+        if self.restore_art and appid is not None and ctx.local_payloads_dir is not None:
+            art_src = ctx.local_payloads_dir / ctx.recipe.id / "artwork"
+            try:
+                has_art = art_src.is_dir() and any(art_src.iterdir())
+            except OSError:
+                has_art = False
+            if has_art:
+                ctx.deferred_vdf_writes.append({
+                    "kind": "restore_art", "game": ctx.recipe.name,
+                    "appid": appid, "src": str(art_src),
+                })
         ctx.log(f"      + Steam shortcut queued: {ctx.recipe.name} -> {exe}"
                 + (f"  (appid {appid})" if appid is not None else ""))
 

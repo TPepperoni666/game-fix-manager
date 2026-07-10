@@ -13,6 +13,7 @@ Options: --store PATH, --steam-root PATH, --dry-run
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -21,7 +22,7 @@ import traceback
 from pathlib import Path
 
 from core import (detect, engine, fetch, manifest, prefixes, sdmap, sdscan,
-                  shortcutsvdf, steamscan, steamvdf, store)
+                  shortcutsvdf, steamart, steamscan, steamvdf, store)
 from ui import get_ui
 
 STATUS_ICON = {engine.APPLIED: "✅", engine.NOT_APPLIED: "☐ ",
@@ -155,6 +156,11 @@ class App:
                 self.ui.msg(f'  {w["game"]}: Steam shortcut written '
                             f'({n} file(s))', "dim")
                 total += n
+            elif kind == "restore_art":
+                n = steamart.restore(self.steam_root, w["appid"], w["src"])
+                self.ui.msg(f'  {w["game"]}: shortcut art restored '
+                            f'({n} file(s))', "dim")
+                total += n
             elif kind == "shortcut":
                 n = shortcutsvdf.set_launch_options(self.steam_root,
                                                     w["names"], w["value"])
@@ -172,6 +178,43 @@ class App:
         self.ui.msg(f"Steam config written ({total} change(s)).", "success")
 
     # --- commands ---
+
+    def _gospel_appid(self, recipe):
+        """The pinned non-Steam appid for a recipe, from prefix_registry.json."""
+        reg = self.store_root / "prefix_registry.json"
+        try:
+            data = json.loads(reg.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        for e in data.get("entries", []):
+            if e.get("recipe_id") == recipe.id and e.get("appid") is not None:
+                return int(e["appid"])
+        return None
+
+    def cmd_capture(self):
+        """Snapshot a game's custom Steam shortcut art (keyed by its gospel
+        appid) into local-payloads, so a recreated shortcut gets it back."""
+        recipe = self._pick_one("🎨 CAPTURE SHORTCUT ART",
+                                 "Capture custom art for:")
+        if recipe is None:
+            return
+        appid = self._gospel_appid(recipe)
+        if appid is None:
+            self.ui.msg(f"No gospel appid for {recipe.name} — can't key its art.",
+                        "warn")
+            return
+        if self.local_payloads is None:
+            self.ui.msg("No local-payloads dir (NAS/SD) set to store the art in.",
+                        "warn")
+            return
+        dest = self.local_payloads / recipe.id / "artwork"
+        n = steamart.capture(self.steam_root, appid, dest)
+        if n:
+            self.ui.msg(f"Captured {n} art file(s) for {recipe.name} -> {dest}",
+                        "success")
+        else:
+            self.ui.msg(f"No custom art found for {recipe.name} (appid {appid}) "
+                        "— set the art in Steam first, then capture.", "warn")
 
     def cmd_list(self):
         if not self.recipes:
@@ -809,7 +852,7 @@ def main():
     parser.add_argument("command", nargs="?",
                         choices=["list", "apply", "revert", "install", "mirror",
                                  "reconcile", "update", "scan", "scan-steam",
-                                 "setup-nas"],
+                                 "capture", "setup-nas"],
                         help="omit for interactive menu")
     parser.add_argument("ids", nargs="*", help="recipe ids (e.g. la-noire)")
     parser.add_argument("--store", help="path to the fix store")
@@ -841,6 +884,7 @@ def main():
         "update": lambda: app.cmd_update(),
         "scan": lambda: app.cmd_scan_sd(),
         "scan-steam": lambda: app.cmd_scan_steam(),
+        "capture": lambda: app.cmd_capture(),
         "setup-nas": lambda: app.cmd_setup_nas(),
     }
     try:
