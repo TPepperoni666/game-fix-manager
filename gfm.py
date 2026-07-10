@@ -299,16 +299,22 @@ class App:
             port_ok, pval = False, "n/a"
         checks.append(("port 443 bindable without root", port_ok, pval))
 
+        # The rule is added by the service's ExecStart, so an active service
+        # means it's in place. iptables -C needs root to read the table, so we
+        # only UPGRADE to "verified" when passwordless sudo actually confirms
+        # it — a failed sudo must not be reported as "rule missing".
         r = run(["sudo", "-n", "iptables", "-t", "nat", "-C", "OUTPUT", "-d",
                  "public-ubiservices.ubi.com", "-j", "DNAT",
                  "--to-destination", "127.0.0.1"])
-        if r is None or r.returncode == 127:
-            checks.append(("ubiservices -> 127.0.0.1 DNAT rule", state == "active",
-                           "inferred from service (needs sudo to verify)"))
+        if r is not None and r.returncode == 0:
+            checks.append(("ubiservices -> 127.0.0.1 DNAT rule", True,
+                           "verified present"))
+        elif state == "active":
+            checks.append(("ubiservices -> 127.0.0.1 DNAT rule", True,
+                           "added by the active service (sudo needed to verify directly)"))
         else:
-            checks.append(("ubiservices -> 127.0.0.1 DNAT rule",
-                           r.returncode == 0,
-                           "present" if r.returncode == 0 else "not found"))
+            checks.append(("ubiservices -> 127.0.0.1 DNAT rule", False,
+                           "service not active — rule not applied"))
 
         try:
             ip = socket.gethostbyname("public-ubiservices.ubi.com")
