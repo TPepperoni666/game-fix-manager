@@ -10,9 +10,14 @@
   },
   "steps": [
     {
+      "type": "install_runner",
+      "name": "GE-Proton10-34"
+    },
+    {
       "type": "steam_shortcut",
       "exe": "RD3 1.0.exe",
-      "start_dir": "{game_dir}"
+      "start_dir": "{game_dir}",
+      "proton": "GE-Proton10-34"
     },
     {
       "type": "wine_registry",
@@ -34,8 +39,14 @@
         "NO_DRIVE": "Please insert the disc labeled: V8 Supercars 3",
         "WRONG_DISC": "Please insert the disc labeled: V8 Supercars 3"
       }
+    },
+    {
+      "type": "wine_registry",
+      "optional": true,
+      "key": "Software\\Wine\\AppDefaults\\RD3 1.0.exe",
+      "values": { "Version": "winxp" }
     }
   ],
-  "post_apply_message": "V8 Supercars 3 (ToCA Race Driver 3) — setup order:\n1. Game folder on the SD card (retail / CD-only, BYO files).\n2. Apply this fix — it AUTO-ADDS the Steam shortcut ('RD3 1.0.exe' — the crack, NOT RD3.exe which is the uncracked 1.1), named 'V8 Supercars 3', game folder as start dir, gospel appid. Steam closes briefly to write it. Then force a Proton version in Compatibility.\n3. Launch the shortcut ONCE and quit — this creates the Proton prefix.\n4. Re-apply this fix — the registry step now writes the paths (dynamically pointed at wherever your game folder lives) into HKLM.\n5. First real launch will open HardwareSetup.exe automatically. Set resolution to 1920x1200 (16:10) + audio and finish it. It may then say 'No Disk Inserted' — ignore, that's normal, the reg fix's fake CD paths keep it happy.\n6. Play. The savedata folder is created inside your game dir on first save.",
+  "post_apply_message": "V8 Supercars 3 (ToCA Race Driver 3) — setup order:\n1. Game folder on the SD card (retail / CD-only, BYO files).\n2. Apply this fix — it AUTO-ADDS the Steam shortcut ('RD3 1.0.exe' — the crack, NOT RD3.exe which is the uncracked 1.1), named 'V8 Supercars 3', game folder as start dir, gospel appid. Steam closes briefly to write it, and it sets GE-Proton 10.34 (install it first via 'gfm stage-runner' or ProtonUp-Qt — Steam won't auto-fetch GE).\n3. Launch the shortcut ONCE and quit — this creates the Proton prefix.\n4. Re-apply this fix — the registry steps now write into the prefix (Codemasters paths into HKLM + the Windows-XP input fix into HKCU).\n5. First real launch will open HardwareSetup.exe automatically. Set resolution to 1920x1200 (16:10) + audio and finish it. It may then say 'No Disk Inserted' — ignore, that's normal, the reg fix's fake CD paths keep it happy.\n6. Play. The savedata folder is created inside your game dir on first save.\nINPUT: ToCA 3 has a Codemasters input bug under Wine where only Enter registers (keyboard AND gamepad). This fix sets the game's Windows version to XP in the prefix (Wine AppDefaults for RD3 1.0.exe), which restores input/gamepad detection — needs the prefix, so run once then RE-APPLY. At any 'Press Enter' prompt, hit Enter once to wake input up. If it STILL won't respond: re-bind in Options > Controls; try 'protontricks <appid> d3dx9'; and set the shortcut's Steam Input layout to Gamepad.",
   "notes": "Retail CD-ROM only (like Barnyard and The Crew). Registry fix adapted from Chemical's community reg files (C:\\ and D:\\ variants) — replaced with dynamic paths so the reg values match wherever the shortcut points. Uses new wine_registry template {game_dir_win} = Z:\\<linux path with backslashes>. Hive is 'system' (HKLM) because Codemasters keys live at HKLM\\Software\\WOW6432Node\\Codemasters\\Race Driver 3. PATH_CD is a bogus H:\\ — the game just checks it exists as a string; the crack in RD3 1.0.exe bypasses actual disc reads. Rebranded to V8 Supercars 3 via NAME_APPLICATION / NAME_CD / TITLEBAR just like the Aussie retail release."
 }
