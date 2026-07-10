@@ -271,6 +271,75 @@ class App:
         self.ui.msg(f"Staged {name} -> {dest}. install_runner will side-load it "
                     "after a reimage.", "success")
 
+    def cmd_test_crew(self):
+        """Health-check the TCU (The Crew) offline-server network setup: the
+        systemd unit, the unprivileged-port-443 sysctl, the ubiservices ->
+        127.0.0.1 DNAT rule, DNS, and whether the server is currently live
+        (it only binds 127.0.0.1:443 while the game is running)."""
+        import socket
+        self.ui.msg("The Crew / TCU — server health check", "warn")
+
+        def run(cmd):
+            try:
+                return subprocess.run(cmd, capture_output=True, text=True,
+                                      timeout=8)
+            except (OSError, subprocess.SubprocessError):
+                return None
+
+        checks = []
+        r = run(["systemctl", "is-active", "tcu-network.service"])
+        state = r.stdout.strip() if r else "n/a"
+        checks.append(("tcu-network.service active", state == "active", state))
+
+        r = run(["sysctl", "-n", "net.ipv4.ip_unprivileged_port_start"])
+        try:
+            port_ok = r is not None and int(r.stdout.strip()) <= 443
+            pval = r.stdout.strip()
+        except (ValueError, AttributeError):
+            port_ok, pval = False, "n/a"
+        checks.append(("port 443 bindable without root", port_ok, pval))
+
+        r = run(["sudo", "-n", "iptables", "-t", "nat", "-C", "OUTPUT", "-d",
+                 "public-ubiservices.ubi.com", "-j", "DNAT",
+                 "--to-destination", "127.0.0.1"])
+        if r is None or r.returncode == 127:
+            checks.append(("ubiservices -> 127.0.0.1 DNAT rule", state == "active",
+                           "inferred from service (needs sudo to verify)"))
+        else:
+            checks.append(("ubiservices -> 127.0.0.1 DNAT rule",
+                           r.returncode == 0,
+                           "present" if r.returncode == 0 else "not found"))
+
+        try:
+            ip = socket.gethostbyname("public-ubiservices.ubi.com")
+            dns_ok = True
+        except OSError:
+            ip, dns_ok = "(resolve failed)", False
+        checks.append(("public-ubiservices.ubi.com resolves", dns_ok, ip))
+
+        live = False
+        try:
+            s = socket.socket()
+            s.settimeout(2)
+            live = s.connect_ex(("127.0.0.1", 443)) == 0
+            s.close()
+        except OSError:
+            pass
+        checks.append(("TCU server live on 127.0.0.1:443 (game must be running)",
+                       live, "listening" if live else "not listening"))
+
+        for name, ok, detail in checks:
+            self.ui.msg(f"  {'PASS' if ok else 'FAIL'}  {name}  [{detail}]",
+                        "success" if ok else "warn")
+        plumbing_ok = checks[0][1] and checks[1][1]
+        if plumbing_ok:
+            self.ui.msg("Network plumbing is good — launch the game and the TCU "
+                        "server should come up on 127.0.0.1:443.", "success")
+        else:
+            self.ui.msg("Plumbing incomplete — re-apply the-crew (set a password "
+                        "with `passwd` first if the systemd step needs sudo).",
+                        "warn")
+
     def cmd_list(self):
         if not self.recipes:
             self.ui.msg(f"No recipes found (store: {self.store_root})", "warn")
@@ -907,7 +976,8 @@ def main():
     parser.add_argument("command", nargs="?",
                         choices=["list", "apply", "revert", "install", "mirror",
                                  "reconcile", "update", "scan", "scan-steam",
-                                 "capture", "stage-runner", "setup-nas"],
+                                 "capture", "stage-runner", "test-crew",
+                                 "setup-nas"],
                         help="omit for interactive menu")
     parser.add_argument("ids", nargs="*", help="recipe ids (e.g. la-noire)")
     parser.add_argument("--store", help="path to the fix store")
@@ -941,6 +1011,7 @@ def main():
         "scan-steam": lambda: app.cmd_scan_steam(),
         "capture": lambda: app.cmd_capture(),
         "stage-runner": lambda: app.cmd_stage_runner(),
+        "test-crew": lambda: app.cmd_test_crew(),
         "setup-nas": lambda: app.cmd_setup_nas(),
     }
     try:
