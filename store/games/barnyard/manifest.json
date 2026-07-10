@@ -6,25 +6,10 @@
     "install_dir_names": ["Barnyard"],
     "marker_files": ["Barnyard.exe"]
   },
-  "remote_payloads": [
-    {
-      "path": "payload/downloads/Ultimate-ASI-Loader.zip",
-      "url": "https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases/download/v9.7.2/Ultimate-ASI-Loader.zip",
-      "sha256": "0f34758b30eaa0efb59f7ae04100db789914e1a08891b89878b8fdb189c2a7c5",
-      "size": 3906673,
-      "extract_to": "payload/asiloader"
-    }
-  ],
   "steps": [
     {
       "type": "copy_files",
-      "from": "payload/widescreen",
-      "to": "{game_dir}",
-      "backup_originals": true
-    },
-    {
-      "type": "copy_files",
-      "from": "payload/asiloader",
+      "from": "payload/widescreen1200",
       "to": "{game_dir}",
       "backup_originals": true
     },
@@ -41,7 +26,6 @@
       "type": "steam_shortcut",
       "exe": "Barnyard.exe",
       "start_dir": "{game_dir}",
-      "launch_options": "WINEDLLOVERRIDES=\"dinput8=n,b\" %command%",
       "proton": "proton_7"
     },
     {
@@ -51,6 +35,6 @@
       "values": { "ControllerEnabled": 1 }
     }
   ],
-  "post_apply_message": "Barnyard (retail game, non-Steam) — order matters:\n1. Apply this fix — it AUTO-ADDS the Steam shortcut (Barnyard.exe, start dir = game folder, gospel appid, dinput8 override, Proton 7.0-6). Steam closes briefly to write it.\n2. 'Failed to create the display, run the Barnyard setup program' = the display isn't configured yet. Fix: run Setup.exe (or Setup/Setup.exe) in the game folder VIA PROTON, pick a display mode / Screen Size 800x600, finish. That writes the display config the game needs; the widescreen ASI then takes over at 1920x1200. Proton 7.0-6 is the runner that inits the display cleanly here (not 9/GE).\n3. RUN THE GAME ONCE, then quit — creates the prefix.\n4. Re-apply this fix — the controller-enable registry step needs the prefix.\nWIDESCREEN: the 1920x1200 fix (AlphaYellow ASI) is ALREADY bundled — it only kicks in once (a) the display works and (b) the dinput8 ASI loader loads (that's the WINEDLLOVERRIDES in the launch options). So no separate mod needed — get the display working first. CONTROLLER: enabled via the THQ registry key (needs the prefix, hence the re-apply); if it still won't take the pad, set the shortcut's Steam Input layout to Gamepad. If the game folder name case differs from Data/Movies on your copy, tell GFM's author (intro-skip targets are case-sensitive on Linux).",
-  "notes": "Fresh build 2026-07-07, per Tony's spec: 1920x1200 (16:10), controller enabled, intros skipped. Widescreen & FOV Fix by AlphaYellow (PCGW community file 3817 — download is behind a csrf/terms gate so the .asi is committed here with credit; ini preconfigured Width=1920 Height=1200 FOVFactor=1.0). ASI Loader dinput8.dll fetched pinned from ThirteenAG v9.7.2 (GitHub digest matches). ControllerEnabled=1 via new wine_registry step (HKCU lives in the prefix's user.reg; needs the prefix to exist, hence optional + re-apply flow). Game is retail CD-ROM only — bring your own install, non-Steam shortcut flow, keep on SD. Save games live IN the game dir (<game>/Save) so they ride along on the SD card. Windowed-mode reg key (RealForcedWindowed) deliberately skipped — gamescope handles fullscreen. dgVoodoo2 skipped — Proton's DXVK translates D3D8 natively. XInput Plus skipped — Steam Input covers remapping."
+  "post_apply_message": "Barnyard (retail 'Full-Rip', non-Steam) — 1920x1200 via the game's OWN widescreen patch (reliable, replaces the old flaky ASI):\n1. Apply — it swaps in the pre-patched 1920x1200 Barnyard.exe (your original backed up as .gfm-orig), drops the matching Setup.exe, skips intros, sets the controller registry key, and AUTO-ADDS the Steam shortcut (Barnyard.exe, game folder, gospel appid, Proton 7.0-6). Steam blips closed to write the shortcut.\n2. Run Setup.exe once VIA PROTON, confirm 1920x1200, quit — that writes the display config the game needs.\n3. Run the game once (creates the prefix), then RE-APPLY so the controller registry key lands in the prefix.\nCONTROLLER: ControllerEnabled is set in HKCU\\SOFTWARE\\THQ\\Barnyard; on the Deck the pad arrives via Steam Input as XInput. If it still won't respond, set the shortcut's Steam Input layout to 'Gamepad'.\nRevert restores your original Barnyard.exe. (dgVoodoo + XInput Plus from the Full-Rip are deliberately NOT deployed — Proton's DXVK handles D3D8 and Steam Input handles the pad.)",
+  "notes": "REWORKED 2026-07-09: dropped the AlphaYellow widescreen ASI + Ultimate ASI Loader (the dinput8 proxy load was hit-or-miss under Proton). Now uses Tony's Full-Rip's own widescreen patch: a PRE-PATCHED Barnyard.exe for the 1920x1200 / 2560x1600 / 3840x2400 set (hex-edited, reliable) staged OFF-GIT at NAS 'Game Fixes/barnyard/payload/widescreen1200/' (Barnyard.exe + Setup.exe). copy_files swaps it in with backup_originals; the user runs Setup.exe once to set the resolution. Controller = HKCU\\SOFTWARE\\THQ\\Barnyard ControllerEnabled=1 (matches the Full-Rip's 'Enable Controller Support.reg') + Steam Input. Runner = Proton 7.0-6 (proton_7) which inits the display where Proton 9 / GE failed. Dropped the WINEDLLOVERRIDES dinput8 override (no ASI loader anymore). dgVoodoo skipped (Proton's DXVK translates D3D8 natively); XInput Plus skipped (Steam Input provides XInput). Full-Rip source: NAS roms/win/Barnyard/Barnyard.zip — a bundle with per-resolution widescreen patches, dgVoodoo, XInput Plus, and controller/windowed .reg files (Readme confirms the copy-exe-then-run-Setup procedure). Pre-patched exe is a hex-edit of the standard Barnyard.exe, so it works on a standard install too. Save games live in <game>/Save (ride along on the SD)."
 }
