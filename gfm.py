@@ -255,16 +255,19 @@ class App:
         if not picked or picked[0] == back:
             return
         name = picked[0]
-        dest = self.local_payloads / "_runners" / name
-        if dest.is_dir():
+        import tarfile
+        dest = self.local_payloads / "_runners" / f"{name}.tar.gz"
+        if dest.is_file():
             if not self.ui.confirm(f"{name} already staged — overwrite?"):
                 return
-            shutil.rmtree(dest)
-        self.ui.msg(f"Copying {name} to {dest} (can take a minute over the "
-                    "NAS)...", "dim")
+        self.ui.msg(f"Packing {name} -> {dest} (reads the read-only runner dir, "
+                    "writes ONE file over the NAS, keeps exec bits)...", "dim")
         try:
             dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(ctd / name, dest)
+            tmp = dest.with_suffix(".gz.tmp")
+            with tarfile.open(tmp, "w:gz") as tf:
+                tf.add(ctd / name, arcname=name)
+            tmp.replace(dest)
         except OSError as e:
             self.ui.msg(f"Failed to stage {name}: {e}", "error")
             return
@@ -680,7 +683,7 @@ class App:
         existing = sdmap.load_first()
         preview = sdmap.write(matched, unmatched, games_dir,
                               dest=dest.with_suffix(".preview.json"),
-                              existing=existing)
+                              existing=existing, steam_root=self.steam_root)
         # Immediately delete the preview file — we only wanted the payload
         dest.with_suffix(".preview.json").unlink(missing_ok=True)
         d = sdmap.diff(existing, preview)
@@ -698,7 +701,7 @@ class App:
         if not self.ui.confirm("Save the SD map to that path?"):
             return
         sdmap.write(matched, unmatched, games_dir, dest=dest,
-                    existing=existing)
+                    existing=existing, steam_root=self.steam_root)
         self.ui.msg(
             f"Saved. {len(matched)} game(s) mapped, {len(unmatched)} "
             "folder(s) unmatched.", "success")

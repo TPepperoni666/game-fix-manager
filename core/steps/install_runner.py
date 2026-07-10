@@ -42,19 +42,30 @@ class InstallRunner:
             raise StepError(
                 f"runner {self.name} not installed and no local-payloads dir to "
                 "side-load from — install it via ProtonUp-Qt")
-        src = ctx.local_payloads_dir / "_runners" / self.name
+        runners = ctx.local_payloads_dir / "_runners"
+        tarball = runners / f"{self.name}.tar.gz"
+        folder = runners / self.name
         try:
-            present = src.is_dir()
+            have_tar = tarball.is_file()
+            have_dir = folder.is_dir()
         except OSError as e:
             raise StepError(f"local-payloads mount is down: {e}")
-        if not present:
+        if not (have_tar or have_dir):
             raise StepError(
-                f"runner {self.name} not found at {src} — stage it on the NAS "
-                "(_runners/<name>/, the extracted folder) or install via ProtonUp-Qt")
+                f"runner {self.name} not found ({tarball} or {folder}) — stage "
+                "it with `gfm stage-runner` or install via ProtonUp-Qt")
         ctx.log(f"      + installing runner {self.name} into compatibilitytools.d")
         if not ctx.dry_run:
             dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(src, dest)
+            if have_tar:
+                import tarfile
+                with tarfile.open(tarball) as tf:
+                    try:  # 'data' filter (Py 3.12+) guards path traversal
+                        tf.extractall(dest.parent, filter="data")
+                    except TypeError:
+                        tf.extractall(dest.parent)
+            else:
+                shutil.copytree(folder, dest)
 
     def verify(self, ctx: Ctx) -> str:
         dest = self._dest(ctx)

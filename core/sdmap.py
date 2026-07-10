@@ -87,18 +87,28 @@ def default_write_path() -> Path | None:
 
 
 def write(matched: list, unmatched: list, games_dir: Path,
-          dest: Path, existing: dict | None = None) -> dict:
+          dest: Path, existing: dict | None = None,
+          steam_root: Path | None = None) -> dict:
     """Write the map. matched is [(recipe, folder, signal), ...],
     unmatched is [folder, ...]. Existing entries not touched by the scan
-    are preserved (freeform notes survive)."""
-    from . import sdscan
+    are preserved (freeform notes survive). When steam_root is given, each
+    matched game also records its live non-Steam shortcut appid, so a scan
+    surfaces the appid Steam actually assigned (for gospel reconciliation)."""
+    from . import sdscan, shortcutsvdf
     existing = existing or {}
     games = dict(existing.get("games", {}))
     for recipe, folder, signal in matched:
         prev = games.get(recipe.id, {})
-        games[recipe.id] = {**prev, "path": str(folder), "matched_by": signal,
-                            "exes": sdscan.find_exes(folder),
-                            "readmes": sdscan.find_readmes(folder)}
+        entry = {**prev, "path": str(folder), "matched_by": signal,
+                 "exes": sdscan.find_exes(folder),
+                 "readmes": sdscan.find_readmes(folder)}
+        if steam_root is not None:
+            try:
+                ids = shortcutsvdf.find_appids(steam_root, recipe.all_names)
+                entry["shortcut_appid"] = ids[0] if ids else None
+            except shortcutsvdf.ShortcutsError:
+                pass
+        games[recipe.id] = entry
     payload = {
         "_meta": {
             "host": socket.gethostname(),
