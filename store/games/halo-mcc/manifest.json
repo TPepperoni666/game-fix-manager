@@ -1,0 +1,32 @@
+{
+  "id": "halo-mcc",
+  "name": "Halo: The Master Chief Collection",
+  "aliases": ["Halo MCC", "MCC", "Halo The Master Chief Collection", "Halo: MCC"],
+  "steam_appid": 976730,
+  "detect": {
+    "install_dir_names": ["Halo The Master Chief Collection"],
+    "marker_files": ["mcc/binaries/win64/MCC-Win64-Shipping.exe"]
+  },
+  "remote_payloads": [
+    {
+      "path": "payload/alpharing/WTSAPI32.dll",
+      "url": "https://github.com/megabitt01/AlphaRing/releases/download/1.3.3/WTSAPI32.dll",
+      "sha256": "00474043dc3266a025785f46be88c6907adfe735415f9545c0a5b1a8378ad325",
+      "size": 6114304
+    }
+  ],
+  "steps": [
+    {
+      "type": "copy_files",
+      "from": "payload/alpharing/WTSAPI32.dll",
+      "to": "{game_dir}/mcc/binaries/win64",
+      "backup_originals": true
+    },
+    {
+      "type": "launch_options",
+      "value": "WINEDLLOVERRIDES=\"WTSAPI32=n,b\" %command%"
+    }
+  ],
+  "post_apply_message": "Halo MCC + AlphaRing (megabitt01 fork, Beta 1.3.3) — enables local SPLITSCREEN across all MCC games (a console feature the PC build lacks), plus Halo 3 camera/object tools and this fork's controller-to-player binding.\nApply installs: (1) AlphaRing's proxy DLL WTSAPI32.dll into steamapps/common/Halo The Master Chief Collection/mcc/binaries/win64 (any original is kept as .gfm-bak); (2) the launch option WINEDLLOVERRIDES=\"WTSAPI32=n,b\" %command% on the Steam game (appid 976730) so Wine loads AlphaRing's WTSAPI32 from the game folder instead of the system one.\n\nMANUAL STEP YOU MUST DO — launch MCC with ANTI-CHEAT DISABLED. EAC will not load an injected/proxy DLL, so AlphaRing is inert (and you can be kicked) unless anti-cheat is off. That means campaign / custom games / splitscreen only — no matchmaking. On the Deck, MCC otherwise runs EAC fine under Proton; you only turn it off to use this.\n\nIn game: open the AlphaRing menu with F4 (or Controller Back + Start), then use its Bind buttons to assign each controller to a player. For non-Xbox pads, turn on Steam Input + 'Xbox Configuration Support' in Steam settings so MCC sees them as 360 pads. VC++ redist that the Windows install guide lists is already bundled in GE/Proton, so no separate install.\n\nNote: recipe pins AlphaRing 1.3.3's WTSAPI32.dll by sha256 (00474043…). If a newer AlphaRing release is wanted, bump the url + sha256 + size in remote_payloads.",
+  "notes": "Built 2026-07-13. Halo MCC = Steam-native (permanent appid 976730), so no non-Steam shortcut / gospel pin — its prefix restores by 976730 automatically. AlphaRing (github megabitt01/AlphaRing, fork of wouter51/AlphaRing) is a single-DLL modding tool: it ships as WTSAPI32.dll, a proxy for the Windows WTSAPI32 system DLL, dropped into mcc/binaries/win64 next to MCC-Win64-Shipping.exe. Install per its README: place the DLL, add WINEDLLOVERRIDES=\"WTSAPI32=n,b\" %command% on Linux/Deck, launch with EAC disabled, toggle menu with F4 / Controller Back+Start. Purpose: PC splitscreen for all MCC titles + Halo 3 camera/object browsing; this fork adds controller-to-player Bind buttons and fixes default gamepad mapping (new profiles init with standard Xbox Halo controls). Ref video: youtube M26Mzan8SNM ('How To Play Halo Splitscreen on PC | AlphaRing Mod for MCC'). DLL fetched as a remote_payload (6.1MB, not committed) rather than into git. EAC-disabled is a manual in-launcher choice we can't force from a file step; flagged in post_apply_message. Untested on Tony's Deck as of build."
+}
