@@ -1,0 +1,24 @@
+{
+  "id": "heroes-over-europe",
+  "name": "Heroes Over Europe",
+  "aliases": ["Heroes Over Europe (2009)", "HeroesOverEurope"],
+  "detect": {
+    "install_dir_names": ["Heroes Over Europe"],
+    "marker_files": ["heroes2.exe"]
+  },
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "heroes2.exe",
+      "start_dir": "{game_dir}",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "Heroes Over Europe (2009, non-Steam, cracked/abandonware) — Apply AUTO-ADDS the Steam shortcut (heroes2.exe, game folder as start dir, a stable computed appid, GE-Proton 10.34). Steam closes briefly to write it; stage GE first with 'gfm stage-runner'. Then just run it. If you get missing-DLL errors, install everything in the game's _Redist folder (per Chemical's _HOW TO PLAY readme). No backed-up prefix for this one, so the appid is derived from the recipe id (stable across re-applies).",
+  "notes": "Built 2026-07-10 from the SD scan (exe heroes2.exe at root; Chemical crack, readme '_HOW TO PLAY!!.txt' = 'launch Heros2.exe, install _Redist for DLL errors'). Not in the gospel registry (no old backup), so steam_shortcut derives a stable appid from the recipe id. Also on the SD: graphicssettings.exe (config) + gu.exe. Not to be confused with Heroes of the Pacific (separate flight game, needs an ASI widescreen fix)."
+}

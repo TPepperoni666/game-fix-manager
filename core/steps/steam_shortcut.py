@@ -46,12 +46,17 @@ class SteamShortcut:
         reg = ctx.recipe.dir.parent.parent / "prefix_registry.json"
         try:
             data = json.loads(reg.read_text(encoding="utf-8"))
+            for e in data.get("entries", []):
+                if e.get("recipe_id") == ctx.recipe.id and e.get("appid") is not None:
+                    return int(e["appid"])
         except (OSError, ValueError):
-            return None
-        for e in data.get("entries", []):
-            if e.get("recipe_id") == ctx.recipe.id and e.get("appid") is not None:
-                return int(e["appid"])
-        return None
+            pass
+        # No gospel in the registry (a game with no backed-up prefix to restore):
+        # derive a STABLE non-Steam appid from the recipe id, so the shortcut,
+        # its compatdata prefix and its Proton mapping all line up and stay put
+        # across re-applies — without hardcoding or pinning to a mount path.
+        import binascii
+        return binascii.crc32(f"gfm:{ctx.recipe.id}".encode()) | 0x80000000
 
     def _exe(self, ctx: Ctx) -> str:
         rel = self.exe or next(iter(ctx.recipe.detect.get("marker_files", [])), None)
