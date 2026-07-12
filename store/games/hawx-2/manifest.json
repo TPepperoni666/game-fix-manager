@@ -1,0 +1,26 @@
+{
+  "id": "hawx-2",
+  "name": "Tom Clancy's H.A.W.X. 2",
+  "aliases": ["HAWX 2", "H.A.W.X. 2", "Tom Clancy's HAWX 2",
+              "tom clancy's h.a.w.x. 2", "hawx2"],
+  "detect": {
+    "install_dir_names": ["Tom Clancy's H.A.W.X. 2", "tom clancy's h.a.w.x. 2",
+                          "HAWX 2"],
+    "marker_files": ["hawx2.exe"]
+  },
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "hawx2.exe",
+      "start_dir": "{game_dir}",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "Tom Clancy's H.A.W.X. 2 (2010, non-Steam) — TEST-FIRST setup. Apply AUTO-ADDS the Steam shortcut pointing at 'hawx2.exe' (the DX9 build, safest under Proton; 'hawx2_dx11.exe' is the DX11 build if you want to try it), game folder as start dir, GE-Proton 10.34, stable computed appid. Steam closes briefly to write it; stage GE first with 'gfm stage-runner'.\nLAUNCH AND SEE:\n- If it's a clean Uplay crack, it just runs (the shortcut bypasses the Ubisoft launcher).\n- If it PROMPTS for Uplay / Ubisoft Connect, it's NOT fully cracked — the DRM's in the exe, same as Driver SF — tell me and we'll handle it then (sign-in or emulator route).\nIf you get missing-DLL errors, install any _Redist. If DX9 misbehaves, switch the shortcut to hawx2_dx11.exe.",
+  "notes": "Built 2026-07-10 from the SD scan. Exes present: hawx2_dx11.exe (DX11), hawx2.exe (DX9), orbit/uplay.exe + orbit/ubisoftgamelauncher.exe (Ubisoft launcher shipped alongside). Tony believes it's DRM-cracked, so the shortcut points at hawx2.exe directly to bypass the launcher -- test-first. If it still demands Uplay, it's a compiled-DRM case like driver-san-francisco (escalate: Ubisoft Connect sign-in, or an owned-game Uplay emulator). Not in the gospel registry -> steam_shortcut derives a stable appid from the recipe id."
+}
