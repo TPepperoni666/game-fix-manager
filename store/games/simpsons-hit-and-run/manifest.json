@@ -7,9 +7,21 @@
   "detect": {
     "install_dir_names": ["The Simpsons - Hit & Run",
                           "The Simpsons Hit & Run"],
-    "marker_files": ["Game/Simpsons.exe"]
+    "marker_files": ["game/simpsons.exe"]
   },
-  "steps": [],
-  "post_apply_message": "Simpsons Hit & Run — no engine steps needed; this recipe exists so detection, reconciliation and mirroring know about the game.\n\n1. Keep the whole 'The Simpsons - Hit & Run' folder on the SD card. Everything you care about lives inside it:\n   - Game/ — the base game and your live save (Game/Save1)\n   - Mods & Launcher/ — Lucas Simpsons H&R Mod Launcher + your 11 installed .lmlm mods (NeverBusted, UnlockAllRewards, Speedometer, HQ Dialogue, etc.)\n2. Add 'Mods & Launcher/Lucas Simpsons Hit & Run Mod Launcher.exe' to Steam (NOT Game/Simpsons.exe — the launcher applies the mods and starts the game). Force a Proton version.\n3. Launch it. Pick which mods to enable in the launcher UI, then Play. That's it.\n\nNote: Save1 is inside the Game/ folder and gets updated as you play — since the whole folder is on the SD card it survives reimages automatically. No prefix sync needed.",
-  "notes": "The mods (.lmlm files) are already installed in Mods & Launcher/Mods/ — the Lucas launcher handles activation at runtime, so GFM has nothing to write into the game files. This recipe is deliberately step-free: it exists for the tool's ledger (detection via shortcut aliases, reconciliation naming, mirror inclusion). Save file (Game/Save1) is a single ~7KB file that lives IN the game folder — SD-resident, so reimage-proof by location. If we ever want mod-enable state to persist across a fresh prefix, capture ~/.local/share/Steam/steamapps/compatdata/<id>/pfx/drive_c/users/steamuser/AppData/Roaming/Lucas/... — future work. Confirmed mods present in Tony's install (2026-07-07): Controller Button Icons, HQ Dialogue (FLAC, 375MB), More Costumes 3.0, NeverBusted, NoAudio, NoHUD, NoLicenseScreenDelay, NoTraffic, RepairCarOnReset, Speedometer, TextNames, UnlockAllRewards."
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "mods & launcher/lucas simpsons hit & run mod launcher.exe",
+      "start_dir": "{game_dir}/mods & launcher",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "The Simpsons Hit & Run — auto-sets up the modded-launcher shortcut:\n1. Apply — it AUTO-ADDS the Steam shortcut pointing at 'Lucas Simpsons Hit & Run Mod Launcher.exe' (NOT the raw Game/Simpsons.exe — the launcher applies your .lmlm mods and starts the game), named 'The Simpsons Hit & Run', gospel appid 3714559883, GE-Proton 10.34. Steam closes briefly to write it. Stage GE first with 'gfm stage-runner' (install_runner side-loads it from the NAS; it's optional so nothing blocks if GE is missing).\n2. Launch it, tick which mods to enable in the launcher UI, Play.\nEverything is SD-resident: Game/ (base game + your Save1 ~7KB) and Mods & Launcher/ (the launcher + mods) — so it survives reimages by location, no prefix sync needed.\nNOTE: the Lucas launcher is a .NET app; GE's wine-mono usually runs it, but if it won't start, 'protontricks <appid> dotnet48'.",
+  "notes": "REWORKED 2026-07-10: added install_runner + steam_shortcut. The shortcut targets the LUCAS MOD LAUNCHER (mods & launcher/lucas simpsons hit & run mod launcher.exe) not the game exe — the launcher activates the .lmlm mods at runtime and boots the game. Game is nested: <folder>/game/simpsons.exe + <folder>/mods & launcher/ (both lowercase, per the SD scan — marker updated to game/simpsons.exe). Gospel appid 3714559883. Mods (.lmlm) already installed in Mods & Launcher/Mods/ — GFM writes nothing into the game files. Save file (game/Save1, ~7KB) lives IN the game folder — SD-resident, reimage-proof by location. Confirmed mods (2026-07-07): Controller Button Icons, HQ Dialogue (FLAC, 375MB), More Costumes 3.0, NeverBusted, NoAudio, NoHUD, NoLicenseScreenDelay, NoTraffic, RepairCarOnReset, Speedometer, TextNames, UnlockAllRewards. Future work: persist mod-enable state (pfx/.../AppData/Roaming/Lucas/...) via the perf/state capture."
 }
