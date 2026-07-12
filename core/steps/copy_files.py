@@ -68,9 +68,16 @@ class CopyFiles:
         self.dst = step["to"]
         self.backup = step.get("backup_originals", True)
         self.executable = step.get("executable", False)
+        # "as": copy a SINGLE source file under a different name (e.g. drop the
+        # ASI loader in as winmm.dll). Ignored for directory sources.
+        self.rename = step.get("as")
 
     def _pairs(self, ctx: Ctx):
-        return list(iter_pairs(ctx.payload_path(self.src), ctx.resolve_target(self.dst)))
+        src = ctx.payload_path(self.src)
+        dst = ctx.resolve_target(self.dst)
+        if self.rename and src.is_file():
+            return [(src, dst / self.rename)]
+        return list(iter_pairs(src, dst))
 
     def apply(self, ctx: Ctx) -> None:
         import os

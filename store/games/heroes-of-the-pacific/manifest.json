@@ -1,0 +1,47 @@
+{
+  "id": "heroes-of-the-pacific",
+  "name": "Heroes of the Pacific",
+  "aliases": ["Heroes of the Pacific (2005)", "HeroesOfThePacific", "HOTP"],
+  "detect": {
+    "install_dir_names": ["Heroes of the Pacific"],
+    "marker_files": ["Heroes.exe"]
+  },
+  "remote_payloads": [
+    {
+      "path": "payload/downloads/Ultimate-ASI-Loader.zip",
+      "url": "https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases/download/v9.7.2/Ultimate-ASI-Loader.zip",
+      "sha256": "0f34758b30eaa0efb59f7ae04100db789914e1a08891b89878b8fdb189c2a7c5",
+      "size": 3906673,
+      "extract_to": "payload/asiloader"
+    }
+  ],
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "copy_files",
+      "from": "payload/widescreen",
+      "to": "{game_dir}",
+      "backup_originals": true
+    },
+    {
+      "type": "copy_files",
+      "from": "payload/asiloader/dinput8.dll",
+      "to": "{game_dir}",
+      "as": "winmm.dll",
+      "backup_originals": true
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "Heroes.exe",
+      "start_dir": "{game_dir}",
+      "launch_options": "WINEDLLOVERRIDES=\"winmm=n,b\" %command%",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "Heroes of the Pacific (2005, non-Steam) — 1920x1200 widescreen fix + auto-shortcut. The game ignores VideoQuery.exe's resolution and forces 800x600; the AlphaYellow ASI patches that.\nApply installs: (1) HeroesOfThePacificWidescreenFix.asi + its ini (Width=1920 Height=1200 FOVFactor=1.0); (2) ThirteenAG's Ultimate ASI Loader dropped in as winmm.dll (this game hooks via winmm); (3) the Steam shortcut for Heroes.exe (gospel appid 4105667313 — your existing prefix) with WINEDLLOVERRIDES=\"winmm=n,b\" so Wine loads the native winmm loader, on GE-Proton 10.34.\nStage GE first with 'gfm stage-runner'. Then just launch — it should come up at 1920x1200 instead of 800x600. If it's still 800x600, the winmm loader didn't hook: confirm the launch option is on the shortcut, and that Heroes.exe (not HOTP.exe) is the exe that renders.",
+  "notes": "Built 2026-07-10. Retail/abandonware (readmes are the original multi-language ones, not a Chemical crack). The game forces 800x600 regardless of VideoQuery.exe -> AlphaYellow Widescreen & FOV Fix (github alphayellow1/AlphaYellowWidescreenFixes, release tag heroesofthepacific, v1.1 rar) committed here (payload/widescreen, .asi 1.3MB + ini set to 1920x1200) since the download is a rar. Loader = ThirteenAG Ultimate ASI Loader v9.7.2 (same pinned zip as barnyard, single universal dinput8.dll) fetched + dropped in as winmm.dll via copy_files 'as' (new option). WINEDLLOVERRIDES winmm=n,b loads it. Exe = Heroes.exe (6.7MB; per Tony, vs HOTP.exe 3.8MB / VideoQuery.exe config). Prefix already exists at appid 4105667313 = the gospel (no drift). Save/config live in the game folder (SD-resident)."
+}
