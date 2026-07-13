@@ -1,0 +1,31 @@
+{
+  "id": "battlefield-3-campaign",
+  "name": "Battlefield 3 Campaign",
+  "aliases": ["Battlefield 3", "BF3", "Battlefield 3 (Campaign)"],
+  "detect": {
+    "install_dir_names": ["Battlefield 3"],
+    "marker_files": ["bf3.exe"]
+  },
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "copy_files",
+      "from": "payload/user.cfg",
+      "to": "{game_dir}",
+      "backup_originals": true
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "bf3.exe",
+      "start_dir": "{game_dir}",
+      "launch_options": "%command% singleplayer",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "Battlefield 3 Campaign (non-Steam, cracked repack) — CAMPAIGN ONLY. BF3's multiplayer launched through Battlelog (a browser plugin) and those servers are long dead, so single-player is the whole game here.\n\nApply AUTO-ADDS a Steam shortcut for bf3.exe with the launch argument 'singleplayer' (via LaunchOptions '%command% singleplayer'), which boots the campaign DIRECTLY and skips Battlelog entirely — GE-Proton 10.34, game folder as start dir, a stable computed appid. Steam closes briefly to write it; stage GE first with 'gfm stage-runner'. It also drops a user.cfg into the game folder with 'WorldRender.DxDeferredCsPathEnable false' (a free FPS boost in open/outdoor areas, no visual change). Origin/EA DRM is handled by your repack's crack (the .par Origin-requirement patch) — no EA App needed.\n\nCONTROLLER: BF3's native gamepad support is PARTIAL — in-game prompts are keyboard/mouse only, and some menus + quick-time-event button prompts need a keyboard. It's playable on a pad via a Steam Input layout that maps the face/menu buttons to the required keyboard keys, but it won't feel like the console version. Turn Steam Input on and expect to build a hybrid gamepad+keyboard layout.\n\nUI SCALING (optional): BF3 doesn't scale its HUD/menus above 1280x720, so at 1920x1200 (Legion) everything looks tiny. The community 'BF3 UI Scaling Fix' fixes it (rename Engine.BuildInfo_Win32_Retail_dll.dll -> ori_..., drop the mod dll). It can trip MP anti-cheat, but this is campaign-only so that's moot. Say the word and I'll wire it into the recipe.\n\nFOV: default is 60-90 vertical; widen it by editing PROF_SAVE_profile in the prefix's Documents/Battlefield 3/settings, or with BF3 Settings Editor.\n\nPENDING YOUR MAP: exe = bf3.exe at the game root and the 'singleplayer' arg are the PCGW-documented defaults; confirm them against your repack's actual layout when you map it — some repacks ship their own SP launcher exe, in which case we point the shortcut at that instead.",
+  "notes": "Built 2026-07-13 (drafted ahead of Tony installing it — his copy is 'Battlefield 3 - [DODI Repack].zip' in NAS Rom_Library/roms/win, not yet on the SD/mapped). Real Steam appid is 1238820 but Tony's is a non-Steam cracked repack -> non-Steam shortcut, computed appid (no gospel backup). CAMPAIGN ONLY by design (MP = Battlelog browser launcher, servers dead). Launch method from PCGW Battlefield_3 'Play Campaign Offline' + community: run bf3.exe with the 'singleplayer' argument to enter the campaign directly, bypassing Battlelog. Repack's crack patches the .par Origin-requirement file (NoFaTe remover), so no EA App/Origin. Config + saves live in Documents/Battlefield 3/settings (PROF_SAVE_body/header/profile, meta.xml) inside the prefix — game-folder-independent, so no gospel prefix needed. Perf: user.cfg WorldRender.DxDeferredCsPathEnable false committed (documented FPS boost). Widescreen native but UI won't scale >720p (BF3 UI Scaling Fix mod available, MP-anticheat-incompatible but campaign-only so fine — NOT bundled yet, flagged in message). Controller = partial (M&K prompts, keyboard-only QTEs/menus) -> Steam Input hybrid layout. UNCONFIRMED until mapped: repack's exe name/layout + whether the 'singleplayer' arg works as-is or the repack wants its own launcher. Frostbite 2 engine; ProtonDB app 1238820."
+}
