@@ -1,0 +1,42 @@
+{
+  "id": "gta-iv",
+  "name": "Grand Theft Auto IV: The Complete Edition",
+  "aliases": ["GTA IV", "GTA 4", "GTAIV", "Grand Theft Auto IV"],
+  "steam_appid": 12210,
+  "detect": {
+    "install_dir_names": ["Grand Theft Auto IV"],
+    "marker_files": ["PlayGTAIV.exe"]
+  },
+  "remote_payloads": [
+    {
+      "path": "payload/downloads/GTAIV.EFLC.FusionFix.zip",
+      "url": "https://github.com/ThirteenAG/GTAIV.EFLC.FusionFix/releases/download/v5.0.1/GTAIV.EFLC.FusionFix.zip",
+      "sha256": "3c202398c133392be985854654f169514e055812cc302ef24e6aa97495975b41",
+      "size": 206711636,
+      "extract_to": "payload/fusionfix"
+    }
+  ],
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "proton_version",
+      "tool": "GE-Proton10-34"
+    },
+    {
+      "type": "copy_files",
+      "from": "payload/fusionfix",
+      "to": "{game_dir}",
+      "backup_originals": true
+    },
+    {
+      "type": "launch_options",
+      "value": "WINEDLLOVERRIDES=\"dinput8=n,b\" %command%"
+    }
+  ],
+  "post_apply_message": "GTA IV: The Complete Edition (Steam appid 12210) + FusionFix v5.0.1 (ThirteenAG) — the essential all-in-one fix. It repairs the PC port's aspect-ratio/FOV handling (the bit that matters for 16:10), adds a real framerate-cap toggle (the port ties physics to FPS), kills the map z-fighting/flicker, restores shadows/reflections/DOF, and brings back the removed radio tracks + definitive-edition visuals.\n\nApply does: (1) installs GE-Proton 10.34 into compatibilitytools.d and FORCES it for appid 12210 (GE bundles the d3dx9 DirectX runtime FusionFix needs, so NO protontricks/d3dx9_43 step is required); (2) drops FusionFix into the game folder — dinput8.dll (ASI loader) + d3d9.dll + plugins/*.asi/.ini + the update/ shader+data overlay (originals backed up as .gfm-bak); (3) sets the launch option WINEDLLOVERRIDES=\"dinput8=n,b\" %command% so Wine loads FusionFix's loader. Stage GE first with 'gfm stage-runner'.\n\nCONTROLLER: native Xbox 360 support — Steam Input covers it, no fix needed.\n\nTWO THINGS TO VERIFY ON THE DECK (couldn't confirm from the dev box — GTA IV isn't synced here):\n1. FILE PLACEMENT — this assumes FusionFix goes in the install ROOT ({game_dir}, next to PlayGTAIV.exe), which is correct for the flattened Complete Edition. If your copy nests the game under a GTAIV/ subfolder, the copy target needs to be {game_dir}/GTAIV instead — tell me and I'll adjust.\n2. DLL OVERRIDE — dinput8=n,b is the loader FusionFix uses; its bundled d3d9.dll is left inert so Proton's DXVK keeps handling D3D9. If FusionFix's in-game menu (open with the mod's hotkey) doesn't appear or graphics options are missing, the fallback is to also override d3d9 — but try dinput8-only first.\n\nCheck it worked: launch, and FusionFix's version string / new graphics options should show in the in-game menu.",
+  "notes": "Built 2026-07-13. Tony confirmed he owns the Steam Complete Edition (appid 12210). FusionFix (github ThirteenAG/GTAIV.EFLC.FusionFix) is THE essential GTA IV fix — pinned to v5.0.1 (resolved from releases/latest 2026-07-13; assets rebuilt 2026-05-12), zip sha256 3c202398…, 197MB, fetched as a remote_payload (too big + copyrighted-adjacent for git) and extracted to payload/fusionfix. Zip layout: dinput8.dll (5.4MB ASI loader) + d3d9.dll (1.3MB) + plugins/GTAIV.EFLC.FusionFix.asi (16MB) + .ini + update/ (frontend_menus.xml, frontend_pc.dat, visualsettings.dat, common/shaders/**). Install per FusionFix readme = extract to the game root where the exe is. Recipe forces GE-Proton10-34 via proton_version (works on Steam appids, writes CompatToolMapping) BECAUSE GE bundles d3dx9_43 that FusionFix needs — sidesteps the 'protontricks 12210 d3dx9_43' step the Gillian guide lists for stock Proton. Override = dinput8=n,b (standard ThirteenAG loader; d3d9.dll left inert so DXVK handles D3D9 on Proton — the .asi carries the features, not the d3d9 proxy). UNVERIFIED on Tony's Deck: (a) Complete-Edition folder layout (root vs GTAIV/ subfolder) → copy target may need {game_dir}/GTAIV; (b) whether d3d9 also needs overriding (fallback only). FusionFix only supports the Complete Edition (1.0.8.0 = 'compromised, unsupported'). Controller native. Refs: FusionFix repo, gillian-guide.github.io/essential-modding/fusionfix, protondb app/12210, steamcommunity guide 3301059886."
+}
