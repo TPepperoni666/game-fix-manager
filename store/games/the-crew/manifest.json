@@ -7,6 +7,10 @@
     "install_dir_names": ["TheCrew", "The Crew"],
     "marker_files": ["the crew/thecrew.exe"]
   },
+  "save_paths": [
+    "{game_dir}/the crew/data.bin",
+    "{game_dir}/data.bin"
+  ],
   "steps": [
     {
       "type": "install_runner",

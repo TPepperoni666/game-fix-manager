@@ -22,8 +22,8 @@ import time
 import traceback
 from pathlib import Path
 
-from core import (detect, engine, fetch, manifest, prefixes, sdmap, sdscan,
-                  shortcutsvdf, steamart, steamscan, steamvdf, store)
+from core import (detect, engine, fetch, manifest, prefixes, saves, sdmap,
+                  sdscan, shortcutsvdf, steamart, steamscan, steamvdf, store)
 from ui import get_ui
 
 STATUS_ICON = {engine.APPLIED: "✅", engine.NOT_APPLIED: "☐ ",
@@ -194,28 +194,32 @@ class App:
 
     def cmd_capture(self):
         """Snapshot a game's custom Steam shortcut art (keyed by its gospel
-        appid) into local-payloads, so a recreated shortcut gets it back."""
-        recipe = self._pick_one("🎨 CAPTURE SHORTCUT ART",
-                                 "Capture custom art for:")
+        appid) AND its game-folder saves into local-payloads, so a recreated
+        shortcut gets its art back and a wiped/replaced game folder gets its
+        save back."""
+        recipe = self._pick_one("🎨 CAPTURE ART + SAVES + SETTINGS",
+                                 "Capture for:")
         if recipe is None:
+            return
+        if self.local_payloads is None:
+            self.ui.msg("No local-payloads dir (NAS/SD) set to capture into.",
+                        "warn")
             return
         appid = self._gospel_appid(recipe)
         if appid is None:
-            self.ui.msg(f"No gospel appid for {recipe.name} — can't key its art.",
-                        "warn")
-            return
-        if self.local_payloads is None:
-            self.ui.msg("No local-payloads dir (NAS/SD) set to store the art in.",
-                        "warn")
-            return
-        dest = self.local_payloads / recipe.id / "artwork"
-        n = steamart.capture(self.steam_root, appid, dest)
-        if n:
-            self.ui.msg(f"Captured {n} art file(s) for {recipe.name} -> {dest}",
-                        "success")
+            self.ui.msg(f"No gospel appid for {recipe.name} — skipping art "
+                        "(nothing to key it by).", "warn")
         else:
-            self.ui.msg(f"No custom art found for {recipe.name} (appid {appid}) "
-                        "— set the art in Steam first, then capture.", "warn")
+            dest = self.local_payloads / recipe.id / "artwork"
+            n = steamart.capture(self.steam_root, appid, dest)
+            if n:
+                self.ui.msg(f"Captured {n} art file(s) for {recipe.name} "
+                            f"-> {dest}", "success")
+            else:
+                self.ui.msg(f"No custom art found for {recipe.name} (appid "
+                            f"{appid}) — set it in Steam first, then capture.",
+                            "warn")
+        self._capture_saves(recipe)
         # Also snapshot localconfig.vdf — the source of the per-game display /
         # perf settings (TDP, scaling, VRR, framerate). Kept whole for now so
         # the surgical per-appid restore can be built against a real file.
@@ -233,6 +237,64 @@ class App:
         if snapped:
             self.ui.msg(f"Snapshotted localconfig.vdf for {snapped} user(s) "
                         f"-> {state} (perf/display source).", "dim")
+
+    def _capture_saves(self, recipe) -> None:
+        """Snapshot game-folder saves (data.bin & friends) to local-payloads.
+        These live next to the exe, so NO prefix backup covers them."""
+        if not recipe.save_paths:
+            return
+        game_dir = self.game_dir_for(recipe, interactive=True)
+        if game_dir is None:
+            self.ui.msg(f"{recipe.name} not located — skipping save capture.",
+                        "warn")
+            return
+        dest = self.local_payloads / recipe.id / "saves"
+        entries, files = saves.capture(recipe, game_dir, self.steam_root, dest,
+                                       log=lambda m: self.ui.msg(m, "dim"))
+        if files:
+            self.ui.msg(f"Captured {files} save file(s)/folder(s) across "
+                        f"{entries} path(s) for {recipe.name} -> {dest}",
+                        "success")
+        else:
+            self.ui.msg(f"No saves found yet for {recipe.name} — play it once, "
+                        "then capture.", "warn")
+
+    def cmd_restore_saves(self):
+        """Put captured game-folder saves back after a reimage/reinstall."""
+        recipe = self._pick_one("♻️  RESTORE GAME SAVES", "Restore saves for:")
+        if recipe is None:
+            return
+        if not recipe.save_paths:
+            self.ui.msg(f"{recipe.name} declares no save_paths — its saves "
+                        "live in the prefix, so a prefix restore covers them.",
+                        "warn")
+            return
+        if self.local_payloads is None:
+            self.ui.msg("No local-payloads dir (NAS/SD) to restore from.",
+                        "warn")
+            return
+        src = self.local_payloads / recipe.id / "saves"
+        entries = saves.read_index(src)
+        if not entries:
+            self.ui.msg(f"No captured saves for {recipe.name} at {src} — "
+                        "capture them first (🎨).", "warn")
+            return
+        game_dir = self.game_dir_for(recipe, interactive=True)
+        if game_dir is None:
+            self.ui.msg(f"{recipe.name} not located.", "warn")
+            return
+        self.ui.msg(f"This writes {len(entries)} captured save path(s) over the "
+                    f"live game files in {game_dir}.", "warn")
+        self.ui.msg(f"Anything already there is kept as *{saves.SAVE_BAK} — but "
+                    "if your live save is NEWER than the snapshot, restoring "
+                    "will bury it.", "warn")
+        ok = self.ui.choose("Restore saves?", ["✅ Yes, restore", "⬅️  Cancel"])
+        if not ok or not ok[0].startswith("✅"):
+            return
+        n = saves.restore(recipe, game_dir, self.steam_root, src,
+                          log=lambda m: self.ui.msg(m, "dim"))
+        self.ui.msg(f"Restored {n} save file(s)/folder(s) for {recipe.name}.",
+                    "success" if n else "warn")
 
     def cmd_stage_runner(self):
         """Copy a compatibilitytools.d runner (e.g. GE-Proton) to the NAS
@@ -945,7 +1007,8 @@ class App:
                 "💾 Mirror Store (offline copy on SD/NAS)",
                 "⬆️  Update (git pull latest recipes + code)",
                 "🖥️  Install Shortcut (Desktop + Game Mode)",
-                "🎨 Capture Shortcut Art + Settings",
+                "🎨 Capture Art + Saves + Settings",
+                "♻️  Restore Game Saves",
                 "🧰 Stage GE-Proton Runner to NAS",
                 "🩺 Test The Crew Server",
                 "❌ Exit"])
@@ -982,6 +1045,9 @@ class App:
             elif choice.startswith("🎨"):
                 self.cmd_capture()
                 self.ui.input("Press Enter to continue")
+            elif choice.startswith("♻"):
+                self.cmd_restore_saves()
+                self.ui.input("Press Enter to continue")
             elif choice.startswith("🧰"):
                 self.cmd_stage_runner()
                 self.ui.input("Press Enter to continue")
@@ -997,8 +1063,8 @@ def main():
     parser.add_argument("command", nargs="?",
                         choices=["list", "apply", "revert", "install", "mirror",
                                  "reconcile", "update", "scan", "scan-steam",
-                                 "capture", "stage-runner", "test-crew",
-                                 "setup-nas"],
+                                 "capture", "restore-saves", "stage-runner",
+                                 "test-crew", "setup-nas"],
                         help="omit for interactive menu")
     parser.add_argument("ids", nargs="*", help="recipe ids (e.g. la-noire)")
     parser.add_argument("--store", help="path to the fix store")
@@ -1031,6 +1097,7 @@ def main():
         "scan": lambda: app.cmd_scan_sd(),
         "scan-steam": lambda: app.cmd_scan_steam(),
         "capture": lambda: app.cmd_capture(),
+        "restore-saves": lambda: app.cmd_restore_saves(),
         "stage-runner": lambda: app.cmd_stage_runner(),
         "test-crew": lambda: app.cmd_test_crew(),
         "setup-nas": lambda: app.cmd_setup_nas(),

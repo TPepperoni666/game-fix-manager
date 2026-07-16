@@ -15,6 +15,9 @@
       "extract_to": "payload/asiloader"
     }
   ],
+  "save_paths": [
+    "{game_dir}/Save"
+  ],
   "steps": [
     {
       "type": "install_runner",

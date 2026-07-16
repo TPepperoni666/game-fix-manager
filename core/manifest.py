@@ -28,6 +28,9 @@ class Recipe:
     post_apply_message: str
     remote_payloads: list[dict]
     requires_game: bool  # False for tool recipes (no install dir; {game_dir} = home)
+    # Path templates for saves living OUTSIDE the prefix (in the game folder),
+    # which prefix backups don't cover. Captured/restored by core/saves.py.
+    save_paths: list[str]
     dir: Path  # recipe folder (contains manifest.json and payload/)
 
     @property
@@ -74,6 +77,7 @@ def load_recipe(recipe_dir: Path) -> Recipe:
         post_apply_message=data.get("post_apply_message", ""),
         remote_payloads=data.get("remote_payloads", []),
         requires_game=data.get("requires_game", True),
+        save_paths=data.get("save_paths", []),
         dir=recipe_dir,
     )
 

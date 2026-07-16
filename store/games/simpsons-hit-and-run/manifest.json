@@ -9,6 +9,9 @@
                           "The Simpsons Hit & Run"],
     "marker_files": ["game/simpsons.exe"]
   },
+  "save_paths": [
+    "{game_dir}/Save1"
+  ],
   "steps": [
     {
       "type": "install_runner",

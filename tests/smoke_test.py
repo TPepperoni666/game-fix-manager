@@ -756,6 +756,65 @@ def main():
         check("mirrored store is loadable",
               len(manifest.load_all(mirror_dest)) == len(manifest.load_all(tmp / "store")))
 
+        # ---- game-folder saves (save_paths) -------------------------------
+        # Saves next to the exe (The Crew's data.bin, Simpsons' Save1) are
+        # covered by NO prefix backup, so capture/restore is the only thing
+        # standing between a game-folder wipe and a lost save.
+        print("== game-folder saves (capture/restore) ==")
+        from core import saves as saves_mod
+        sv_root = tmp / "saves_fixture"
+        sv_recipe_dir = sv_root / "store" / "games" / "svtest"
+        sv_recipe_dir.mkdir(parents=True)
+        (sv_recipe_dir / "manifest.json").write_text(json.dumps({
+            "id": "svtest", "name": "Save Test",
+            "detect": {"marker_files": ["g.exe"]},
+            "save_paths": ["{game_dir}/nested/data.bin", "{game_dir}/Save1",
+                           "{game_dir}/PROF_SAVE_*", "{game_dir}/absent.bin"],
+            "steps": [],
+        }), encoding="utf-8")
+        sv_recipe = manifest.load_recipe(sv_recipe_dir)
+        check("save_paths parsed off the manifest", len(sv_recipe.save_paths) == 4)
+
+        sv_game = sv_root / "game"
+        (sv_game / "nested").mkdir(parents=True)
+        (sv_game / "nested" / "data.bin").write_bytes(b"SAVE-V1")
+        (sv_game / "Save1").mkdir()
+        (sv_game / "Save1" / "slot.dat").write_bytes(b"SLOT")
+        (sv_game / "PROF_SAVE_body").write_bytes(b"BODY")
+        (sv_game / "PROF_SAVE_header").write_bytes(b"HEADER")
+        sv_snap = sv_root / "snap"
+
+        n_entries, n_files = saves_mod.capture(sv_recipe, sv_game, None, sv_snap,
+                                               log=quiet)
+        check("capture takes nested file + dir + glob, skips absent",
+              n_entries == 3 and n_files == 4)
+        check("capture writes a readable index",
+              len(saves_mod.read_index(sv_snap)) == 3)
+
+        # simulate a reimage / game-folder wipe
+        (sv_game / "nested" / "data.bin").unlink()
+        shutil.rmtree(sv_game / "Save1")
+        (sv_game / "PROF_SAVE_body").unlink()
+        (sv_game / "PROF_SAVE_header").unlink()
+        restored = saves_mod.restore(sv_recipe, sv_game, None, sv_snap, log=quiet)
+        check("restore puts every save back", restored == 4)
+        check("restored nested file intact",
+              (sv_game / "nested" / "data.bin").read_bytes() == b"SAVE-V1")
+        check("restored dir intact",
+              (sv_game / "Save1" / "slot.dat").read_bytes() == b"SLOT")
+        check("restored glob matches intact",
+              (sv_game / "PROF_SAVE_body").read_bytes() == b"BODY"
+              and (sv_game / "PROF_SAVE_header").read_bytes() == b"HEADER")
+
+        # a restore must never be what eats a newer live save
+        (sv_game / "nested" / "data.bin").write_bytes(b"NEWER-LIVE")
+        saves_mod.restore(sv_recipe, sv_game, None, sv_snap, log=quiet)
+        check("live save set aside, not clobbered",
+              (sv_game / "nested" / ("data.bin" + saves_mod.SAVE_BAK)).read_bytes()
+              == b"NEWER-LIVE")
+        check("no snapshot -> no entries, no crash",
+              saves_mod.read_index(sv_root / "missing") == [])
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
