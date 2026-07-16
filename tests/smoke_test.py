@@ -815,6 +815,73 @@ def main():
         check("no snapshot -> no entries, no crash",
               saves_mod.read_index(sv_root / "missing") == [])
 
+        # ---- prefix import (restore backed-up prefixes to compatdata) -----
+        print("== prefix import (backup -> compatdata) ==")
+        from core import prefiximport as pi
+        pi_sd = tmp / "pi_sd"
+        deck_bk = (pi_sd / "steamos_restore" / "prefix_backups"
+                   / "The_Crew" / "3585568980")
+        baz_bk = (pi_sd / "bazzite_restore" / "prefix backups"
+                  / "Barnyard" / "3702111588")
+        for b in (deck_bk, baz_bk):
+            (b / "pfx" / "drive_c").mkdir(parents=True)
+            (b / "pfx" / "drive_c" / "save.dat").write_bytes(b"PREFIX-SAVE")
+        (pi_sd / "steamos_restore" / "prefix_backups" / "Husk" / "999").mkdir(
+            parents=True)  # no pfx/ inside
+
+        roots = pi.backup_roots([pi_sd])
+        check("finds BOTH backup layouts (underscore + 'prefix backups')",
+              len(roots) == 2)
+        found = pi.list_backups(roots)
+        check("lists every <name>/<appid> backup",
+              {b.appid for b in found} == {"3585568980", "3702111588", "999"})
+        check("husk backup (no pfx/) flagged",
+              not next(b for b in found if b.appid == "999").has_pfx)
+        check("real backup has pfx/",
+              next(b for b in found if b.appid == "3585568980").has_pfx)
+        check("target defaults to primary library compatdata",
+              pi.target_dir(steam, "3585568980")
+              == steam / "steamapps" / "compatdata" / "3585568980")
+        check("no backups -> empty list, no crash",
+              pi.list_backups([tmp / "pi_missing"]) == [])
+
+        crew_bk = next(b for b in found if b.appid == "3585568980")
+        check("not live before import", not pi.is_live(steam, "3585568980"))
+        dst, n_files = pi.restore(crew_bk, steam, log=quiet)
+        check("prefix restored into compatdata",
+              (dst / "pfx" / "drive_c" / "save.dat").read_bytes() == b"PREFIX-SAVE"
+              and n_files == 1)
+        check("live after import", pi.is_live(steam, "3585568980"))
+
+        # an import must never be what destroys a current prefix
+        (dst / "pfx" / "LIVE").write_bytes(b"LIVE-PREFIX")
+        pi.restore(crew_bk, steam, log=quiet)
+        check("live prefix set aside, not destroyed",
+              (dst.with_name(dst.name + pi.PREFIX_BAK) / "pfx" / "LIVE")
+              .read_bytes() == b"LIVE-PREFIX")
+
+        # A wine prefix holds dosdevices/z: -> / . Following that symlink would
+        # copy the whole root filesystem into compatdata. Creating a symlink
+        # needs elevation on Windows, so guard the FLAG rather than the OS
+        # behaviour — this catches anyone quietly dropping symlinks=True.
+        calls = []
+        real_copytree = shutil.copytree
+
+        def _spy(src, dest, *a, **kw):
+            # copytree recurses into itself positionally; calls[0] is the
+            # outer call restore() made, which is the one under test.
+            calls.append(kw)
+            return real_copytree(src, dest, *a, **kw)
+
+        pi.shutil.copytree = _spy
+        try:
+            shutil.rmtree(dst, ignore_errors=True)
+            pi.restore(crew_bk, steam, log=quiet)
+        finally:
+            pi.shutil.copytree = real_copytree
+        check("restore copies with symlinks=True (z:-> / never followed)",
+              bool(calls) and calls[0].get("symlinks") is True)
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

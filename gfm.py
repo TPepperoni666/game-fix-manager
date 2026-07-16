@@ -22,8 +22,9 @@ import time
 import traceback
 from pathlib import Path
 
-from core import (detect, engine, fetch, manifest, prefixes, saves, sdmap,
-                  sdscan, shortcutsvdf, steamart, steamscan, steamvdf, store)
+from core import (detect, engine, fetch, manifest, prefiximport, prefixes,
+                  saves, sdmap, sdscan, shortcutsvdf, steamart, steamscan,
+                  steamvdf, store)
 from ui import get_ui
 
 STATUS_ICON = {engine.APPLIED: "✅", engine.NOT_APPLIED: "☐ ",
@@ -237,6 +238,94 @@ class App:
         if snapped:
             self.ui.msg(f"Snapshotted localconfig.vdf for {snapped} user(s) "
                         f"-> {state} (perf/display source).", "dim")
+
+    def _registry_by_appid(self) -> dict:
+        """prefix_registry.json entries keyed by appid string."""
+        reg = self.store_root / "prefix_registry.json"
+        try:
+            data = json.loads(reg.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return {str(e["appid"]): e for e in data.get("entries", [])
+                if e.get("appid") is not None}
+
+    def _import_one(self, backup, reg) -> None:
+        name = (reg.get(backup.appid, {}).get("name") or backup.safe_name)
+        if not backup.has_pfx:
+            self.ui.msg(f"{name}: backup has no pfx/ inside — skipping "
+                        f"({backup.path})", "warn")
+            return
+        self.ui.msg(f"Importing {name} (appid {backup.appid})…", "dim")
+        try:
+            dst, files = prefiximport.restore(
+                backup, self.steam_root, log=lambda m: self.ui.msg(m, "dim"))
+        except OSError as e:
+            self.ui.msg(f"{name}: import failed — {e}", "error")
+            return
+        self.ui.msg(f"{name}: prefix restored to {dst} ({files} files)",
+                    "success")
+
+    def cmd_import_prefixes(self):
+        """Restore prefixes backed up by the old Linux Prefix Manager into
+        compatdata — the other half of the gospel-appid design."""
+        self.ui.header("📥 IMPORT PREFIX BACKUPS")
+        if self.steam_root is None:
+            self.ui.msg("Steam root not found — nowhere to import to.", "warn")
+            return
+        roots = prefiximport.backup_roots()
+        if not roots:
+            self.ui.msg("No prefix-backup folder found on any SD card. Looked "
+                        "for <SD>/steamos_restore/prefix_backups/ and "
+                        "<SD>/bazzite_restore/prefix backups/.", "warn")
+            return
+        for r in roots:
+            self.ui.msg(f"📂 {r}", "dim")
+        backups = prefiximport.list_backups(roots)
+        if not backups:
+            self.ui.msg("Backup folder exists but holds no <name>/<appid>/ "
+                        "prefixes.", "warn")
+            return
+        reg = self._registry_by_appid()
+        self.ui.msg("", "dim")
+        self.ui.msg("Install each game and let Steam make its shortcut BEFORE "
+                    "importing — Steam wipes compatdata around first launch, "
+                    "so import last.", "warn")
+        self.ui.msg("", "dim")
+        by_label, options = {}, []
+        for b in backups:
+            entry = reg.get(b.appid, {})
+            name = entry.get("name") or b.safe_name
+            live = prefiximport.is_live(self.steam_root, b.appid)
+            mark = "⚠️ " if live else "  "
+            note = " [live prefix will be set aside]" if live else ""
+            if not b.has_pfx:
+                note = " [no pfx/ — empty backup]"
+            label = f"{mark}{name}  (appid {b.appid}){note}"
+            options.append(label)
+            by_label[label] = b
+        all_opt = f"⏬ Import ALL {len(backups)} prefixes"
+        back = "⬅️  Cancel"
+        picked = self.ui.choose("Import which prefix?",
+                                options + [all_opt, back])
+        if not picked or picked[0] == back:
+            return
+        chosen = backups if picked[0] == all_opt else [by_label[picked[0]]]
+        live_n = sum(1 for b in chosen
+                     if prefiximport.is_live(self.steam_root, b.appid))
+        if live_n:
+            self.ui.msg(f"{live_n} of these already have a live prefix. Each "
+                        f"is kept as <appid>{prefiximport.PREFIX_BAK}, but if "
+                        "the live one is NEWER than the backup you'd be going "
+                        "backwards.", "warn")
+        ok = self.ui.choose(f"Import {len(chosen)} prefix(es)?",
+                            ["✅ Yes, import", "⬅️  Cancel"])
+        if not ok or not ok[0].startswith("✅"):
+            return
+        for b in chosen:
+            self._import_one(b, reg)
+        self.ui.msg("Done. If a game still starts fresh, its shortcut appid "
+                    "doesn't match the prefix — run Apply (which forces the "
+                    "gospel appid) then re-check.", "dim")
 
     def _capture_saves(self, recipe) -> None:
         """Snapshot game-folder saves (data.bin & friends) to local-payloads.
@@ -1004,6 +1093,7 @@ class App:
                 "📚 Scan Steam Libraries (inventory installed games)",
                 "🔌 Connect NAS Payloads (SMB automount)",
                 "🔗 Reconcile Prefixes (adopt existing compatdata)",
+                "📥 Import Prefix Backups (restore saves/configs)",
                 "💾 Mirror Store (offline copy on SD/NAS)",
                 "⬆️  Update (git pull latest recipes + code)",
                 "🖥️  Install Shortcut (Desktop + Game Mode)",
@@ -1032,6 +1122,9 @@ class App:
                 self.ui.input("Press Enter to continue")
             elif choice.startswith("🔗"):
                 self.cmd_reconcile()
+                self.ui.input("Press Enter to continue")
+            elif choice.startswith("📥"):
+                self.cmd_import_prefixes()
                 self.ui.input("Press Enter to continue")
             elif choice.startswith("💾"):
                 self.cmd_mirror(None)
@@ -1063,8 +1156,8 @@ def main():
     parser.add_argument("command", nargs="?",
                         choices=["list", "apply", "revert", "install", "mirror",
                                  "reconcile", "update", "scan", "scan-steam",
-                                 "capture", "restore-saves", "stage-runner",
-                                 "test-crew", "setup-nas"],
+                                 "capture", "restore-saves", "import-prefixes",
+                                 "stage-runner", "test-crew", "setup-nas"],
                         help="omit for interactive menu")
     parser.add_argument("ids", nargs="*", help="recipe ids (e.g. la-noire)")
     parser.add_argument("--store", help="path to the fix store")
@@ -1098,6 +1191,7 @@ def main():
         "scan-steam": lambda: app.cmd_scan_steam(),
         "capture": lambda: app.cmd_capture(),
         "restore-saves": lambda: app.cmd_restore_saves(),
+        "import-prefixes": lambda: app.cmd_import_prefixes(),
         "stage-runner": lambda: app.cmd_stage_runner(),
         "test-crew": lambda: app.cmd_test_crew(),
         "setup-nas": lambda: app.cmd_setup_nas(),
