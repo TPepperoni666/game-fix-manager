@@ -929,6 +929,25 @@ def main():
               len(todo) == 1 and ok_n == 2 and need == 2048)
         check("free space reports something", dep.free_space(dp_sd) > 0)
 
+        # ---- CLI wiring ---------------------------------------------------
+        # A command in the parser's choices but missing a handler used to fall
+        # through to the interactive menu — the command would silently "do
+        # nothing" instead of erroring. Both now come from one dict; assert
+        # every entry resolves to a real App method.
+        print("== CLI wiring ==")
+        import gfm as gfm_mod
+        missing = [name for name in gfm_mod.COMMANDS if not callable(
+            gfm_mod.COMMANDS[name])]
+        check("every CLI command has a callable handler", not missing)
+        for expected in ("scan", "save-restore", "deploy", "import-prefixes",
+                         "restore-saves", "scan-sd", "scan-steam"):
+            check(f"CLI exposes '{expected}'", expected in gfm_mod.COMMANDS)
+        methods = ("cmd_scan_all", "cmd_save_restore", "cmd_deploy_game",
+                   "cmd_import_prefixes", "cmd_restore_saves", "cmd_capture",
+                   "menu_advanced")
+        check("bundle + advanced methods exist on App",
+              all(hasattr(gfm_mod.App, m) for m in methods))
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

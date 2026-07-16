@@ -193,38 +193,32 @@ class App:
                 return int(e["appid"])
         return None
 
-    def cmd_capture(self):
-        """Snapshot a game's custom Steam shortcut art (keyed by its gospel
-        appid) AND its game-folder saves into local-payloads, so a recreated
-        shortcut gets its art back and a wiped/replaced game folder gets its
-        save back."""
-        recipe = self._pick_one("🎨 CAPTURE ART + SAVES + SETTINGS",
-                                 "Capture for:")
-        if recipe is None:
-            return
-        if self.local_payloads is None:
-            self.ui.msg("No local-payloads dir (NAS/SD) set to capture into.",
-                        "warn")
-            return
+    def _capture_one(self, recipe, interactive: bool = True) -> bool:
+        """Art + game-folder saves for one recipe. Returns True if anything
+        was captured. interactive=False in bulk runs — otherwise a sweep over
+        32 recipes would stop and ask for a path on every undetected game."""
+        got = False
         appid = self._gospel_appid(recipe)
         if appid is None:
-            self.ui.msg(f"No gospel appid for {recipe.name} — skipping art "
-                        "(nothing to key it by).", "warn")
+            if interactive:
+                self.ui.msg(f"No gospel appid for {recipe.name} — skipping art "
+                            "(nothing to key it by).", "warn")
         else:
             dest = self.local_payloads / recipe.id / "artwork"
             n = steamart.capture(self.steam_root, appid, dest)
             if n:
-                self.ui.msg(f"Captured {n} art file(s) for {recipe.name} "
-                            f"-> {dest}", "success")
-            else:
+                self.ui.msg(f"  🎨 {recipe.name}: {n} art file(s)", "success")
+                got = True
+            elif interactive:
                 self.ui.msg(f"No custom art found for {recipe.name} (appid "
                             f"{appid}) — set it in Steam first, then capture.",
                             "warn")
-        self._capture_saves(recipe)
-        # Also snapshot localconfig.vdf — the source of the per-game display /
-        # perf settings (TDP, scaling, VRR, framerate). Kept whole for now so
-        # the surgical per-appid restore can be built against a real file.
-        from core import steamvdf
+        return self._capture_saves(recipe, interactive=interactive) or got
+
+    def _snapshot_localconfig(self) -> int:
+        """Snapshot localconfig.vdf — the source of per-game display/perf
+        settings (TDP, scaling, VRR, framerate). Kept whole for now so the
+        surgical per-appid restore can be built against a real file."""
         state = self.local_payloads / "_state"
         snapped = 0
         for cfg in steamvdf._localconfigs(self.steam_root):
@@ -235,6 +229,44 @@ class App:
                 snapped += 1
             except OSError as e:
                 self.ui.msg(f"  localconfig snapshot failed: {e}", "warn")
+        return snapped
+
+    def _capture_all(self) -> None:
+        """Capture art + saves for every DETECTED game, then the settings
+        snapshot. No prompting — undetected games are skipped silently."""
+        if self.local_payloads is None:
+            self.ui.msg("No local-payloads dir (NAS/SD) set to capture into.",
+                        "warn")
+            return
+        hits = 0
+        for recipe in self.recipes:
+            if recipe.requires_game and \
+                    self.game_dir_for(recipe, interactive=False) is None:
+                continue
+            if self._capture_one(recipe, interactive=False):
+                hits += 1
+        self.ui.msg(f"Captured art/saves for {hits} game(s).",
+                    "success" if hits else "dim")
+        snapped = self._snapshot_localconfig()
+        if snapped:
+            self.ui.msg(f"Snapshotted localconfig.vdf for {snapped} user(s) "
+                        "(perf/display source).", "dim")
+
+    def cmd_capture(self):
+        """Snapshot ONE game's custom Steam shortcut art (keyed by its gospel
+        appid) AND its game-folder saves into local-payloads, so a recreated
+        shortcut gets its art back and a wiped/replaced game folder gets its
+        save back. The 🔍 Scan bundle does this for every game at once."""
+        recipe = self._pick_one("🎨 CAPTURE ART + SAVES + SETTINGS",
+                                 "Capture for:")
+        if recipe is None:
+            return
+        if self.local_payloads is None:
+            self.ui.msg("No local-payloads dir (NAS/SD) set to capture into.",
+                        "warn")
+            return
+        self._capture_one(recipe, interactive=True)
+        snapped = self._snapshot_localconfig()
         if snapped:
             self.ui.msg(f"Snapshotted localconfig.vdf for {snapped} user(s) "
                         f"-> {state} (perf/display source).", "dim")
@@ -442,29 +474,82 @@ class App:
                     "doesn't match the prefix — run Apply (which forces the "
                     "gospel appid) then re-check.", "dim")
 
-    def _capture_saves(self, recipe) -> None:
+    def _capture_saves(self, recipe, interactive: bool = True) -> bool:
         """Snapshot game-folder saves (data.bin & friends) to local-payloads.
         These live next to the exe, so NO prefix backup covers them."""
         if not recipe.save_paths:
-            return
-        game_dir = self.game_dir_for(recipe, interactive=True)
+            return False
+        game_dir = self.game_dir_for(recipe, interactive=interactive)
         if game_dir is None:
-            self.ui.msg(f"{recipe.name} not located — skipping save capture.",
-                        "warn")
-            return
+            if interactive:
+                self.ui.msg(f"{recipe.name} not located — skipping save "
+                            "capture.", "warn")
+            return False
         dest = self.local_payloads / recipe.id / "saves"
-        entries, files = saves.capture(recipe, game_dir, self.steam_root, dest,
-                                       log=lambda m: self.ui.msg(m, "dim"))
+        entries, files = saves.capture(
+            recipe, game_dir, self.steam_root, dest,
+            log=(lambda m: self.ui.msg(m, "dim")) if interactive
+            else (lambda _m: None))
         if files:
-            self.ui.msg(f"Captured {files} save file(s)/folder(s) across "
-                        f"{entries} path(s) for {recipe.name} -> {dest}",
-                        "success")
-        else:
+            self.ui.msg(f"  💾 {recipe.name}: {files} save file(s)/folder(s) "
+                        f"across {entries} path(s)", "success")
+            return True
+        if interactive:
             self.ui.msg(f"No saves found yet for {recipe.name} — play it once, "
                         "then capture.", "warn")
+        return False
+
+    def _saves_snapshot_for(self, recipe):
+        """(src_dir, entries) for a recipe's captured saves, or (None, [])."""
+        if not recipe.save_paths or self.local_payloads is None:
+            return None, []
+        src = self.local_payloads / recipe.id / "saves"
+        return src, saves.read_index(src)
+
+    def _restore_saves_one(self, recipe, interactive: bool = True) -> int:
+        src, entries = self._saves_snapshot_for(recipe)
+        if not entries:
+            return 0
+        game_dir = self.game_dir_for(recipe, interactive=interactive)
+        if game_dir is None:
+            if interactive:
+                self.ui.msg(f"{recipe.name} not located.", "warn")
+            return 0
+        n = saves.restore(recipe, game_dir, self.steam_root, src,
+                          log=lambda m: self.ui.msg(m, "dim"))
+        if n:
+            self.ui.msg(f"  💾 {recipe.name}: {n} save file(s)/folder(s) "
+                        "restored", "success")
+        return n
+
+    def _restore_saves_all(self) -> None:
+        """Restore game-folder saves for every game that HAS a snapshot."""
+        pending = []
+        for recipe in self.recipes:
+            _src, entries = self._saves_snapshot_for(recipe)
+            if entries:
+                pending.append(recipe)
+        if not pending:
+            self.ui.msg("No captured game-folder saves to restore — run 🔍 Scan "
+                        "first to capture them.", "warn")
+            return
+        self.ui.msg(f"{len(pending)} game(s) have captured saves: "
+                    + ", ".join(r.name for r in pending), "dim")
+        self.ui.msg(f"Anything already live is kept as *{saves.SAVE_BAK} — but "
+                    "if a live save is NEWER than its snapshot, restoring "
+                    "buries it.", "warn")
+        ok = self.ui.choose(f"Restore saves for {len(pending)} game(s)?",
+                            ["✅ Yes, restore", "⬅️  Skip"])
+        if not ok or not ok[0].startswith("✅"):
+            return
+        total = sum(self._restore_saves_one(r, interactive=False)
+                    for r in pending)
+        self.ui.msg(f"Restored {total} save file(s)/folder(s) across "
+                    f"{len(pending)} game(s).", "success" if total else "warn")
 
     def cmd_restore_saves(self):
-        """Put captured game-folder saves back after a reimage/reinstall."""
+        """Put ONE game's captured game-folder saves back. The ♻️ Save Restore
+        bundle does every game at once."""
         recipe = self._pick_one("♻️  RESTORE GAME SAVES", "Restore saves for:")
         if recipe is None:
             return
@@ -477,28 +562,101 @@ class App:
             self.ui.msg("No local-payloads dir (NAS/SD) to restore from.",
                         "warn")
             return
-        src = self.local_payloads / recipe.id / "saves"
-        entries = saves.read_index(src)
+        src, entries = self._saves_snapshot_for(recipe)
         if not entries:
             self.ui.msg(f"No captured saves for {recipe.name} at {src} — "
                         "capture them first (🎨).", "warn")
             return
-        game_dir = self.game_dir_for(recipe, interactive=True)
-        if game_dir is None:
-            self.ui.msg(f"{recipe.name} not located.", "warn")
-            return
         self.ui.msg(f"This writes {len(entries)} captured save path(s) over the "
-                    f"live game files in {game_dir}.", "warn")
+                    "live game files.", "warn")
         self.ui.msg(f"Anything already there is kept as *{saves.SAVE_BAK} — but "
                     "if your live save is NEWER than the snapshot, restoring "
                     "will bury it.", "warn")
         ok = self.ui.choose("Restore saves?", ["✅ Yes, restore", "⬅️  Cancel"])
         if not ok or not ok[0].startswith("✅"):
             return
-        n = saves.restore(recipe, game_dir, self.steam_root, src,
-                          log=lambda m: self.ui.msg(m, "dim"))
+        n = self._restore_saves_one(recipe, interactive=True)
         self.ui.msg(f"Restored {n} save file(s)/folder(s) for {recipe.name}.",
                     "success" if n else "warn")
+
+    def cmd_scan_all(self):
+        """Take stock of everything and snapshot it: SD games -> Steam games
+        -> adopt orphan prefixes -> capture art/saves/settings.
+
+        Order matters: scan SD and Steam FIRST so detection knows where every
+        game lives, otherwise reconcile has nothing to match against and
+        capture skips games it can't locate."""
+        self.ui.header("🔍 SCAN")
+        self.ui.msg("SD games → Steam games → reconcile prefixes → capture "
+                    "art/saves/settings", "dim")
+        self.ui.msg("", "dim")
+        self.ui.msg("── 1/4  Scanning SD for games " + "─" * 12, "info")
+        self.cmd_scan_sd()
+        self.ui.msg("── 2/4  Scanning Steam libraries " + "─" * 9, "info")
+        self.cmd_scan_steam()
+        self.ui.msg("── 3/4  Reconciling prefixes " + "─" * 13, "info")
+        self.cmd_reconcile()
+        self.ui.msg("── 4/4  Capturing art + saves + settings " + "─" * 1,
+                    "info")
+        self._capture_all()
+        self.ui.msg("", "dim")
+        self.ui.msg("Scan complete.", "success")
+
+    def cmd_save_restore(self):
+        """Put saves back after a reimage: prefix backups -> game-folder saves.
+
+        Reconcile is deliberately NOT part of this — it repoints a shortcut at
+        an OLD prefix already on disk, which would leave Steam ignoring the
+        prefix we just imported at the gospel appid. It lives in 🔍 Scan."""
+        self.ui.header("♻️  SAVE RESTORE")
+        self.ui.msg("Prefix backups → game-folder saves", "dim")
+        self.ui.msg("Install your games first — Steam wipes compatdata around "
+                    "first launch, so restoring last is what sticks.", "warn")
+        self.ui.msg("", "dim")
+        self.ui.msg("── 1/2  Importing prefix backups " + "─" * 9, "info")
+        self.cmd_import_prefixes()
+        self.ui.msg("── 2/2  Restoring game-folder saves " + "─" * 6, "info")
+        self._restore_saves_all()
+        self.ui.msg("", "dim")
+        self.ui.msg("Save restore complete.", "success")
+
+    def menu_advanced(self):
+        """The individual steps the two bundles wrap, for surgical use."""
+        while True:
+            self.ui.header("🛠  ADVANCED")
+            self.ui.msg("Individual steps — 🔍 Scan and ♻️  Save Restore run "
+                        "these for you.", "dim")
+            self.ui.msg("", "dim")
+            choice = self.ui.choose("Run which step?", [
+                "📁 Scan SD for Games (paths + exes + readmes)",
+                "📚 Scan Steam Libraries (inventory + buildids)",
+                "🔗 Reconcile Prefixes (adopt existing compatdata)",
+                "🎨 Capture one game (art + saves)",
+                "📥 Import Prefix Backups (backup -> compatdata)",
+                "♻️  Restore Game Saves (one game)",
+                "🧰 Stage GE-Proton Runner to NAS",
+                "🩺 Test The Crew Server",
+                "⬅️  Back"])
+            choice = choice[0] if choice else "⬅️  Back"
+            if choice.startswith("📁"):
+                self.cmd_scan_sd()
+            elif choice.startswith("📚"):
+                self.cmd_scan_steam()
+            elif choice.startswith("🔗"):
+                self.cmd_reconcile()
+            elif choice.startswith("🎨"):
+                self.cmd_capture()
+            elif choice.startswith("📥"):
+                self.cmd_import_prefixes()
+            elif choice.startswith("♻"):
+                self.cmd_restore_saves()
+            elif choice.startswith("🧰"):
+                self.cmd_stage_runner()
+            elif choice.startswith("🩺"):
+                self.cmd_test_crew()
+            else:
+                return
+            self.ui.input("Press Enter to continue")
 
     def cmd_stage_runner(self):
         """Copy a compatibilitytools.d runner (e.g. GE-Proton) to the NAS
@@ -1205,18 +1363,13 @@ class App:
                 "📋 Status",
                 "↩️  Revert a Game",
                 "⬇️  Deploy Game from NAS (copy game to SD)",
-                "📁 Scan SD for Games (auto-populate paths)",
-                "📚 Scan Steam Libraries (inventory installed games)",
+                "🔍 Scan (SD + Steam + prefixes + capture saves/art)",
+                "♻️  Save Restore (prefix backups + game saves)",
                 "🔌 Connect NAS Payloads (SMB automount)",
-                "🔗 Reconcile Prefixes (adopt existing compatdata)",
-                "📥 Import Prefix Backups (restore saves/configs)",
-                "💾 Mirror Store (offline copy on SD/NAS)",
+                "💾 Mirror Store (offline copy of recipes on SD/NAS)",
                 "⬆️  Update (git pull latest recipes + code)",
-                "🖥️  Install Shortcut (Desktop + Game Mode)",
-                "🎨 Capture Art + Saves + Settings",
-                "♻️  Restore Game Saves",
-                "🧰 Stage GE-Proton Runner to NAS",
-                "🩺 Test The Crew Server",
+                "🖥️  Install Shortcut (put GFM on Desktop + Game Mode)",
+                "🛠  Advanced (individual steps)",
                 "❌ Exit"])
             choice = choice[0] if choice else "❌ Exit"
             if choice.startswith("🔧"):
@@ -1230,20 +1383,14 @@ class App:
             elif choice.startswith("⬇"):
                 self.cmd_deploy_game()
                 self.ui.input("Press Enter to continue")
-            elif choice.startswith("📁"):
-                self.cmd_scan_sd()
+            elif choice.startswith("🔍"):
+                self.cmd_scan_all()
                 self.ui.input("Press Enter to continue")
-            elif choice.startswith("📚"):
-                self.cmd_scan_steam()
+            elif choice.startswith("♻"):
+                self.cmd_save_restore()
                 self.ui.input("Press Enter to continue")
             elif choice.startswith("🔌"):
                 self.cmd_setup_nas()
-                self.ui.input("Press Enter to continue")
-            elif choice.startswith("🔗"):
-                self.cmd_reconcile()
-                self.ui.input("Press Enter to continue")
-            elif choice.startswith("📥"):
-                self.cmd_import_prefixes()
                 self.ui.input("Press Enter to continue")
             elif choice.startswith("💾"):
                 self.cmd_mirror(None)
@@ -1254,30 +1401,45 @@ class App:
             elif choice.startswith("🖥"):
                 self.cmd_install()
                 self.ui.input("Press Enter to continue")
-            elif choice.startswith("🎨"):
-                self.cmd_capture()
-                self.ui.input("Press Enter to continue")
-            elif choice.startswith("♻"):
-                self.cmd_restore_saves()
-                self.ui.input("Press Enter to continue")
-            elif choice.startswith("🧰"):
-                self.cmd_stage_runner()
-                self.ui.input("Press Enter to continue")
-            elif choice.startswith("🩺"):
-                self.cmd_test_crew()
-                self.ui.input("Press Enter to continue")
+            elif choice.startswith("🛠"):
+                self.menu_advanced()
             else:
                 return
 
 
+# CLI command -> what it runs. Single source of truth: main() builds BOTH the
+# parser's choices and the dispatch from this, so the two can't drift. They
+# used to be two lists, and a command present in choices but missing from
+# dispatch fell through to `dispatch.get(cmd, app.menu)` — silently opening the
+# interactive menu instead of running the command.
+COMMANDS = {
+    "list": lambda app, a: app.cmd_list(),
+    "apply": lambda app, a: app.cmd_apply(a.ids),
+    "revert": lambda app, a: app.cmd_revert(a.ids),
+    "install": lambda app, a: app.cmd_install(),
+    "mirror": lambda app, a: app.cmd_mirror(a.dest),
+    "update": lambda app, a: app.cmd_update(),
+    "deploy": lambda app, a: app.cmd_deploy_game(),
+    # bundles (the two headline menu entries)
+    "scan": lambda app, a: app.cmd_scan_all(),
+    "save-restore": lambda app, a: app.cmd_save_restore(),
+    # the individual steps those bundles wrap
+    "scan-sd": lambda app, a: app.cmd_scan_sd(),
+    "scan-steam": lambda app, a: app.cmd_scan_steam(),
+    "reconcile": lambda app, a: app.cmd_reconcile(),
+    "capture": lambda app, a: app.cmd_capture(),
+    "import-prefixes": lambda app, a: app.cmd_import_prefixes(),
+    "restore-saves": lambda app, a: app.cmd_restore_saves(),
+    # setup / diagnostics
+    "setup-nas": lambda app, a: app.cmd_setup_nas(),
+    "stage-runner": lambda app, a: app.cmd_stage_runner(),
+    "test-crew": lambda app, a: app.cmd_test_crew(),
+}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", nargs="?",
-                        choices=["list", "apply", "revert", "install", "mirror",
-                                 "reconcile", "update", "scan", "scan-steam",
-                                 "capture", "restore-saves", "import-prefixes",
-                                 "deploy", "stage-runner", "test-crew",
-                                 "setup-nas"],
+    parser.add_argument("command", nargs="?", choices=list(COMMANDS),
                         help="omit for interactive menu")
     parser.add_argument("ids", nargs="*", help="recipe ids (e.g. la-noire)")
     parser.add_argument("--store", help="path to the fix store")
@@ -1299,26 +1461,9 @@ def main():
               file=sys.stderr)
         sys.exit(1)
 
-    dispatch = {
-        "list": lambda: app.cmd_list(),
-        "apply": lambda: app.cmd_apply(args.ids),
-        "revert": lambda: app.cmd_revert(args.ids),
-        "install": lambda: app.cmd_install(),
-        "mirror": lambda: app.cmd_mirror(args.dest),
-        "reconcile": lambda: app.cmd_reconcile(),
-        "update": lambda: app.cmd_update(),
-        "scan": lambda: app.cmd_scan_sd(),
-        "scan-steam": lambda: app.cmd_scan_steam(),
-        "capture": lambda: app.cmd_capture(),
-        "restore-saves": lambda: app.cmd_restore_saves(),
-        "import-prefixes": lambda: app.cmd_import_prefixes(),
-        "deploy": lambda: app.cmd_deploy_game(),
-        "stage-runner": lambda: app.cmd_stage_runner(),
-        "test-crew": lambda: app.cmd_test_crew(),
-        "setup-nas": lambda: app.cmd_setup_nas(),
-    }
+    handler = COMMANDS.get(args.command)
     try:
-        dispatch.get(args.command, app.menu)()
+        app.menu() if handler is None else handler(app, args)
     except KeyboardInterrupt:
         app.log("interrupted by user")
     except Exception:

@@ -32,9 +32,9 @@ class PlainUI(UI):
                 return multiselect_arrows(header, options)
             except NotImplementedError:
                 pass  # fall through to numbered input on Windows / non-TTY
-        print(f"\n{header}")
+        _print(f"\n{header}")
         for i, opt in enumerate(options, 1):
-            print(f"  {i}) {opt}")
+            _print(f"  {i}) {opt}")   # _print, not print: options carry emoji
         hint = "numbers comma-separated, or 'a' for all" if multi else "number"
         raw = input(f"Select ({hint}, blank to cancel): ").strip()
         if not raw:
@@ -50,7 +50,8 @@ class PlainUI(UI):
 
     def confirm(self, question: str, danger: bool = False) -> bool:
         tag = "[DANGER] " if danger else ""
-        return input(f"{tag}{question} [y/N]: ").strip().lower() in ("y", "yes")
+        _print(f"{tag}{question}")   # questions can carry emoji; prompt can't
+        return input("[y/N]: ").strip().lower() in ("y", "yes")
 
     def input(self, prompt: str, default: str = "",
               password: bool = False) -> str:
