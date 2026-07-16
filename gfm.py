@@ -22,9 +22,9 @@ import time
 import traceback
 from pathlib import Path
 
-from core import (detect, engine, fetch, manifest, prefiximport, prefixes,
-                  saves, sdmap, sdscan, shortcutsvdf, steamart, steamscan,
-                  steamvdf, store)
+from core import (deploy, detect, engine, fetch, manifest, prefiximport,
+                  prefixes, saves, sdmap, sdscan, shortcutsvdf, steamart,
+                  steamscan, steamvdf, store)
 from ui import get_ui
 
 STATUS_ICON = {engine.APPLIED: "✅", engine.NOT_APPLIED: "☐ ",
@@ -238,6 +238,121 @@ class App:
         if snapped:
             self.ui.msg(f"Snapshotted localconfig.vdf for {snapped} user(s) "
                         f"-> {state} (perf/display source).", "dim")
+
+    @staticmethod
+    def _gb(n: float) -> str:
+        return f"{n / (1 << 30):.2f} GB"
+
+    @staticmethod
+    def _eta(seconds: float) -> str:
+        if seconds < 0 or seconds > 86400:
+            return "--:--"
+        return f"{int(seconds) // 60:d}:{int(seconds) % 60:02d}"
+
+    def cmd_deploy_game(self):
+        """Pull a game staged on the NAS (_games/<name>/) onto the SD card.
+        The one thing a reimage restore couldn't put back: the game itself."""
+        self.ui.header("⬇️  DEPLOY GAME FROM NAS")
+        if self.local_payloads is None:
+            self.ui.msg("No local-payloads dir (NAS/SD) configured — run "
+                        "🔌 Connect NAS Payloads first.", "warn")
+            return
+        root = deploy.staged_root(self.local_payloads)
+        self.ui.msg(f"📂 Staged games: {root}", "dim")
+        games = deploy.list_staged(self.local_payloads)
+        if not games:
+            self.ui.msg(f"Nothing staged yet. Copy a game folder to {root}/ "
+                        "(e.g. '_games/Battlefield 3/') and re-run.", "warn")
+            return
+        games_dirs = sdscan.find_games_dirs()
+        if not games_dirs:
+            raw = self.ui.input("No SD Games/ folder found — enter one "
+                                "(blank to cancel)")
+            if not raw:
+                return
+            dest_root = Path(raw)
+            if not dest_root.is_dir():
+                self.ui.msg(f"Not a directory: {dest_root}", "error")
+                return
+        elif len(games_dirs) == 1:
+            dest_root = games_dirs[0]
+        else:
+            picked = self.ui.choose("Deploy to which card?",
+                                    [str(g) for g in games_dirs])
+            if not picked:
+                return
+            dest_root = Path(picked[0])
+        self.ui.msg(f"🎯 Destination : {dest_root}", "dim")
+        self.ui.msg("", "dim")
+
+        by_label, options = {}, []
+        for g in games:
+            todo, size, skipped = deploy.plan(g, dest_root)
+            if not todo:
+                state = "✅ already on the card"
+            elif skipped:
+                state = f"↻ resume — {self._gb(size)} of {self._gb(g.size)} left"
+            else:
+                state = f"{self._gb(g.size)}, {g.files} files"
+            label = f"{g.name}  ({state})"
+            options.append(label)
+            by_label[label] = (g, size)
+        back = "⬅️  Cancel"
+        picked = self.ui.choose("Deploy which game?", options + [back])
+        if not picked or picked[0] == back:
+            return
+        game, need = by_label[picked[0]]
+        if need == 0:
+            self.ui.msg(f"{game.name} is already fully on the card — nothing "
+                        "to copy.", "success")
+            return
+
+        free = deploy.free_space(dest_root)
+        self.ui.msg(f"Need {self._gb(need)}, free {self._gb(free)}", "dim")
+        if free and need > free:
+            self.ui.msg(f"Not enough room on {dest_root}: needs "
+                        f"{self._gb(need)}, only {self._gb(free)} free. "
+                        "Freeing space now beats failing at 95%.", "error")
+            return
+        ok = self.ui.choose(f"Copy {game.name} ({self._gb(need)}) to "
+                            f"{dest_root}?", ["✅ Yes, copy", "⬅️  Cancel"])
+        if not ok or not ok[0].startswith("✅"):
+            return
+
+        started = time.monotonic()
+
+        def _show(done: int, total: int, rel: str) -> None:
+            pct = (done * 100 // total) if total else 100
+            elapsed = max(time.monotonic() - started, 0.001)
+            rate = done / elapsed
+            eta = (total - done) / rate if rate > 0 else -1
+            name = (rel[:38] + "…") if len(rel) > 39 else rel
+            self.ui.progress(
+                f"  {pct:3d}%  {self._gb(done)}/{self._gb(total)}  "
+                f"{rate / (1 << 20):5.1f} MB/s  ETA {self._eta(eta)}  {name}")
+
+        try:
+            stats = deploy.deploy(game, dest_root, progress=_show,
+                                  log=lambda m: self.ui.msg(m, "warn"))
+        except OSError as e:
+            self.ui.progress_done()
+            self.ui.msg(f"Copy failed: {e}", "error")
+            self.ui.msg("Re-run to resume — finished files are kept.", "warn")
+            return
+        except KeyboardInterrupt:
+            self.ui.progress_done()
+            self.ui.msg("Cancelled. Re-run to resume where it stopped.", "warn")
+            return
+        self.ui.progress_done()
+        secs = stats["seconds"]
+        rate = stats["bytes"] / max(secs, 0.001) / (1 << 20)
+        self.ui.msg(f"{game.name} deployed to {stats['dest']}", "success")
+        self.ui.msg(f"  {stats['copied']} file(s), {self._gb(stats['bytes'])} "
+                    f"in {int(secs) // 60}m {int(secs) % 60}s ({rate:.1f} MB/s)"
+                    + (f", {stats['skipped']} already there"
+                       if stats["skipped"] else ""), "dim")
+        self.ui.msg("Now run 📁 Scan SD so the map picks it up, then 🔧 Apply "
+                    "to add its shortcut + fixes.", "dim")
 
     def _registry_by_appid(self) -> dict:
         """prefix_registry.json entries keyed by appid string."""
@@ -1089,6 +1204,7 @@ class App:
                 "🔧 Apply Fixes",
                 "📋 Status",
                 "↩️  Revert a Game",
+                "⬇️  Deploy Game from NAS (copy game to SD)",
                 "📁 Scan SD for Games (auto-populate paths)",
                 "📚 Scan Steam Libraries (inventory installed games)",
                 "🔌 Connect NAS Payloads (SMB automount)",
@@ -1111,6 +1227,9 @@ class App:
                 self.ui.input("Press Enter to continue")
             elif choice.startswith("↩"):
                 self.cmd_revert([])
+            elif choice.startswith("⬇"):
+                self.cmd_deploy_game()
+                self.ui.input("Press Enter to continue")
             elif choice.startswith("📁"):
                 self.cmd_scan_sd()
                 self.ui.input("Press Enter to continue")
@@ -1157,7 +1276,8 @@ def main():
                         choices=["list", "apply", "revert", "install", "mirror",
                                  "reconcile", "update", "scan", "scan-steam",
                                  "capture", "restore-saves", "import-prefixes",
-                                 "stage-runner", "test-crew", "setup-nas"],
+                                 "deploy", "stage-runner", "test-crew",
+                                 "setup-nas"],
                         help="omit for interactive menu")
     parser.add_argument("ids", nargs="*", help="recipe ids (e.g. la-noire)")
     parser.add_argument("--store", help="path to the fix store")
@@ -1192,6 +1312,7 @@ def main():
         "capture": lambda: app.cmd_capture(),
         "restore-saves": lambda: app.cmd_restore_saves(),
         "import-prefixes": lambda: app.cmd_import_prefixes(),
+        "deploy": lambda: app.cmd_deploy_game(),
         "stage-runner": lambda: app.cmd_stage_runner(),
         "test-crew": lambda: app.cmd_test_crew(),
         "setup-nas": lambda: app.cmd_setup_nas(),

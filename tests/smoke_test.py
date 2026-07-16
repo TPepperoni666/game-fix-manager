@@ -882,6 +882,53 @@ def main():
         check("restore copies with symlinks=True (z:-> / never followed)",
               bool(calls) and calls[0].get("symlinks") is True)
 
+        # ---- deploy staged game from NAS -> SD ---------------------------
+        print("== deploy game (NAS _games/ -> SD Games/) ==")
+        from core import deploy as dep
+        dp_root = tmp / "dep"
+        dp_nas = dp_root / "nas"
+        dp_sd = dp_root / "sd" / "Games"
+        dp_sd.mkdir(parents=True)
+        dp_game = dep.staged_root(dp_nas) / "Battlefield 3"
+        (dp_game / "Data").mkdir(parents=True)
+        (dp_game / "temp-dodi").mkdir()          # empty dir — must be carried
+        (dp_game / "bf3.exe").write_bytes(b"E" * (5 << 20))  # > chunk size
+        (dp_game / "Data" / "big.sb").write_bytes(b"D" * 2048)
+        (dp_game / "bf3.par").write_bytes(b"")   # 0-byte file — must be carried
+
+        staged = dep.list_staged(dp_nas)
+        check("lists staged games with size + count",
+              len(staged) == 1 and staged[0].name == "Battlefield 3"
+              and staged[0].files == 3)
+        check("no _games dir -> empty list, no crash",
+              dep.list_staged(dp_root / "absent") == [])
+
+        ticks = []
+        stats = dep.deploy(staged[0], dp_sd,
+                           progress=lambda d, t, r: ticks.append(d))
+        dp_dst = dp_sd / "Battlefield 3"
+        check("deploy copies every file",
+              stats["copied"] == 3
+              and (dp_dst / "bf3.exe").stat().st_size == (5 << 20))
+        check("empty directory carried across (temp-dodi)",
+              (dp_dst / "temp-dodi").is_dir())
+        check("0-byte file carried across (bf3.par)",
+              (dp_dst / "bf3.par").is_file()
+              and (dp_dst / "bf3.par").stat().st_size == 0)
+        check("no .gfm-part temp files left behind",
+              not list(dp_dst.rglob("*.gfm-part")))
+        check("progress reported during copy", len(ticks) >= 1)
+
+        again = dep.deploy(staged[0], dp_sd)
+        check("re-deploy is a no-op (resume skips identical files)",
+              again["copied"] == 0 and again["skipped"] == 3)
+
+        (dp_dst / "Data" / "big.sb").unlink()
+        todo, need, ok_n = dep.plan(staged[0], dp_sd)
+        check("plan re-copies only what's missing",
+              len(todo) == 1 and ok_n == 2 and need == 2048)
+        check("free space reports something", dep.free_space(dp_sd) > 0)
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
