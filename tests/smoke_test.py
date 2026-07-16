@@ -944,9 +944,16 @@ def main():
             check(f"CLI exposes '{expected}'", expected in gfm_mod.COMMANDS)
         methods = ("cmd_scan_all", "cmd_save_restore", "cmd_deploy_game",
                    "cmd_import_prefixes", "cmd_restore_saves", "cmd_capture",
-                   "menu_advanced")
-        check("bundle + advanced methods exist on App",
+                   "menu_advanced", "menu_settings", "_pick_many")
+        check("bundle + submenu methods exist on App",
               all(hasattr(gfm_mod.App, m) for m in methods))
+        # Apply/Revert must use the MULTI picker: _pick_one silently allowed
+        # only one game while the prompt claimed "A = select, then Done".
+        import inspect
+        for fn in ("cmd_apply", "cmd_revert"):
+            src = inspect.getsource(getattr(gfm_mod.App, fn))
+            check(f"{fn} uses the multi-select picker",
+                  "_pick_many" in src and "_pick_one" not in src)
 
         print(f"\nAll {PASS} checks passed.")
     finally:

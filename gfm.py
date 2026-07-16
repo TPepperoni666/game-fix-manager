@@ -620,6 +620,36 @@ class App:
         self.ui.msg("", "dim")
         self.ui.msg("Save restore complete.", "success")
 
+    def menu_settings(self):
+        """Setup + maintenance: the tool's own plumbing, not game work."""
+        while True:
+            self.ui.header("⚙️  SETTINGS")
+            self.ui.msg(f"📦 Store : {self.store_root or 'NOT FOUND'}", "dim")
+            self.ui.msg(f"📡 NAS   : {self.local_payloads or 'not connected'}",
+                        "dim")
+            self.ui.msg("", "dim")
+            choice = self.ui.choose("Setup & maintenance:", [
+                "🔌 Connect NAS Payloads (SMB automount)",
+                "🧰 Stage GE-Proton Runner to NAS",
+                "💾 Mirror Store (offline copy of recipes on SD/NAS)",
+                "⬆️  Update (git pull latest recipes + code)",
+                "🖥️  Install Shortcut (put GFM on Desktop + Game Mode)",
+                "⬅️  Back"])
+            choice = choice[0] if choice else "⬅️  Back"
+            if choice.startswith("🔌"):
+                self.cmd_setup_nas()
+            elif choice.startswith("🧰"):
+                self.cmd_stage_runner()
+            elif choice.startswith("💾"):
+                self.cmd_mirror(None)
+            elif choice.startswith("⬆"):
+                self.cmd_update()
+            elif choice.startswith("🖥"):
+                self.cmd_install()
+            else:
+                return
+            self.ui.input("Press Enter to continue")
+
     def menu_advanced(self):
         """The individual steps the two bundles wrap, for surgical use."""
         while True:
@@ -634,7 +664,6 @@ class App:
                 "🎨 Capture one game (art + saves)",
                 "📥 Import Prefix Backups (backup -> compatdata)",
                 "♻️  Restore Game Saves (one game)",
-                "🧰 Stage GE-Proton Runner to NAS",
                 "🩺 Test The Crew Server",
                 "⬅️  Back"])
             choice = choice[0] if choice else "⬅️  Back"
@@ -650,8 +679,6 @@ class App:
                 self.cmd_import_prefixes()
             elif choice.startswith("♻"):
                 self.cmd_restore_saves()
-            elif choice.startswith("🧰"):
-                self.cmd_stage_runner()
             elif choice.startswith("🩺"):
                 self.cmd_test_crew()
             else:
@@ -814,6 +841,23 @@ class App:
             return None
         return by_label.get(picked[0])
 
+    def _pick_many(self, title: str, prompt: str) -> list:
+        """Multi-select recipe picker (arrow-key toggle on the Deck).
+
+        Apply/Revert act on SEVERAL games in one pass — which is also why
+        every queued VDF write lands behind a single Steam bounce at the end
+        rather than one bounce per game."""
+        self.ui.header(title)
+        options, by_label = [], {}
+        for recipe in self.recipes:
+            game_dir = self.game_dir_for(recipe, interactive=False)
+            mark = "❓ " if (recipe.requires_game and game_dir is None) else "  "
+            label = f"{mark}{recipe.name}"
+            options.append(label)
+            by_label[label] = recipe
+        picked = self.ui.choose(prompt, options, multi=True)
+        return [by_label[p] for p in picked if p in by_label]
+
     def _apply_one(self, recipe) -> None:
         self.log(f"apply {recipe.id}")
         game_dir = self.game_dir_for(recipe, interactive=True)
@@ -845,16 +889,18 @@ class App:
                 self._apply_one(recipe)
             self.flush_vdf_writes()
             return
-        # Interactive: pick one, apply, back to list, repeat. header() clears
-        # the screen at each phase so apply output never stacks under a menu.
-        while True:
-            recipe = self._pick_one("🔧 APPLY FIXES",
-                                    "Pick a game (A = select, then Done)")
-            if recipe is None:
-                break
-            self.ui.header(f"Applying: {recipe.name}")
+        # Multi-select: tick several games, apply them all, ONE Steam bounce.
+        chosen = self._pick_many(
+            "🔧 APPLY FIXES",
+            "Pick games — ←→ toggle, Enter confirm, Esc cancel")
+        if not chosen:
+            return
+        for i, recipe in enumerate(chosen, 1):
+            self.ui.header(f"Applying {i}/{len(chosen)}: {recipe.name}")
             self._apply_one(recipe)
-            self.ui.input("Press Enter to continue")
+            if i < len(chosen):
+                self.ui.input("Press Enter for the next game")
+        self.ui.input("Press Enter to continue")
         self.flush_vdf_writes()
 
     def cmd_revert(self, ids: list[str]):
@@ -865,16 +911,23 @@ class App:
                     self.run_engine(recipe, gd, engine.revert_recipe)
             self.flush_vdf_writes()
             return
-        while True:
-            recipe = self._pick_one("↩️  REVERT A GAME",
-                                    "Pick a game (A = select, then Done)")
-            if recipe is None:
-                break
-            self.ui.header(f"Reverting: {recipe.name}")
+        chosen = self._pick_many(
+            "↩️  REVERT A GAME",
+            "Pick games to revert — ←→ toggle, Enter confirm, Esc cancel")
+        if not chosen:
+            return
+        names = ", ".join(r.name for r in chosen)
+        if not self.ui.confirm(f"Revert {len(chosen)} game(s)? {names}",
+                               danger=True):
+            return
+        for i, recipe in enumerate(chosen, 1):
+            self.ui.header(f"Reverting {i}/{len(chosen)}: {recipe.name}")
             gd = self.game_dir_for(recipe, interactive=True)
-            if gd and self.ui.confirm(f"Revert {recipe.name}?", danger=True):
+            if gd:
                 self.run_engine(recipe, gd, engine.revert_recipe)
-            self.ui.input("Press Enter to continue")
+            if i < len(chosen):
+                self.ui.input("Press Enter for the next game")
+        self.ui.input("Press Enter to continue")
         self.flush_vdf_writes()
 
     def cmd_update(self):
@@ -1365,10 +1418,7 @@ class App:
                 "⬇️  Deploy Game from NAS (copy game to SD)",
                 "🔍 Scan (SD + Steam + prefixes + capture saves/art)",
                 "♻️  Save Restore (prefix backups + game saves)",
-                "🔌 Connect NAS Payloads (SMB automount)",
-                "💾 Mirror Store (offline copy of recipes on SD/NAS)",
-                "⬆️  Update (git pull latest recipes + code)",
-                "🖥️  Install Shortcut (put GFM on Desktop + Game Mode)",
+                "⚙️  Settings (NAS, runners, mirror, update, install)",
                 "🛠  Advanced (individual steps)",
                 "❌ Exit"])
             choice = choice[0] if choice else "❌ Exit"
@@ -1389,18 +1439,8 @@ class App:
             elif choice.startswith("♻"):
                 self.cmd_save_restore()
                 self.ui.input("Press Enter to continue")
-            elif choice.startswith("🔌"):
-                self.cmd_setup_nas()
-                self.ui.input("Press Enter to continue")
-            elif choice.startswith("💾"):
-                self.cmd_mirror(None)
-                self.ui.input("Press Enter to continue")
-            elif choice.startswith("⬆"):
-                self.cmd_update()
-                self.ui.input("Press Enter to continue")
-            elif choice.startswith("🖥"):
-                self.cmd_install()
-                self.ui.input("Press Enter to continue")
+            elif choice.startswith("⚙"):
+                self.menu_settings()
             elif choice.startswith("🛠"):
                 self.menu_advanced()
             else:
