@@ -952,6 +952,10 @@ def main():
               dep.measure(staged[0]).files == 3)
         check("no _games dir -> empty list, no crash",
               dep.list_staged(dp_root / "absent") == [])
+        # The menu marks what's already on the card, but must do it with ONE
+        # stat per game — not by re-walking trees (that's what made it slow).
+        check("is_deployed: false before the copy",
+              not dep.is_deployed(staged[0], dp_sd))
 
         ticks = []
         stats = dep.deploy(staged[0], dp_sd,
@@ -968,6 +972,9 @@ def main():
         check("no .gfm-part temp files left behind",
               not list(dp_dst.rglob("*.gfm-part")))
         check("progress reported during copy", len(ticks) >= 1)
+
+        check("is_deployed: true once it's on the card",
+              dep.is_deployed(staged[0], dp_sd))
 
         again = dep.deploy(staged[0], dp_sd)
         check("re-deploy is a no-op (resume skips identical files)",

@@ -342,13 +342,21 @@ class App:
         self.ui.msg(f"🎯 Destination : {dest_root}", "dim")
         self.ui.msg("", "dim")
 
-        # Names only — measuring every game here meant two full tree walks
-        # each (one round-trip per file over SMB) before the menu even drew.
-        # The picked game gets measured below; the rest cost nothing.
-        by_label = {f"  {g.name}": g for g in games}
+        # Names + a ONE-STAT presence check. Measuring every game here meant
+        # two full tree walks each (a round-trip per file over SMB) before the
+        # menu even drew — 43s+ with HAWX staged. The picked game gets measured
+        # below; the rest cost one is_dir() apiece.
+        by_label, on_card = {}, 0
+        for g in games:
+            here = deploy.is_deployed(g, dest_root)
+            on_card += here
+            mark = "✅" if here else "⬇️ "
+            state = "on the card" if here else "not copied yet"
+            by_label[f"{mark} {g.name} — {state}"] = g
         back = "⬅️  Cancel"
-        picked = self.ui.choose(f"Deploy which game?  ({len(games)} staged)",
-                                list(by_label) + [back])
+        picked = self.ui.choose(
+            f"Deploy which game?  ({len(games)} staged, {on_card} on the card)",
+            list(by_label) + [back])
         if not picked or picked[0] == back:
             return
         game = by_label[picked[0]]

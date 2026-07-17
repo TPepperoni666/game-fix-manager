@@ -103,6 +103,16 @@ def list_staged(local_payloads: Path) -> list[StagedGame]:
     return out
 
 
+def is_deployed(game: StagedGame, dest_root: Path) -> bool:
+    """Is this game already on the card? ONE stat, deliberately — not a tree
+    walk. Enough to mark the menu; whether the copy is COMPLETE is answered by
+    plan() once a game is picked (a partial copy shows up there as a resume)."""
+    try:
+        return (dest_root / game.name).is_dir()
+    except OSError:
+        return False
+
+
 def free_space(path: Path) -> int:
     """Free bytes at the nearest existing ancestor of path."""
     p = path
