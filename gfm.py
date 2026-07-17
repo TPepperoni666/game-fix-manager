@@ -342,27 +342,29 @@ class App:
         self.ui.msg(f"🎯 Destination : {dest_root}", "dim")
         self.ui.msg("", "dim")
 
-        by_label, options = {}, []
-        for g in games:
-            todo, size, skipped = deploy.plan(g, dest_root)
-            if not todo:
-                state = "✅ already on the card"
-            elif skipped:
-                state = f"↻ resume — {self._gb(size)} of {self._gb(g.size)} left"
-            else:
-                state = f"{self._gb(g.size)}, {g.files} files"
-            label = f"{g.name}  ({state})"
-            options.append(label)
-            by_label[label] = (g, size)
+        # Names only — measuring every game here meant two full tree walks
+        # each (one round-trip per file over SMB) before the menu even drew.
+        # The picked game gets measured below; the rest cost nothing.
+        by_label = {f"  {g.name}": g for g in games}
         back = "⬅️  Cancel"
-        picked = self.ui.choose("Deploy which game?", options + [back])
+        picked = self.ui.choose(f"Deploy which game?  ({len(games)} staged)",
+                                list(by_label) + [back])
         if not picked or picked[0] == back:
             return
-        game, need = by_label[picked[0]]
-        if need == 0:
+        game = by_label[picked[0]]
+
+        self.ui.msg(f"Measuring {game.name}…", "dim")
+        deploy.measure(game)
+        todo, need, skipped = deploy.plan(game, dest_root)
+        self.ui.msg(f"{game.name}: {self._gb(game.size)}, {game.files} file(s)",
+                    "info")
+        if not todo:
             self.ui.msg(f"{game.name} is already fully on the card — nothing "
                         "to copy.", "success")
             return
+        if skipped:
+            self.ui.msg(f"↻ resuming — {skipped} file(s) already there, "
+                        f"{self._gb(need)} still to copy", "info")
 
         free = deploy.free_space(dest_root)
         self.ui.msg(f"Need {self._gb(need)}, free {self._gb(free)}", "dim")

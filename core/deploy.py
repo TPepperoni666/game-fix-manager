@@ -43,8 +43,8 @@ _TICK = 0.25            # seconds between progress callbacks
 class StagedGame:
     name: str
     path: Path
-    files: int
-    size: int
+    files: int | None = None   # None until measure() — see list_staged()
+    size: int | None = None
 
 
 def staged_root(local_payloads: Path) -> Path:
@@ -52,7 +52,11 @@ def staged_root(local_payloads: Path) -> Path:
 
 
 def tree_stats(root: Path) -> tuple[int, int]:
-    """(file_count, total_bytes) — tolerant of unreadable entries."""
+    """(file_count, total_bytes) — tolerant of unreadable entries.
+
+    EXPENSIVE over SMB: one round-trip per file. Call it for the ONE game the
+    user picked, never for every game just to draw a menu.
+    """
     files = size = 0
     for dirpath, _dirs, names in os.walk(root):
         for n in names:
@@ -64,8 +68,25 @@ def tree_stats(root: Path) -> tuple[int, int]:
     return files, size
 
 
+def measure(game: StagedGame) -> StagedGame:
+    """Fill in files/size for one game (walks its tree). Idempotent."""
+    if game.files is None or game.size is None:
+        game.files, game.size = tree_stats(game.path)
+    return game
+
+
 def list_staged(local_payloads: Path) -> list[StagedGame]:
-    """Every game staged under _games/. Empty list if the mount is down."""
+    """Every game staged under _games/ — NAMES ONLY, deliberately.
+
+    This used to walk each game's whole tree for a size, and the caller then
+    walked them all AGAIN via plan() to work out resume state — two full
+    walks per game, each a round-trip per file, before the menu even drew.
+    With ~32k files staged that's ~65k SMB round-trips to render a list of
+    names, and it took an age. Now it's one cheap iterdir(); size and resume
+    state are measured for the ONE game that gets picked.
+
+    Empty list if the mount is down.
+    """
     root = staged_root(local_payloads)
     out: list[StagedGame] = []
     try:
@@ -78,8 +99,7 @@ def list_staged(local_payloads: Path) -> list[StagedGame]:
                 continue
         except OSError:
             continue
-        files, size = tree_stats(d)
-        out.append(StagedGame(d.name, d, files, size))
+        out.append(StagedGame(d.name, d))
     return out
 
 

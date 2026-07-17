@@ -938,9 +938,18 @@ def main():
         (dp_game / "bf3.par").write_bytes(b"")   # 0-byte file — must be carried
 
         staged = dep.list_staged(dp_nas)
-        check("lists staged games with size + count",
-              len(staged) == 1 and staged[0].name == "Battlefield 3"
-              and staged[0].files == 3)
+        check("lists staged games by name",
+              len(staged) == 1 and staged[0].name == "Battlefield 3")
+        # Drawing the menu must NOT walk every game: over SMB that's a
+        # round-trip per file, and with ~32k staged files it took 43s to draw
+        # a list of names (and plan() then walked them all again, both sides).
+        # Names are cheap; size/count are measured for the picked game only.
+        check("list_staged is lazy — no measuring (keeps the menu instant)",
+              staged[0].files is None and staged[0].size is None)
+        check("measure() fills size + count on demand",
+              dep.measure(staged[0]).files == 3 and staged[0].size is not None)
+        check("measure() is idempotent",
+              dep.measure(staged[0]).files == 3)
         check("no _games dir -> empty list, no crash",
               dep.list_staged(dp_root / "absent") == [])
 
