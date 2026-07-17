@@ -123,6 +123,41 @@ Everything below is written, unit-tested (159 smoke checks) and pushed, but
 - [x] **GE-Proton10-34 as the standard runner** — done. Every new recipe pins it
       unless the game needs otherwise (only Heroes of the Pacific deviates: it
       needs GE-Proton11-1 to launch at all).
+- [ ] **Weekly background scan → reclaim SD space for games removed from Steam.**
+      Tony's idea: a timer (systemd, like tcu-network.service) notices when a
+      non-Steam shortcut disappears from `shortcuts.vdf` and removes that game
+      from the SD.
+
+      The idea is sound; the naive implementation is **destructive and wrong**.
+      Hazards to design around, all of them real:
+
+      1. **"No shortcut" ≠ "removed".** A freshly deployed game has no shortcut
+         until you Apply — the gap between ⬇️ Deploy and 🔧 Apply is exactly
+         that state. A rule of "on the SD, not in Steam → delete" wipes the game
+         you just spent 10 minutes copying.
+      2. **So it needs a SNAPSHOT.** Removal is only detectable as *was in the
+         last snapshot, absent now*. Store the known shortcut appids (we already
+         pin gospel appids, and `sdmap` already records `shortcut_appid`).
+      3. **An empty/rewritten `shortcuts.vdf` looks like "user deleted
+         everything".** A reimage, a Steam reset, a botched write — including
+         our OWN close-Steam→write→restart dance — could present as every game
+         vanishing at once. On a timer, unattended, that's a mass delete. Guard:
+         refuse to act if more than 1–2 disappear at once, or if the vdf failed
+         to parse, or if the snapshot is stale/missing. Fail closed.
+      4. **DELETING THE GAME FOLDER DESTROYS GAME-FOLDER SAVES.** The Crew's
+         `data.bin` and Simpsons' `Save1` live *inside* the game dir — that's the
+         whole reason `save_paths` exists. Deletion MUST refuse unless that
+         game's saves are already captured (`saves.read_index()` non-empty), or
+         capture them first.
+      5. **Only delete what's restorable.** Require the game to be staged in NAS
+         `_games/` first, so a false positive costs a re-copy, not the game.
+      6. **Confirm, don't auto-delete.** Better shape: the timer *detects* and
+         queues, the tool shows "these 2 look removed, reclaim 19GB?" next time
+         you open it. Unattended deletion of user data on a heuristic is how you
+         lose trust in a tool permanently.
+
+      Also worth asking whether it's needed: the SD is 2TB with ~1.8TB free, so
+      this is tidiness, not pressure. Low priority, high blast radius.
 
 ## 4. Ready to build (say the word)
 
