@@ -826,15 +826,40 @@ class App:
                         "warn")
 
     def cmd_list(self):
+        """The catalogue: every recipe that exists, grouped by whether the
+        game is actually on this device. Apply only offers the detected ones,
+        so this is where you see the full library — including fixes for games
+        you haven't installed (or copied to the SD) yet."""
         if not self.recipes:
             self.ui.msg(f"No recipes found (store: {self.store_root})", "warn")
             return
         self.ui.header("🔧 GAME FIXES")
         self.ui.msg(f"Store : {self.store_root}", "dim")
         self.ui.msg(f"Steam : {self.steam_root or 'not found'}", "dim")
+        here, elsewhere = [], []
         for recipe in self.recipes:
             game_dir = self.game_dir_for(recipe, interactive=False)
-            self.ui.msg(self.status_line(recipe, game_dir))
+            if recipe.requires_game and game_dir is None:
+                elsewhere.append(recipe)
+            else:
+                here.append((recipe, game_dir))
+        self.ui.msg("", "dim")
+        self.ui.msg(f"── ON THIS DEVICE ({len(here)}) " + "─" * 24, "info")
+        if here:
+            for recipe, game_dir in here:
+                self.ui.msg(self.status_line(recipe, game_dir))
+        else:
+            self.ui.msg("  (none detected — run 🔍 Scan, or ⬇️ Deploy a game "
+                        "from the NAS)", "dim")
+        self.ui.msg("", "dim")
+        self.ui.msg(f"── FIXES AVAILABLE, GAME NOT HERE ({len(elsewhere)}) "
+                    + "─" * 6, "dim")
+        for recipe in elsewhere:
+            self.ui.msg(f"  · {recipe.name}", "dim")
+        self.ui.msg("", "dim")
+        self.ui.msg(f"{len(self.recipes)} recipe(s) total — {len(here)} "
+                    f"playable here, {len(elsewhere)} waiting on the game.",
+                    "dim")
 
     def _recipes_by_ids(self, ids: list[str]):
         by_id = {r.id: r for r in self.recipes}
@@ -869,17 +894,37 @@ class App:
     def _pick_many(self, title: str, prompt: str) -> list:
         """Multi-select recipe picker (arrow-key toggle on the Deck).
 
-        Apply/Revert act on SEVERAL games in one pass — which is also why
-        every queued VDF write lands behind a single Steam bounce at the end
-        rather than one bounce per game."""
+        Only offers games actually present on this device — a list of 33 where
+        most are ❓ "not found" is noise you have to read past every time. The
+        full catalogue, including fixes for games you haven't copied over yet,
+        lives in 📋 Status.
+
+        Apply/Revert act on SEVERAL games in one pass — which is also why every
+        queued VDF write lands behind a single Steam bounce at the end rather
+        than one bounce per game."""
         self.ui.header(title)
         options, by_label = [], {}
+        hidden = 0
         for recipe in self.recipes:
             game_dir = self.game_dir_for(recipe, interactive=False)
-            mark = "❓ " if (recipe.requires_game and game_dir is None) else "  "
-            label = f"{mark}{recipe.name}"
+            if recipe.requires_game and game_dir is None:
+                hidden += 1
+                continue
+            label = f"  {recipe.name}"
             options.append(label)
             by_label[label] = recipe
+        if not options:
+            self.ui.msg("No games detected on this device. Run 🔍 Scan to find "
+                        "them, or ⬇️ Deploy one from the NAS.", "warn")
+            if hidden:
+                self.ui.msg(f"({hidden} recipe(s) exist for games that aren't "
+                            "here — see 📋 Status.)", "dim")
+            self.ui.input("Press Enter to continue")
+            return []
+        if hidden:
+            self.ui.msg(f"Showing {len(options)} detected game(s); {hidden} "
+                        "recipe(s) hidden (game not on this device — see "
+                        "📋 Status).", "dim")
         picked = self.ui.choose(prompt, options, multi=True)
         return [by_label[p] for p in picked if p in by_label]
 
