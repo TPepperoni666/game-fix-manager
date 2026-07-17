@@ -18,8 +18,13 @@ import shutil
 from pathlib import Path
 
 
-def _grid_dirs(steam_root: Path) -> list[Path]:
-    ud = steam_root / "userdata"
+def _grid_dirs(steam_root: Path | None) -> list[Path]:
+    # steam_root is None when Steam wasn't found. Guard here rather than at
+    # every call site: capture() runs across every recipe during 🔍 Scan, and
+    # `None / "userdata"` would take the whole scan down with a TypeError.
+    if steam_root is None:
+        return []
+    ud = Path(steam_root) / "userdata"
     if not ud.is_dir():
         return []
     return [d / "config" / "grid" for d in sorted(ud.iterdir())

@@ -86,10 +86,18 @@ def capture(recipe, game_dir: Path, steam_root: Path | None, dest: Path,
             log: Callable[[str], None] = print) -> tuple[int, int]:
     """Snapshot every save_paths entry into <dest>.
 
-    Returns (entries_captured, files_captured). Writing index.json last means
-    a half-finished capture never leaves a manifest claiming more than it has.
+    Returns (entries_captured, files_captured) for what was captured THIS run.
+
+    The written index MERGES with the previous one: an entry whose save isn't
+    in the game folder right now keeps its earlier backup listed, as long as
+    the slot's files are still on disk. Without that, capturing after a game
+    folder is replaced (exactly the reimage case, and 🔍 Scan captures every
+    game automatically) would rewrite the index without that entry — leaving a
+    perfectly good backup sitting on the NAS that restore can never find.
+    Writing only when something new was captured means a run that finds
+    nothing leaves the existing index untouched.
     """
-    entries, files = [], 0
+    fresh, files = [], 0
     for slot, template in enumerate(getattr(recipe, "save_paths", [])):
         resolved = _resolve(recipe, game_dir, steam_root, template)
         if resolved is None:
@@ -112,13 +120,30 @@ def capture(recipe, game_dir: Path, steam_root: Path | None, dest: Path,
             files += 1
             log(f"      + {src}")
         if names:
-            entries.append({"slot": slot, "template": template, "names": names})
-    if entries:
-        dest.mkdir(parents=True, exist_ok=True)
-        (dest / INDEX_NAME).write_text(
-            json.dumps({"recipe": recipe.id, "entries": entries}, indent=2),
-            encoding="utf-8")
-    return len(entries), files
+            fresh.append({"slot": slot, "template": template, "names": names})
+    if not fresh:
+        return 0, 0
+    merged = list(fresh)
+    done = {e["slot"] for e in fresh}
+    for old in read_index(dest):
+        slot = old.get("slot")
+        if slot in done:
+            continue
+        slot_dir = dest / str(slot)
+        try:
+            still_there = slot_dir.is_dir() and any(slot_dir.iterdir())
+        except OSError:
+            still_there = False
+        if still_there:
+            merged.append(old)
+            log(f"      = keeping earlier backup of {old.get('template')} "
+                "(not in the game folder right now)")
+    merged.sort(key=lambda e: e.get("slot", 0))
+    dest.mkdir(parents=True, exist_ok=True)
+    (dest / INDEX_NAME).write_text(
+        json.dumps({"recipe": recipe.id, "entries": merged}, indent=2),
+        encoding="utf-8")
+    return len(fresh), files
 
 
 def read_index(src: Path) -> list[dict]:

@@ -8,6 +8,7 @@ Run:  python tests/smoke_test.py
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sys
 import tempfile
@@ -815,6 +816,46 @@ def main():
         check("no snapshot -> no entries, no crash",
               saves_mod.read_index(sv_root / "missing") == [])
 
+        # Re-capturing after a save vanishes from the game folder must NOT
+        # drop it from the index: the backup is still on disk, and losing the
+        # index entry makes it unreachable to restore forever. This is the
+        # reimage case exactly — deploy a fresh game folder, 🔍 Scan captures
+        # every game, and a save you DID back up silently goes missing.
+        shutil.rmtree(sv_game / "Save1")
+        fresh_n, _ = saves_mod.capture(sv_recipe, sv_game, None, sv_snap,
+                                       log=quiet)
+        merged = saves_mod.read_index(sv_snap)
+        check("re-capture keeps the backup of a now-missing save",
+              any(e["template"] == "{game_dir}/Save1" for e in merged))
+        check("re-capture reports only what it freshly captured", fresh_n == 2)
+        (sv_game / "nested" / "data.bin").unlink()
+        saves_mod.restore(sv_recipe, sv_game, None, sv_snap, log=quiet)
+        check("the carried-forward backup still restores",
+              (sv_game / "Save1" / "slot.dat").read_bytes() == b"SLOT")
+        idx_before = (sv_snap / saves_mod.INDEX_NAME).read_text()
+        saves_mod.capture(sv_recipe, tmp / "sv_nothing_here", None, sv_snap,
+                          log=quiet)
+        check("a capture that finds nothing leaves the index untouched",
+              (sv_snap / saves_mod.INDEX_NAME).read_text() == idx_before)
+
+        # steam_root is None when Steam isn't found. 🔍 Scan captures across
+        # every recipe, so an unguarded `None / "userdata"` took the whole
+        # scan down with a TypeError.
+        print("== no-Steam guards ==")
+        from core import steamart as art_mod
+        art_src = tmp / "art_fixture"
+        art_src.mkdir()
+        (art_src / "123.png").write_bytes(b"PNG")
+        try:
+            cap_n = art_mod.capture(None, 123, tmp / "art_out")
+            res_n = art_mod.restore(None, 123, art_src)
+            crashed = False
+        except Exception:
+            cap_n = res_n = -1
+            crashed = True
+        check("steamart capture/restore survive steam_root=None",
+              not crashed and cap_n == 0 and res_n == 0)
+
         # ---- prefix import (restore backed-up prefixes to compatdata) -----
         print("== prefix import (backup -> compatdata) ==")
         from core import prefiximport as pi
@@ -935,10 +976,21 @@ def main():
         # nothing" instead of erroring. Both now come from one dict; assert
         # every entry resolves to a real App method.
         print("== CLI wiring ==")
+        import inspect as _insp
         import gfm as gfm_mod
         missing = [name for name in gfm_mod.COMMANDS if not callable(
             gfm_mod.COMMANDS[name])]
         check("every CLI command has a callable handler", not missing)
+        # callable() alone is too weak — a wrong-arity lambda passes it and
+        # then blows up at runtime. main() calls handler(app, args).
+        wrong = [n for n, fn in gfm_mod.COMMANDS.items()
+                 if len(_insp.signature(fn).parameters) != 2]
+        check("every CLI handler takes exactly (app, args)", not wrong)
+        # ...and that each lambda actually names a method App has.
+        _src = _insp.getsource(gfm_mod).split("COMMANDS = {")[1].split("\n}")[0]
+        unknown = sorted({m for m in re.findall(r"app\.(\w+)\(", _src)
+                          if not hasattr(gfm_mod.App, m)})
+        check("every CLI handler targets a real App method", not unknown)
         for expected in ("scan", "save-restore", "deploy", "import-prefixes",
                          "restore-saves", "scan-sd", "scan-steam"):
             check(f"CLI exposes '{expected}'", expected in gfm_mod.COMMANDS)
