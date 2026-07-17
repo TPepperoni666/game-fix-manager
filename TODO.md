@@ -144,14 +144,27 @@ Everything below is written, unit-tested (159 smoke checks) and pushed, but
          vanishing at once. On a timer, unattended, that's a mass delete. Guard:
          refuse to act if more than 1–2 disappear at once, or if the vdf failed
          to parse, or if the snapshot is stale/missing. Fail closed.
-      4. **DELETING THE GAME FOLDER DESTROYS GAME-FOLDER SAVES.** The Crew's
-         `data.bin` and Simpsons' `Save1` live *inside* the game dir — that's the
-         whole reason `save_paths` exists. Deletion MUST refuse unless that
-         game's saves are already captured (`saves.read_index()` non-empty), or
-         capture them first.
-      5. **Only delete what's restorable.** Require the game to be staged in NAS
+      4. **NEVER TOUCH `compatdata/`. Delete only `<SD>/Games/<name>/`.**
+         Most games keep their saves in the PREFIX
+         (`compatdata/<appid>/pfx/drive_c/users/steamuser/...`), not the game
+         folder. Steam does not remove a non-Steam shortcut's prefix when you
+         delete the shortcut — it just becomes an orphan (which is exactly what
+         🔗 Reconcile exists to adopt). So for prefix-save games this whole
+         feature is **safe and reversible by design**: the prefix survives, and
+         because we pin the **gospel appid**, re-deploying + re-applying later
+         recreates the shortcut with the SAME appid, which marries straight back
+         up to the untouched prefix. Saves intact, nothing lost but the copy
+         time. That's the pinned-appid design paying off.
+      5. **The exception: GAME-FOLDER saves die with the folder.** The Crew's
+         `data.bin`, Simpsons' `Save1`, Heroes of the Pacific's `save/` live
+         *inside* the game dir — that's the whole reason `save_paths` exists.
+         For any recipe with `save_paths`, deletion MUST refuse unless those
+         saves are already captured (`saves.read_index()` non-empty), or capture
+         them first. This is the ONLY case where reclaiming space can actually
+         lose data.
+      6. **Only delete what's restorable.** Require the game to be staged in NAS
          `_games/` first, so a false positive costs a re-copy, not the game.
-      6. **Confirm, don't auto-delete.** Better shape: the timer *detects* and
+      7. **Confirm, don't auto-delete.** Better shape: the timer *detects* and
          queues, the tool shows "these 2 look removed, reclaim 19GB?" next time
          you open it. Unattended deletion of user data on a heuristic is how you
          lose trust in a tool permanently.
