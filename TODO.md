@@ -5,6 +5,36 @@ Last updated 2026-07-13. Deeper context lives in the Claude memory files
 
 ---
 
+## 0. NEXT SESSION — start here (Tony's pick, 2026-07-13)
+
+1. **Make the NAS writable on the Deck.** ⬆️ Update, then ⚙️ Settings →
+   🔌 Connect NAS Payloads (needs sudo) to reinstall the mount unit as `rw`.
+   **Why it matters:** the share is mounted `ro`, and capture WRITES there —
+   so right now nothing is backing up **The Crew's `data.bin`** (game-folder
+   save, covered by no prefix backup — the one live data-loss risk), your
+   custom art, or `_state/localconfig.vdf` (which is the *only* thing blocking
+   the per-game perf/TDP restore). The share itself is fine — 35GB was written
+   to it from Windows today; it's purely the Deck's mount option, and it was
+   our bug (fixed in a34f25c). Old installs keep the `ro` unit until this is
+   re-run.
+2. **Test Halo MCC + AlphaRing.** Remember MCC must launch with **anti-cheat
+   disabled** or the DLL is inert. Untested.
+3. **Stage the big four** (~280 GB): Death Stranding 2, RE Requiem, College
+   Football 27, Pragmata. DS2 is ~17 GB in from an aborted run — robocopy
+   resumes, doesn't restart.
+4. **Make the NAS `Game Fixes` share visible from the Windows machine.**
+   Likely cause found today: the share is **guest**, and Windows 10/11 blocks
+   insecure guest logons by default ("your organization's security policies
+   block unauthenticated guest access"). Evidence: Python hit *"Encryption is
+   not supported for guest access"* and a later listing got *Permission
+   denied*, while robocopy/bash worked — i.e. the SMB session is guest and
+   flaky. Right fix = create a real SMB user on TrueNAS and map the share with
+   credentials (a drive letter), rather than re-enabling guest logons on
+   Windows. That'd fix Tony's Explorer visibility AND the intermittent access
+   from tooling.
+
+---
+
 ## 1. Test on the Deck — a lot of new code has never touched real hardware
 
 Everything below is written, unit-tested (159 smoke checks) and pushed, but
