@@ -50,11 +50,22 @@ Everything below is written, unit-tested (159 smoke checks) and pushed, but
 
 ## 2. Blocked on you
 
-- [ ] **Stage BF3** → copy `F:\games\Battlefield 3\` (all 12.36 GB, nothing
-      excluded) to `\\192.168.1.33\Game Fixes\_games\Battlefield 3\`, then
-      ⬇️ Deploy → 📁 Scan → 🔧 Apply. This is the deploy PoC.
-- [ ] **HAWX 1** — install to the SD + rescan, then I build it (research done:
-      use `HAWX.exe`, the DX9 one; `HAWX_dx10.exe` black-screens).
+- [x] **Stage BF3** — done. It's on the SD, mapped, and Apply works. (The
+      documented `singleplayer` launch arg turned out to BREAK it; recipe now
+      sets no launch options.)
+- [x] **HAWX 1** — recipe built off the Windows install (no SD scan needed) and
+      staged to the NAS.
+- [ ] **Deploy the newly staged games** — FUEL, PURE (CD), Blur and HAWX 1 are
+      all on the NAS at `_games/` **with recipes built**. Just needs
+      ⬆️ Update → ⬇️ Deploy → 🔧 Apply on the Deck.
+- [ ] **Stage the big four** (~280 GB): Death Stranding 2, RE Requiem, College
+      Football 27, Pragmata. DS2 is ~17 GB in from an aborted run — robocopy
+      resumes rather than restarts. Only worth it for what you'd actually play
+      on a handheld.
+- [ ] **Move the prefix backups to the SD** — the scan reported `GBM sources: 0
+      SD backups, 0 CSV entries`, so `import-prefixes` has nothing to do until
+      they're at `<SD>/steamos_restore/prefix_backups/<name>/<appid>/`. You said
+      you'd done this — the next Scan's log line will confirm (count > 0).
 - [ ] **PitCrew / The Crew mods** — need to know **where PitCrew writes its
       compiled output** before I can spec capture/restore. Either point me at
       its docs or compile once and tell me what changed in the game folder.
@@ -63,7 +74,27 @@ Everything below is written, unit-tested (159 smoke checks) and pushed, but
 
 ---
 
-## 3. Ready to build (say the word)
+## 3. Feature ideas (Tony's, 2026-07-13)
+
+- [ ] **"Add shortcuts for games on this device that aren't in Steam."** A menu
+      option that finds games present on the SD/disk with no Steam shortcut and
+      offers to create them. Today you only get a shortcut if a recipe exists
+      and you Apply it — a game with no recipe is invisible. Would lean on the
+      SD scan (which already knows folder + exes) rather than needing a recipe.
+      Open question: which exe, when a folder has several (FUEL is the warning —
+      the obvious `FUEL.exe` is the WRONG one). Probably: propose the best guess,
+      let the user confirm/override.
+- [ ] **Auto-create the shortcut when a game is deployed from the NAS.** i.e.
+      ⬇️ Deploy → offer to Scan + Apply in one go, so a copied game lands
+      playable. Deploy is currently recipe-agnostic (it just copies
+      `_games/<name>` → `Games/<name>`), so this means teaching it to look for a
+      matching recipe afterwards. Sensible: it's the natural end of the
+      deploy → scan → apply chain.
+- [x] **GE-Proton10-34 as the standard runner** — done. Every new recipe pins it
+      unless the game needs otherwise (only Heroes of the Pacific deviates: it
+      needs GE-Proton11-1 to launch at all).
+
+## 4. Ready to build (say the word)
 
 - [ ] **BF3 UI Scaling Fix** — BF3's UI doesn't scale past 720p, so at
       1920×1200 the HUD/menus are tiny. `Engine.BuildInfo_Win32_Retail_dll.dll`
@@ -88,7 +119,7 @@ Everything below is written, unit-tested (159 smoke checks) and pushed, but
 
 ---
 
-## 4. Parked / dropped
+## 5. Parked / dropped
 
 - **V8 Supercars 3** + **Colin McRae Rally 2005** — both Codemasters, both need
   the exe to run from a C:/D: drive-root *inside* the prefix (SD/Z:\ path broke
@@ -100,7 +131,7 @@ Everything below is written, unit-tested (159 smoke checks) and pushed, but
 
 ---
 
-## 5. Known caveats in the code
+## 6. Known caveats in the code
 
 - `prefiximport.restore` is **not atomic**: if the copy dies midway your live
   prefix is safe in `<appid>.gfm-prefixbak`, but the target is left partial.

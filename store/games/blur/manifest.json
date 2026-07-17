@@ -1,0 +1,24 @@
+{
+  "id": "blur",
+  "name": "Blur",
+  "aliases": ["Blur (2010)"],
+  "detect": {
+    "install_dir_names": ["Blur"],
+    "marker_files": ["Blur.exe"]
+  },
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "Blur.exe",
+      "start_dir": "{game_dir}",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "Blur (2010, Bizarre Creations, non-Steam cracked copy) — Apply auto-adds the Steam shortcut for Blur.exe on GE-Proton 10.34, with a pinned appid so its prefix survives a reimage. Stage GE first with 'gfm stage-runner'.\n\nThat's deliberately ALL it does. Blur shipped with Games for Windows Live, which is dead — but your copy has no GFWL bits left at all (no xlive.dll anywhere; the crack is baked into Blur.exe), so there's nothing to bypass. It's a 2010 console-era racer: native widescreen and native Xbox 360 pad support, so Steam Input just works. No mod, no fix, no launch options needed.\n\nLANGUAGE (if you ever want it): the root english.txt is the language selector — rename it to french.txt / italian.txt / german.txt / spanish.txt to switch.\n\nIF IT WON'T LAUNCH: shout — but there's no known Proton blocker here, and nothing exotic in the folder (just Blur.exe, binkw32.dll for Bink video, and data).",
+  "notes": "Built 2026-07-13 straight off Tony's Windows install at F:\\games\\Blur (130 files / 7.3GB), staged to NAS _games/Blur — no SD scan needed.\n\nWHY THERE'S NO GFWL WORK HERE: Blur is a Games for Windows Live title and I originally listed it under 'Tier 1 — dead launcher, needs a GFWL bypass'. That was WRONG for Tony's copy and he called it out: the crack already handles it. Verified against the real install — a recursive search for xlive/GFWL/GameuxInstall/crack/1911 components found NOTHING, and the only exes are Blur.exe (27.6MB) and Uninstall/unins000.exe. So the recipe is a plain shortcut; don't re-add a GFWL step on the strength of the game's reputation.\n\nNative widescreen + native 360 pad (2010 console-era racer) so no controller/widescreen work. Root english.txt is the language selector (rename to french/italian/german/spanish.txt). Non-Steam -> computed appid. Copy speed note: only 130 files for 7.3GB, so it staged at 106 MB/s — the fastest of the batch, and a neat contrast with HAWX (21,519 files, 6.8GB, 30 MB/s)."
+}

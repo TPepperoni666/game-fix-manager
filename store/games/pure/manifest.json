@@ -1,0 +1,24 @@
+{
+  "id": "pure",
+  "name": "PURE",
+  "aliases": ["PURE (CD)", "Pure", "PURE (2008)"],
+  "detect": {
+    "install_dir_names": ["PURE (CD)", "PURE", "Pure"],
+    "marker_files": ["Pure.exe"]
+  },
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "Pure.exe",
+      "start_dir": "{game_dir}",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "PURE (2008, Disney/Black Rock, non-Steam cracked copy) — Apply auto-adds the Steam shortcut for Pure.exe on GE-Proton 10.34. Stage GE first with 'gfm stage-runner'.\n\nEXPECTED ON FIRST LAUNCH — NOT A BUG: it starts WINDOWED. Straight from the crack readme (_HOW TO RUN GAME!!.txt by ChemicalFlood): \"The Game will launch windowed on first launch but as soon as you change your Resolution on the main menu it will fix!\" So go to the main menu, set your resolution (1920x1200), and it sorts itself out. Don't go hunting for a windowed-mode fix.\n\nIF IT WON'T LAUNCH / MISSING DLLs: the readme says install all 6 programs in the game's _Redist folder (DirectX websetup, OpenAL, and the VC++ redists). Under Proton most of that is already provided by GE, so try it first without — OpenAL (oalinst.exe) is the one most likely to actually matter if sound is missing.\n\nIF IT WON'T START AT ALL: there's an 11KB d3d9.dll at the game root (dated 2013 — a wrapper/shim, far too small to be DXVK). Wine loads its own builtin d3d9 by default, so that file is ignored. If PURE turns out to need it, add the launch option WINEDLLOVERRIDES=\"d3d9=n,b\" %command% — but only if it misbehaves, since overriding d3d9 also takes DXVK out of the picture.\n\nCONTROLLER + WIDESCREEN: 2008 console-era racer with native widescreen and native Xbox 360 pad support — Steam Input just works, nothing to mod.",
+  "notes": "Built 2026-07-13 straight off Tony's Windows install at F:\\games\\PURE (CD) (10,124 files / 4.94GB), staged to NAS _games/'PURE (CD)' — no SD scan needed. NOTE the folder name really does contain the parens: 'PURE (CD)'. Watch out with PowerShell — Test-Path treats [ ] as wildcards and ( ) are fine, but LiteralPath is safer.\n\nFrom the crack readme (_HOW TO RUN GAME!!.txt, ChemicalFlood): run Pure.exe as admin; _Redist has 6 installers (dxwebsetup, oalinst, vcredist_2015-2019 x86+x64, vcredist x86+x64) for missing-DLL errors; and the documented first-launch-is-windowed quirk that fixes itself once you set a resolution in the menu — recorded in post_apply_message so it isn't mistaken for a fault.\n\nOnly root exe is Pure.exe (5.4MB), so no launch-target ambiguity (unlike FUEL, where FUEL.exe is a GFWL dead end). Root also has an 11KB d3d9.dll dated 2013 — a wrapper/shim of some kind, NOT DXVK. Proton ignores it by default (builtin d3d9 wins); flagged WINEDLLOVERRIDES=\"d3d9=n,b\" as the fallback if the game proves to need it. binkw32.dll + fmodex/fmod_event present (Bink video + FMOD audio). Non-Steam -> computed appid. Native widescreen + 360 pad. Copy speed note: 10,124 files/4.94GB staged at only ~40 MB/s vs Blur's 106 MB/s for a LARGER 7.3GB — small-file SMB overhead, expected."
+}

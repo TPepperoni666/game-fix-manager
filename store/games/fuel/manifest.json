@@ -1,0 +1,24 @@
+{
+  "id": "fuel",
+  "name": "FUEL",
+  "aliases": ["FUEL (2009)", "Fuel"],
+  "detect": {
+    "install_dir_names": ["FUEL", "Fuel"],
+    "marker_files": ["FUEL.exe", "SecuLauncher.exe"]
+  },
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "SecuLauncher.exe",
+      "start_dir": "{game_dir}",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "FUEL (2009, Codemasters, non-Steam cracked copy) — Apply auto-adds the Steam shortcut on GE-Proton 10.34. Stage GE first with 'gfm stage-runner'.\n\nTHE KEY BIT — THE RIGHT EXE: the shortcut points at SecuLauncher.exe, NOT FUEL.exe. Straight from the crack's own instructions (_HOW TO RUN GAME!!.txt by ChemicalFlood): \"To Play The Game, right click and run SecuLauncher.exe as administrator — you cannot launch Fuel.exe as requires Windows Live Launcher.\" FUEL.exe is still gated behind Games for Windows Live (dead since 2014); SecuLauncher.exe is the crack's way in. If you ever re-add this game by hand, do NOT point it at FUEL.exe — it will not start.\n\nIF IT WON'T LAUNCH: install everything in the game's _Redist folder (4 programs) — that's the crack readme's fix for missing-DLL errors. Under Proton most of this is already provided, so try it first without.\n\nCONTROLLER + WIDESCREEN: this is a 2009 Codemasters racer — native widescreen and native Xbox 360 pad support, so Steam Input just works. Nothing to mod.\n\nFOV: FUEL's field of view is on the tight side at 16:10; PCGW lists FOV as an area of interest for this game. Nothing bundled — say the word if it bothers you and we'll look.",
+  "notes": "Built 2026-07-13 straight off Tony's Windows install at F:\\games\\FUEL (585 files / 3.84GB), staged to NAS _games/FUEL — no SD scan needed.\n\nLAUNCH TARGET IS THE WHOLE POINT: root exes are FUEL.exe (6.8MB), GameSetup.exe (0.5MB) and SecuLauncher.exe (0.1MB). The crack's readme is explicit that FUEL.exe requires the Windows Live launcher and CANNOT be used; SecuLauncher.exe is the entry point. Razor 1911 release (rzr-fuel.nfo: Codemasters, 2009-07-02, protection SecuROM); 1911.dll at the root is Razor's crack component. Do not 'tidy' the shortcut to FUEL.exe because it looks more canonical — it's the one that doesn't work.\n\n_Redist holds 4 installers for missing-DLL errors per the readme. GFWL is dead (services off 2014) which is exactly why the FUEL.exe path is a dead end even on Windows. Non-Steam -> computed appid (not in the gospel registry). Native widescreen + 360 pad (2009 Codemasters racer) so no controller/widescreen work needed. Copy speed note: 585 files/3.84GB staged at ~95 MB/s."
+}
