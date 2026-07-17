@@ -231,6 +231,19 @@ class App:
                 self.ui.msg(f"  localconfig snapshot failed: {e}", "warn")
         return snapped
 
+    def _payloads_writable(self) -> bool:
+        """Can we actually write to local-payloads? The NAS share is mounted
+        read-only on some setups, and capture needs to WRITE there — better a
+        clear message than an Errno 30 traceback part-way through a scan."""
+        try:
+            self.local_payloads.mkdir(parents=True, exist_ok=True)
+            probe = self.local_payloads / ".gfm-write-test"
+            probe.write_text("x", encoding="utf-8")
+            probe.unlink()
+            return True
+        except OSError:
+            return False
+
     def _capture_all(self) -> None:
         """Capture art + saves for every DETECTED game, then the settings
         snapshot. No prompting — undetected games are skipped silently."""
@@ -238,13 +251,25 @@ class App:
             self.ui.msg("No local-payloads dir (NAS/SD) set to capture into.",
                         "warn")
             return
+        if not self._payloads_writable():
+            self.ui.msg(f"Local-payloads is READ-ONLY: {self.local_payloads}",
+                        "error")
+            self.ui.msg("Capture has to write art/saves there, so it's being "
+                        "skipped. Re-run 🔌 Connect NAS Payloads to remount the "
+                        "share rw (older installs mounted it ro), or point "
+                        "--local-payloads at a writable path.", "warn")
+            return
         hits = 0
         for recipe in self.recipes:
             if recipe.requires_game and \
                     self.game_dir_for(recipe, interactive=False) is None:
                 continue
-            if self._capture_one(recipe, interactive=False):
-                hits += 1
+            # One unhappy game must never take down the whole scan.
+            try:
+                if self._capture_one(recipe, interactive=False):
+                    hits += 1
+            except OSError as e:
+                self.ui.msg(f"  ! {recipe.name}: capture failed — {e}", "warn")
         self.ui.msg(f"Captured art/saves for {hits} game(s).",
                     "success" if hits else "dim")
         snapped = self._snapshot_localconfig()
@@ -1055,7 +1080,13 @@ class App:
                    "payloads)\nAfter=network-online.target\n"
                    "Wants=network-online.target\n\n[Mount]\n"
                    f"What=//{host}/{share}\nWhere={mount_point}\nType=cifs\n"
-                   f"Options={cred_opt},uid={uid},gid={gid},ro,iocharset=utf8,"
+                   # rw, NOT ro: this mount started life as a read-only source
+                   # of payloads to copy FROM, but the share is now also where
+                   # capture writes art/saves and stage-runner writes runner
+                   # tarballs. With ro, 🔍 Scan died with
+                   # "OSError [Errno 30] Read-only file system" on the first
+                   # game it tried to capture.
+                   f"Options={cred_opt},uid={uid},gid={gid},rw,iocharset=utf8,"
                    "vers=3.0,_netdev,nofail\nTimeoutSec=20\n")
         sudo_write(f"/etc/systemd/system/{auto_unit}",
                    "[Unit]\nDescription=Automount for Game Fixes SMB share\n\n"
