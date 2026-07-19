@@ -625,18 +625,29 @@ class App:
         except (OSError, ValueError):
             return []
 
-    def cmd_backup_prefixes(self):
+    def cmd_backup_prefixes_saved(self):
+        """Re-run the backup over the selection you picked last time — no
+        picker, no re-ticking. Same thing the weekly timer does, on demand."""
+        return self.cmd_backup_prefixes(use_saved=True)
+
+    def cmd_backup_prefixes(self, use_saved: bool = False):
         """Back up Proton prefixes to the SD, in the same layout
         📥 Import Prefix Backups reads. Replaces the old Linux Prefix Manager's
         backup half. Cloud games are hidden behind a toggle so the list stays
-        the dozen that matter, not 80 Steam titles."""
-        self.ui.header("💼 BACK UP PREFIXES")
+        the dozen that matter, not 80 Steam titles.
+
+        use_saved skips the picker and backs up the remembered selection
+        (`gfm backup-prefixes-now` / the 🔁 menu entry); --auto is that plus
+        never prompting at all (the weekly timer)."""
+        self.ui.header("🔁 BACK UP PREFIXES (last selection)" if use_saved
+                       else "💼 BACK UP PREFIXES")
         if self.steam_root is None:
             self.ui.msg("No Steam root — nothing to back up.", "warn")
             return
-        auto = getattr(self.args, "auto", False)
+        unattended = getattr(self.args, "auto", False)
+        use_saved = use_saved or unattended
         cards = store.sd_card_roots()
-        if auto:
+        if unattended:
             # The weekly timer has no one to ask — NEVER prompt here or the
             # unattended run hangs forever waiting on stdin.
             if not cards:
@@ -670,18 +681,28 @@ class App:
         opted = set(self.cfg.get("prefix_backup_cloud", []))
         cloud_total = sum(1 for p in allp if p.has_cloud and p.appid not in opted)
 
-        # --auto (the weekly timer): back up the remembered selection, no UI.
-        if getattr(self.args, "auto", False):
+        # Skip the picker and use the remembered set (🔁 menu entry, or the
+        # weekly timer when unattended).
+        if use_saved:
             remembered = set(self.cfg.get("prefix_backup_selection", []))
             chosen = [p for p in allp if p.appid in remembered]
             if not chosen:
-                self.ui.msg("Weekly prefix backup: nothing selected yet — run "
-                            "💼 Back Up Prefixes once by hand to choose what to "
-                            "keep, and the timer will maintain it from then on.",
+                self.ui.msg("Nothing selected yet — run 💼 Back Up Prefixes "
+                            "once to choose what to keep. After that this (and "
+                            "the weekly timer) maintains exactly that set.",
                             "warn")
                 return
-            self.ui.msg(f"Weekly prefix backup: {len(chosen)} remembered "
-                        "prefix(es).", "info")
+            missing = len(remembered) - len(chosen)
+            self.ui.msg(f"Backing up {len(chosen)} remembered prefix(es)"
+                        + (f" ({missing} no longer in compatdata)"
+                           if missing > 0 else "") + ".", "info")
+            for p in chosen:
+                self.ui.msg(f"    {p.name}  ({self._gb(p.size)})", "dim")
+            if not unattended:
+                ok = self.ui.choose("Back these up now?",
+                                    ["✅ Yes, back up", "⬅️  Cancel"])
+                if not ok or not ok[0].startswith("✅"):
+                    return
             self._run_prefix_backups(chosen, dest)
             return
 
@@ -1329,6 +1350,7 @@ class App:
                 "🔗 Reconcile Prefixes (adopt existing compatdata)",
                 "🎨 Capture one game (art + saves)",
                 "💼 Back Up Prefixes (compatdata -> SD)",
+                "🔁 Back Up Prefixes Now (last selection, no picker)",
                 "📥 Import Prefix Backups (backup -> compatdata)",
                 "♻️  Restore Game Saves (one game)",
                 "🎚  Restore Per-Game Settings (framerate/tearing)",
@@ -1345,6 +1367,8 @@ class App:
                 self.cmd_capture()
             elif choice.startswith("💼"):
                 self.cmd_backup_prefixes()
+            elif choice.startswith("🔁"):
+                self.cmd_backup_prefixes_saved()
             elif choice.startswith("📥"):
                 self.cmd_import_prefixes()
             elif choice.startswith("♻"):
@@ -2197,6 +2221,7 @@ COMMANDS = {
     "reconcile": lambda app, a: app.cmd_reconcile(),
     "capture": lambda app, a: app.cmd_capture(),
     "backup-prefixes": lambda app, a: app.cmd_backup_prefixes(),
+    "backup-prefixes-now": lambda app, a: app.cmd_backup_prefixes_saved(),
     "import-prefixes": lambda app, a: app.cmd_import_prefixes(),
     "restore-saves": lambda app, a: app.cmd_restore_saves(),
     "restore-settings": lambda app, a: app.cmd_restore_settings(),

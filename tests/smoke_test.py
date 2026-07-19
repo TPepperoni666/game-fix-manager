@@ -1015,7 +1015,12 @@ def main():
         # the job forever waiting on stdin that never comes.
         for _fn in ("cmd_reclaim", "cmd_backup_prefixes"):
             _s = _insp.getsource(getattr(_gfm.App, _fn))
-            _ia = _s.index("if auto:")
+            # the unattended guard is named `auto` in one, `unattended` in the
+            # other — take whichever appears first
+            _guards = [_s.index(g) for g in ("if auto:", "if unattended:")
+                       if g in _s]
+            check(f"{_fn} has an unattended guard", bool(_guards))
+            _ia = min(_guards)
             _prompts = [c for c in ("self.ui.input(", "self.ui.choose(",
                                     "self.ui.confirm(", "_pick_reclaim(")
                         if c in _s]
@@ -1315,9 +1320,21 @@ def main():
         unknown = sorted({m for m in re.findall(r"app\.(\w+)\(", _src)
                           if not hasattr(gfm_mod.App, m)})
         check("every CLI handler targets a real App method", not unknown)
+        # "Back up with last selection" — skips the picker so a manual re-run
+        # doesn't mean re-ticking everything; --auto is that plus no prompts.
+        _bp = _insp.getsource(_gfm.App.cmd_backup_prefixes)
+        check("--auto implies use_saved (timer reuses the remembered set)",
+              "use_saved = use_saved or unattended" in _bp)
+        check("empty remembered set reports instead of silently doing nothing",
+              "Nothing selected yet" in _bp)
+        check("🔁 wrapper delegates with use_saved=True",
+              "use_saved=True" in _insp.getsource(
+                  _gfm.App.cmd_backup_prefixes_saved))
+
         for expected in ("scan", "save-restore", "deploy", "import-prefixes",
                          "restore-saves", "restore-settings", "scan-sd",
-                         "scan-steam", "reclaim", "setup-reclaim-timer"):
+                         "scan-steam", "reclaim", "setup-reclaim-timer",
+                         "backup-prefixes", "backup-prefixes-now"):
             check(f"CLI exposes '{expected}'", expected in gfm_mod.COMMANDS)
         methods = ("cmd_scan_all", "cmd_save_restore", "cmd_deploy_game",
                    "cmd_import_prefixes", "cmd_restore_saves", "cmd_capture",
