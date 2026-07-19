@@ -1181,6 +1181,54 @@ def main():
         check("restore for an unknown host is a safe no-op",
               ds.restore(dstate, dhome, host="mystery-pc", log=quiet) == 0)
 
+        # ---- prefix BACKUP (retires the old Linux Prefix Manager) ----------
+        # Writes the exact layout prefiximport reads, so backup+restore pair up.
+        print("== prefix backup (compatdata -> SD) ==")
+        from core import prefixbackup as pbk
+        check("safe_name matches the old tool's sanitiser",
+              pbk.safe_name("Tom Clancy's H.A.W.X") == "Tom_Clancy_s_H.A.W.X"
+              and pbk.safe_name("Project CARS 3") == "Project_CARS_3")
+        _pb = tmp / "pbk"
+        _mk = lambda n, cloud, steam=True, aid="1": pbk.PrefixInfo(
+            appid=aid, name=n, path=_pb, is_steam=steam, has_cloud=cloud)
+        _all = [_mk("The Crew", False, False, "10"), _mk("Driver SF", False, True, "11"),
+                _mk("Halo MCC", True, True, "12"), _mk("Project CARS 3", True, True, "13")]
+        check("cloud games hidden from the default list",
+              {p.name for p in pbk.candidates(_all, set())}
+              == {"The Crew", "Driver SF"})
+        check("show_cloud reveals them for picking",
+              len(pbk.candidates(_all, set(), show_cloud=True)) == 4)
+        check("an opted-in cloud game graduates to the main list",
+              {p.name for p in pbk.candidates(_all, {"13"})}
+              == {"The Crew", "Driver SF", "Project CARS 3"})
+
+        _src = tmp / "compat" / "4242"
+        (_src / "pfx" / "drive_c" / "users" / "steamuser" / "Documents").mkdir(parents=True)
+        (_src / "pfx" / "drive_c" / "users" / "steamuser" / "Documents" / "save.dat"
+         ).write_bytes(b"SAVE" * 64)
+        (_src / "pfx" / "drive_c" / "users" / "steamuser" / "Temp").mkdir()
+        (_src / "pfx" / "drive_c" / "users" / "steamuser" / "Temp" / "j.tmp"
+         ).write_bytes(b"J" * 4096)
+        _info = pbk.PrefixInfo(appid="4242", name="Test Game", path=_src,
+                               is_steam=False, has_cloud=False)
+        _dest = tmp / "pbk_sd" / "steamos_restore" / "prefix_backups"
+        _st = pbk.backup(_info, _dest, log=quiet)
+        _out = _dest / "Test_Game" / "4242"
+        check("backup copies the prefix contents",
+              (_out / "pfx" / "drive_c" / "users" / "steamuser" / "Documents"
+               / "save.dat").is_file())
+        check("Temp junk is skipped",
+              not (_out / "pfx" / "drive_c" / "users" / "steamuser" / "Temp").exists())
+        _st2 = pbk.backup(_info, _dest, log=quiet)
+        check("re-backup is incremental (nothing re-copied)",
+              _st2["copied"] == 0 and _st2["skipped"] > 0)
+        # The whole point: what backup writes, import can read.
+        from core import prefiximport as _pi
+        _found = _pi.list_backups([_dest])
+        check("prefiximport reads back what prefixbackup wrote",
+              len(_found) == 1 and _found[0].appid == "4242"
+              and _found[0].has_pfx)
+
         # ---- CLI wiring ---------------------------------------------------
         # A command in the parser's choices but missing a handler used to fall
         # through to the interactive menu — the command would silently "do

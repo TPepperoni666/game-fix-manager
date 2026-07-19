@@ -24,9 +24,9 @@ import traceback
 from pathlib import Path
 
 from core import (deckysettings, deploy, detect, engine, fetch, manifest,
-                  prefiximport, prefixes, reclaim, saves, sdmap, sdscan,
-                  shortcutsvdf, steamart, steamperf, steamscan, steamvdf,
-                  store)
+                  prefixbackup, prefiximport, prefixes, reclaim, saves, sdmap,
+                  sdscan, shortcutsvdf, steamart, steamperf, steamscan,
+                  steamvdf, store)
 from ui import get_ui
 
 STATUS_ICON = {engine.APPLIED: "✅", engine.NOT_APPLIED: "☐ ",
@@ -582,6 +582,133 @@ class App:
         self.ui.msg(f"{name}: prefix restored to {dst} ({files} files)",
                     "success")
 
+    def cmd_backup_prefixes(self):
+        """Back up Proton prefixes to the SD, in the same layout
+        📥 Import Prefix Backups reads. Replaces the old Linux Prefix Manager's
+        backup half. Cloud games are hidden behind a toggle so the list stays
+        the dozen that matter, not 80 Steam titles."""
+        self.ui.header("💼 BACK UP PREFIXES")
+        if self.steam_root is None:
+            self.ui.msg("No Steam root — nothing to back up.", "warn")
+            return
+        cards = store.sd_card_roots()
+        if not cards:
+            raw = self.ui.input("No SD card found — enter a destination root "
+                                "(blank to cancel)")
+            if not raw or not Path(raw).is_dir():
+                return
+            sd = Path(raw)
+        elif len(cards) == 1:
+            sd = cards[0]
+        else:
+            pick = self.ui.choose("Back up to which card?",
+                                  [str(c) for c in cards])
+            if not pick:
+                return
+            sd = Path(pick[0])
+        dest = prefixbackup.backup_root(sd)
+        self.ui.msg(f"🎯 Destination : {dest}", "dim")
+        self.ui.msg("(Sync that folder to the NAS with Syncthing for an "
+                    "off-device copy.)", "dim")
+        self.ui.msg("Scanning compatdata…", "dim")
+        allp = prefixbackup.enumerate_prefixes(self.steam_root, sd)
+        if not allp:
+            self.ui.msg("No prefixes found in compatdata.", "warn")
+            return
+        opted = set(self.cfg.get("prefix_backup_cloud", []))
+        cloud_total = sum(1 for p in allp if p.has_cloud and p.appid not in opted)
+
+        show_cloud = False
+        chosen = []
+        while True:
+            cands = prefixbackup.candidates(allp, opted, show_cloud)
+            by_label, labels = {}, []
+            toggle = (f"➕ Also show Steam Cloud games ({cloud_total} hidden)"
+                      if cloud_total and not show_cloud else None)
+            if toggle:
+                labels.append(toggle)
+            for p in cands:
+                kind = "non-Steam" if not p.is_steam else "Steam"
+                if p.has_cloud:
+                    kind += " · ☁" + (" opted in" if p.appid in opted else "")
+                mark = "✅" if p.backed_up else "  "
+                lbl = (f"{mark} {p.name}  ({self._gb(p.size)})  {kind}")
+                labels.append(lbl)
+                by_label[lbl] = p
+            hidden = "" if show_cloud else f", {cloud_total} cloud hidden"
+            picked = self.ui.choose(
+                f"Back up which prefixes?  ({len(cands)} shown{hidden}) — "
+                "←→ toggle, Enter confirm", labels, multi=True)
+            if not picked:
+                return
+            if toggle and toggle in picked:
+                show_cloud = True          # re-render with cloud games listed
+                continue
+            chosen = [by_label[p] for p in picked if p in by_label]
+            break
+        if not chosen:
+            return
+
+        # Any cloud game picked is remembered, so it graduates to the main list.
+        newly = [p.appid for p in chosen if p.has_cloud and p.appid not in opted]
+        if newly:
+            opted |= set(newly)
+            self.cfg["prefix_backup_cloud"] = sorted(opted)
+            store.save_config(self.cfg)
+            self.ui.msg(f"{len(newly)} cloud game(s) remembered — they'll show "
+                        "in the main list from now on.", "dim")
+
+        total = 0
+        for p in chosen:
+            _t, need, _s = prefixbackup.plan(p, dest)
+            total += need
+        free = deploy.free_space(sd)
+        self.ui.msg(f"To copy: {self._gb(total)} across {len(chosen)} prefix(es)"
+                    f"; free {self._gb(free)}", "info")
+        if free and total > free:
+            self.ui.msg(f"Not enough room on {sd}.", "error")
+            return
+        ok = self.ui.choose(f"Back up {len(chosen)} prefix(es)?",
+                            ["✅ Yes, back up", "⬅️  Cancel"])
+        if not ok or not ok[0].startswith("✅"):
+            return
+
+        done_n = 0
+        for p in chosen:
+            started = time.monotonic()
+
+            def _show(d, t, rel):
+                pct = (d * 100 // t) if t else 100
+                el = max(time.monotonic() - started, 0.001)
+                rate = d / el
+                eta = (t - d) / rate if rate > 0 else -1
+                nm = (rel[:30] + "…") if len(rel) > 31 else rel
+                self.ui.progress(
+                    f"  {p.name[:18]:18s} {pct:3d}%  {self._gb(d)}/{self._gb(t)}"
+                    f"  {rate / (1 << 20):5.1f} MB/s  ETA {self._eta(eta)}  {nm}")
+
+            try:
+                st = prefixbackup.backup(p, dest, progress=_show,
+                                         log=lambda m: self.ui.msg(m, "warn"))
+            except OSError as e:
+                self.ui.progress_done()
+                self.ui.msg(f"{p.name}: backup failed — {e}", "error")
+                continue
+            except KeyboardInterrupt:
+                self.ui.progress_done()
+                self.ui.msg(f"{p.name}: cancelled (re-run to resume)", "warn")
+                break
+            self.ui.progress_done()
+            self.ui.msg(f"  ✓ {p.name}: {st['copied']} file(s), "
+                        f"{self._gb(st['bytes'])}"
+                        + (f", {st['skipped']} unchanged" if st["skipped"] else "")
+                        + (f", {st['links']} symlink(s)" if st["links"] else ""),
+                        "success")
+            done_n += 1
+        self.ui.msg(f"Backed up {done_n} prefix(es) to {dest}.", "success")
+        self.ui.msg("📥 Import Prefix Backups restores these after a reimage.",
+                    "dim")
+
     def cmd_import_prefixes(self):
         """Restore prefixes backed up by the old Linux Prefix Manager into
         compatdata — the other half of the gospel-appid design."""
@@ -1099,6 +1226,7 @@ class App:
                 "📚 Scan Steam Libraries (inventory + buildids)",
                 "🔗 Reconcile Prefixes (adopt existing compatdata)",
                 "🎨 Capture one game (art + saves)",
+                "💼 Back Up Prefixes (compatdata -> SD)",
                 "📥 Import Prefix Backups (backup -> compatdata)",
                 "♻️  Restore Game Saves (one game)",
                 "🎚  Restore Per-Game Settings (framerate/tearing)",
@@ -1113,6 +1241,8 @@ class App:
                 self.cmd_reconcile()
             elif choice.startswith("🎨"):
                 self.cmd_capture()
+            elif choice.startswith("💼"):
+                self.cmd_backup_prefixes()
             elif choice.startswith("📥"):
                 self.cmd_import_prefixes()
             elif choice.startswith("♻"):
@@ -1964,6 +2094,7 @@ COMMANDS = {
     "scan-steam": lambda app, a: app.cmd_scan_steam(),
     "reconcile": lambda app, a: app.cmd_reconcile(),
     "capture": lambda app, a: app.cmd_capture(),
+    "backup-prefixes": lambda app, a: app.cmd_backup_prefixes(),
     "import-prefixes": lambda app, a: app.cmd_import_prefixes(),
     "restore-saves": lambda app, a: app.cmd_restore_saves(),
     "restore-settings": lambda app, a: app.cmd_restore_settings(),
