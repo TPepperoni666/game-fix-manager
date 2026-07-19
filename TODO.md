@@ -7,6 +7,12 @@ Last updated 2026-07-13. Deeper context lives in the Claude memory files
 
 ## 0. NEXT SESSION — start here (Tony's pick, 2026-07-13)
 
+> **Staging source is now `E:\Games`** (was `F:\games`). Use E:\Games for any
+> future robocopy to NAS `_games/`. Recipe *notes* still cite F:\games as where
+> they were built — harmless, historical; recipes reference the SD game_dir, not
+> the source drive.
+
+
 1. **Make the NAS writable on the Deck.** ⬆️ Update, then ⚙️ Settings →
    🔌 Connect NAS Payloads (needs sudo) to reinstall the mount unit as `rw`.
    **Why it matters:** the share is mounted `ro`, and capture WRITES there —
@@ -123,13 +129,32 @@ Everything below is written, unit-tested (159 smoke checks) and pushed, but
 - [x] **GE-Proton10-34 as the standard runner** — done. Every new recipe pins it
       unless the game needs otherwise (only Heroes of the Pacific deviates: it
       needs GE-Proton11-1 to launch at all).
-- [ ] **Weekly background scan → reclaim SD space for games removed from Steam.**
-      Tony's idea: a timer (systemd, like tcu-network.service) notices when a
-      non-Steam shortcut disappears from `shortcuts.vdf` and removes that game
-      from the SD.
+- [ ] **Weekly background scan → reclaim SD space for BIG games removed from
+      Steam.** Tony's idea, refined 2026-07-13: a timer (systemd, like
+      tcu-network.service) notices when the Steam shortcut for a
+      **tool-deployed** game disappears from `shortcuts.vdf` (i.e. Tony deleted
+      it), and if that game is **larger than 50 GB**, removes it from the SD.
 
-      The idea is sound; the naive implementation is **destructive and wrong**.
-      Hazards to design around, all of them real:
+      **The >50 GB floor is the key safety feature, not just convenience.** Every
+      game whose save lives in the GAME FOLDER (The Crew's `data.bin` 24.6GB,
+      Simpsons' `Save1` 2.2GB, HOTP — all retro titles) is well under 50 GB, so
+      the threshold makes them **ineligible by construction**. What's left over
+      50 GB is big modern AAA (Death Stranding 2 122GB, RE Requiem 75GB) whose
+      saves live in the PREFIX and survive deletion (hazard 4). So the threshold
+      excludes the only case that could actually lose data. Keep the save_paths
+      guard anyway as defence-in-depth, but the floor is what makes this safe.
+
+      **The trigger, precisely:** a game is a reclaim candidate only if ALL of:
+      (a) it was DEPLOYED by the tool from NAS `_games/` — needs a deployed-games
+      record (write one when `deploy` runs); (b) it has a recipe with a
+      steam_shortcut + pinned gospel appid; (c) that appid was in LAST week's
+      `shortcuts.vdf` snapshot but is ABSENT now; (d) it's still staged in NAS
+      `_games/` (so deletion is a re-copy away, never a loss); (e) its on-SD size
+      is > 50 GB. Non-Steam shortcuts live in `shortcuts.vdf` (binary — we
+      already parse it via `core/shortcutsvdf.py`), NOT the `appmanifest_*.acf`
+      files (those are Steam-owned games).
+
+      Remaining hazards to design around, all still real:
 
       1. **"No shortcut" ≠ "removed".** A freshly deployed game has no shortcut
          until you Apply — the gap between ⬇️ Deploy and 🔧 Apply is exactly
