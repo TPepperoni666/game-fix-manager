@@ -353,10 +353,23 @@ class App:
             return
         root = deploy.staged_root(self.local_payloads)
         self.ui.msg(f"📂 Staged games: {root}", "dim")
+        if not deploy.mount_reachable(self.local_payloads):
+            self.ui.msg(f"The NAS mount looks DOWN ({self.local_payloads} is "
+                        "empty/unreachable).", "error")
+            self.ui.msg("An idle automount drops after a few minutes and the "
+                        "guest re-mount can fail silently. Wake it — open the "
+                        "share once in Files/Dolphin, or re-run 🔌 Connect NAS "
+                        "Payloads — then try again. (A real SMB login instead of"
+                        " guest would stop this; see TODO.)", "warn")
+            return
         games = deploy.list_staged(self.local_payloads)
         if not games:
-            self.ui.msg(f"Nothing staged yet. Copy a game folder to {root}/ "
-                        "(e.g. '_games/Battlefield 3/') and re-run.", "warn")
+            if not root.is_dir():
+                self.ui.msg(f"NAS is up but there's no _games/ folder yet. "
+                            f"Create {root}/ and stage a game into it.", "warn")
+            else:
+                self.ui.msg(f"Nothing staged yet. Copy a game folder to {root}/ "
+                            "(e.g. '_games/Battlefield 3/') and re-run.", "warn")
             return
         dest_root = self._deploy_dest_root()
         if dest_root is None:
@@ -1537,7 +1550,12 @@ class App:
                    "vers=3.0,_netdev,nofail\nTimeoutSec=20\n")
         sudo_write(f"/etc/systemd/system/{auto_unit}",
                    "[Unit]\nDescription=Automount for Game Fixes SMB share\n\n"
-                   f"[Automount]\nWhere={mount_point}\nTimeoutIdleSec=300\n\n"
+                   # No TimeoutIdleSec: once mounted, STAY mounted until reboot.
+                   # It used to idle-unmount after 300s, and the guest re-mount
+                   # then failed silently — leaving an empty folder that read as
+                   # "nothing staged". A guest share + flaky re-mount is why;
+                   # keeping it mounted sidesteps the re-mount entirely.
+                   f"[Automount]\nWhere={mount_point}\n\n"
                    "[Install]\nWantedBy=multi-user.target\n")
 
         subprocess.run(["sudo", "systemctl", "daemon-reload"], check=True)

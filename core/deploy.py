@@ -53,6 +53,20 @@ def staged_root(local_payloads: Path) -> Path:
     return local_payloads / GAMES_DIR
 
 
+def mount_reachable(local_payloads: Path) -> bool:
+    """Is the local-payloads (NAS) mount actually up?
+
+    A systemd automount idle-drops after a few minutes, and a failed guest
+    re-mount leaves an EMPTY mountpoint rather than raising — so an unreachable
+    NAS otherwise looks like 'nothing staged'. The share always has content
+    (_runners/, per-recipe folders), so 'no entries at all' means the mount is
+    down, not that the share is empty."""
+    try:
+        return any(True for _ in local_payloads.iterdir())
+    except OSError:
+        return False
+
+
 def tree_stats(root: Path) -> tuple[int, int]:
     """(file_count, total_bytes) — tolerant of unreadable entries.
 

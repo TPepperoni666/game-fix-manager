@@ -965,6 +965,16 @@ def main():
               dep.measure(staged[0]).files == 3)
         check("no _games dir -> empty list, no crash",
               dep.list_staged(dp_root / "absent") == [])
+        # A dropped automount looks like an EMPTY folder, not an error — so the
+        # deploy screen must tell "NAS down" from "nothing staged" (it read as
+        # "nothing staged", which is what made the menu look empty).
+        check("mount_reachable: populated share -> up", dep.mount_reachable(dp_nas))
+        check("mount_reachable: missing path -> down",
+              not dep.mount_reachable(dp_root / "gone"))
+        _empty = dp_root / "empty_mountpoint"
+        _empty.mkdir()
+        check("mount_reachable: empty mountpoint -> down (dropped automount)",
+              not dep.mount_reachable(_empty))
         # The menu marks what's already on the card, but must do it with ONE
         # stat per game — not by re-walking trees (that's what made it slow).
         check("is_deployed: false before the copy",
