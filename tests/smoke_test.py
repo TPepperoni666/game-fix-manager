@@ -1110,6 +1110,38 @@ def main():
               and (dep.staged_root(rc_nas) / "Big").is_dir()
               and "Big" not in r.deployed)
 
+        # ---- per-game settings capture/restore (Gamescope block) ----------
+        # localconfig.vdf keeps the Deck's per-game framerate/tearing/frame-
+        # limit under "Gamescope", keyed by appid. Restore must be SURGICAL:
+        # merge only those back into a fresh localconfig, touch nothing else.
+        print("== per-game settings (Gamescope restore) ==")
+        from core import steamperf as sp
+        snap_tree = {"UserLocalConfigStore": {
+            "friends": {"1": {"name": "keep me"}},
+            "Gamescope": {
+                "AppTargetFrameRate": {"111": "60", "222": "144"},
+                "AllowTearing": {"111": "0"},
+                "DisableFrameLimit": {"222": "1"}}}}
+        saved = sp.extract(snap_tree)
+        check("extract pulls the per-appid Gamescope maps",
+              saved["AppTargetFrameRate"] == {"111": "60", "222": "144"}
+              and saved["AllowTearing"] == {"111": "0"})
+        # a fresh post-reimage localconfig with OTHER data but no Gamescope
+        fresh = {"UserLocalConfigStore": {"friends": {"9": {"name": "fresh"}}}}
+        n = sp.restore_into(fresh, saved)
+        check("restore merges every saved value", n == 4)
+        check("restore reproduces the settings exactly",
+              sp.extract(fresh) == saved)
+        check("restore is surgical — untouched keys survive",
+              steamvdf._child_ci(sp._store(fresh), "friends")
+              == {"9": {"name": "fresh"}})
+        n2 = sp.restore_into(fresh, saved, only_appids={"111"})
+        check("only_appids restores just the named game",
+              sum(1 for m in sp.extract(fresh).values() for a in m if a == "222")
+              >= 1 and n2 == 2)  # 111 in AppTargetFrameRate + AllowTearing
+        check("empty snapshot -> nothing extracted",
+              sp.extract({"UserLocalConfigStore": {}}) == {})
+
         # ---- CLI wiring ---------------------------------------------------
         # A command in the parser's choices but missing a handler used to fall
         # through to the interactive menu — the command would silently "do
@@ -1132,8 +1164,8 @@ def main():
                           if not hasattr(gfm_mod.App, m)})
         check("every CLI handler targets a real App method", not unknown)
         for expected in ("scan", "save-restore", "deploy", "import-prefixes",
-                         "restore-saves", "scan-sd", "scan-steam", "reclaim",
-                         "setup-reclaim-timer"):
+                         "restore-saves", "restore-settings", "scan-sd",
+                         "scan-steam", "reclaim", "setup-reclaim-timer"):
             check(f"CLI exposes '{expected}'", expected in gfm_mod.COMMANDS)
         methods = ("cmd_scan_all", "cmd_save_restore", "cmd_deploy_game",
                    "cmd_import_prefixes", "cmd_restore_saves", "cmd_capture",

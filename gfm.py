@@ -25,7 +25,7 @@ from pathlib import Path
 
 from core import (deploy, detect, engine, fetch, manifest, prefiximport,
                   prefixes, reclaim, saves, sdmap, sdscan, shortcutsvdf,
-                  steamart, steamscan, steamvdf, store)
+                  steamart, steamperf, steamscan, steamvdf, store)
 from ui import get_ui
 
 STATUS_ICON = {engine.APPLIED: "✅", engine.NOT_APPLIED: "☐ ",
@@ -692,6 +692,72 @@ class App:
         self.ui.msg(f"Restored {total} save file(s)/folder(s) across "
                     f"{len(pending)} game(s).", "success" if total else "warn")
 
+    def _settings_restore_plan(self):
+        """(uid, snapshot, live, count) for each Steam user whose captured
+        localconfig snapshot has per-game Gamescope settings to restore."""
+        if self.steam_root is None or self.local_payloads is None:
+            return []
+        state = self.local_payloads / "_state"
+        plan = []
+        for live in steamvdf._localconfigs(self.steam_root):
+            uid = live.parent.parent.name
+            snap = steamperf.snapshot_path(state, uid)
+            try:
+                if not snap.is_file():
+                    continue
+                saved = steamperf.extract(steamvdf.vdf_loads(
+                    snap.read_text(encoding="utf-8", errors="surrogateescape")))
+            except OSError:
+                continue
+            cnt = sum(len(m) for m in saved.values())
+            if cnt:
+                plan.append((uid, snap, live, cnt))
+        return plan
+
+    def cmd_restore_settings(self):
+        """Merge captured per-game Deck settings (framerate limit / tearing /
+        frame-limit toggle) from the _state snapshot back into localconfig.vdf.
+        Surgical — only the Gamescope per-appid entries; everything else Steam
+        regenerated is left alone. Steam closes briefly (it rewrites the file
+        on exit)."""
+        self.ui.header("🎚  RESTORE PER-GAME SETTINGS")
+        if self.steam_root is None:
+            self.ui.msg("No Steam root — nothing to restore into.", "warn")
+            return
+        if self.local_payloads is None:
+            self.ui.msg("No local-payloads dir — nowhere to restore from.",
+                        "warn")
+            return
+        plan = self._settings_restore_plan()
+        if not plan:
+            self.ui.msg("No captured per-game settings for this device's Steam "
+                        "user(s). Run 🔍 Scan (or 🎨 Capture) on a machine that "
+                        "HAS the settings first — the snapshot lives on the NAS "
+                        "at _state/localconfig-<uid>.vdf.", "warn")
+            return
+        total = sum(c for _u, _s, _l, c in plan)
+        self.ui.msg(f"{total} per-game setting(s) to restore across "
+                    f"{len(plan)} Steam user(s) — framerate/tearing/frame-limit,"
+                    " keyed by appid (gospel-pinned games line up).", "info")
+        if not self.ui.confirm("Restore them? Steam closes briefly to write "
+                               "localconfig.vdf.", danger=True):
+            return
+        was_running = steamvdf.steam_running()
+        if was_running:
+            steamvdf.close_steam(lambda m: self.ui.msg(m, "warn"))
+        written = 0
+        for uid, snap, live, _c in plan:
+            try:
+                n = steamperf.restore_file(snap, live)
+                written += n
+                self.ui.msg(f"  user {uid}: {n} setting(s) merged", "dim")
+            except OSError as e:
+                self.ui.msg(f"  user {uid}: failed — {e}", "error")
+        if was_running:
+            steamvdf.start_steam(lambda m: self.ui.msg(m, "warn"))
+        self.ui.msg(f"Restored {written} per-game setting(s).",
+                    "success" if written else "warn")
+
     def cmd_restore_saves(self):
         """Put ONE game's captured game-folder saves back. The ♻️ Save Restore
         bundle does every game at once."""
@@ -913,10 +979,15 @@ class App:
         self.ui.msg("Install your games first — Steam wipes compatdata around "
                     "first launch, so restoring last is what sticks.", "warn")
         self.ui.msg("", "dim")
-        self.ui.msg("── 1/2  Importing prefix backups " + "─" * 9, "info")
+        self.ui.msg("── 1/3  Importing prefix backups " + "─" * 9, "info")
         self.cmd_import_prefixes()
-        self.ui.msg("── 2/2  Restoring game-folder saves " + "─" * 6, "info")
+        self.ui.msg("── 2/3  Restoring game-folder saves " + "─" * 6, "info")
         self._restore_saves_all()
+        self.ui.msg("── 3/3  Restoring per-game settings " + "─" * 6, "info")
+        if self._settings_restore_plan():
+            self.cmd_restore_settings()
+        else:
+            self.ui.msg("No captured per-game settings to restore.", "dim")
         self.ui.msg("", "dim")
         self.ui.msg("Save restore complete.", "success")
 
@@ -970,6 +1041,7 @@ class App:
                 "🎨 Capture one game (art + saves)",
                 "📥 Import Prefix Backups (backup -> compatdata)",
                 "♻️  Restore Game Saves (one game)",
+                "🎚  Restore Per-Game Settings (framerate/tearing)",
                 "🩺 Test The Crew Server",
                 "⬅️  Back"])
             choice = choice[0] if choice else "⬅️  Back"
@@ -985,6 +1057,8 @@ class App:
                 self.cmd_import_prefixes()
             elif choice.startswith("♻"):
                 self.cmd_restore_saves()
+            elif choice.startswith("🎚"):
+                self.cmd_restore_settings()
             elif choice.startswith("🩺"):
                 self.cmd_test_crew()
             else:
@@ -1827,6 +1901,7 @@ COMMANDS = {
     "capture": lambda app, a: app.cmd_capture(),
     "import-prefixes": lambda app, a: app.cmd_import_prefixes(),
     "restore-saves": lambda app, a: app.cmd_restore_saves(),
+    "restore-settings": lambda app, a: app.cmd_restore_settings(),
     # setup / diagnostics
     "setup-nas": lambda app, a: app.cmd_setup_nas(),
     "stage-runner": lambda app, a: app.cmd_stage_runner(),
