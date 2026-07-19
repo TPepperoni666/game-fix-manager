@@ -294,7 +294,8 @@ class App:
         snapped = self._snapshot_localconfig()
         if snapped:
             self.ui.msg(f"Snapshotted localconfig.vdf for {snapped} user(s) "
-                        f"-> {state} (perf/display source).", "dim")
+                        f"-> {self.local_payloads / '_state'} "
+                        "(perf/display source).", "dim")
 
     @staticmethod
     def _gb(n: float) -> str:
@@ -306,10 +307,33 @@ class App:
             return "--:--"
         return f"{int(seconds) // 60:d}:{int(seconds) % 60:02d}"
 
+    # The steps that make a game APPEAR IN STEAM AND RUN — run automatically
+    # right after a deploy, so a copied game is immediately playable and
+    # 🔧 Apply Fixes is left to mean the actual fixes (widescreen, perf, mods).
+    SETUP_STEP_TYPES = ("install_runner", "proton_version", "steam_shortcut")
+
+    def _deploy_dest_root(self):
+        """Which SD Games/ folder to deploy into (prompt only if ambiguous)."""
+        games_dirs = sdscan.find_games_dirs()
+        if not games_dirs:
+            raw = self.ui.input("No SD Games/ folder found — enter one "
+                                "(blank to cancel)")
+            if not raw or not Path(raw).is_dir():
+                if raw:
+                    self.ui.msg(f"Not a directory: {raw}", "error")
+                return None
+            return Path(raw)
+        if len(games_dirs) == 1:
+            return games_dirs[0]
+        picked = self.ui.choose("Deploy to which card?",
+                                [str(g) for g in games_dirs])
+        return Path(picked[0]) if picked else None
+
     def cmd_deploy_game(self):
-        """Pull a game staged on the NAS (_games/<name>/) onto the SD card.
-        The one thing a reimage restore couldn't put back: the game itself."""
-        self.ui.header("⬇️  DEPLOY GAME FROM NAS")
+        """Copy one or more staged games (NAS _games/<name>/) onto the SD, then
+        AUTO-CREATE each one's Steam shortcut so it's immediately playable. The
+        game files are the one thing a reimage restore couldn't put back."""
+        self.ui.header("⬇️  DEPLOY GAMES FROM NAS")
         if self.local_payloads is None:
             self.ui.msg("No local-payloads dir (NAS/SD) configured — run "
                         "🔌 Connect NAS Payloads first.", "warn")
@@ -321,31 +345,14 @@ class App:
             self.ui.msg(f"Nothing staged yet. Copy a game folder to {root}/ "
                         "(e.g. '_games/Battlefield 3/') and re-run.", "warn")
             return
-        games_dirs = sdscan.find_games_dirs()
-        if not games_dirs:
-            raw = self.ui.input("No SD Games/ folder found — enter one "
-                                "(blank to cancel)")
-            if not raw:
-                return
-            dest_root = Path(raw)
-            if not dest_root.is_dir():
-                self.ui.msg(f"Not a directory: {dest_root}", "error")
-                return
-        elif len(games_dirs) == 1:
-            dest_root = games_dirs[0]
-        else:
-            picked = self.ui.choose("Deploy to which card?",
-                                    [str(g) for g in games_dirs])
-            if not picked:
-                return
-            dest_root = Path(picked[0])
+        dest_root = self._deploy_dest_root()
+        if dest_root is None:
+            return
         self.ui.msg(f"🎯 Destination : {dest_root}", "dim")
         self.ui.msg("", "dim")
 
-        # Names + a ONE-STAT presence check. Measuring every game here meant
-        # two full tree walks each (a round-trip per file over SMB) before the
-        # menu even drew — 43s+ with HAWX staged. The picked game gets measured
-        # below; the rest cost one is_dir() apiece.
+        # Multi-select. Names + one is_dir() marker each (cheap) — NOT a tree
+        # walk; the picked games get measured just before they copy.
         by_label, on_card = {}, 0
         for g in games:
             here = deploy.is_deployed(g, dest_root)
@@ -353,83 +360,137 @@ class App:
             mark = "✅" if here else "⬇️ "
             state = "on the card" if here else "not copied yet"
             by_label[f"{mark} {g.name} — {state}"] = g
-        back = "⬅️  Cancel"
         picked = self.ui.choose(
-            f"Deploy which game?  ({len(games)} staged, {on_card} on the card)",
-            list(by_label) + [back])
-        if not picked or picked[0] == back:
+            f"Deploy which games?  ({len(games)} staged, {on_card} on the "
+            "card) — ←→ toggle, Enter confirm", list(by_label), multi=True)
+        chosen = [by_label[p] for p in picked if p in by_label]
+        if not chosen:
             return
-        game = by_label[picked[0]]
 
-        self.ui.msg(f"Measuring {game.name}…", "dim")
-        deploy.measure(game)
-        todo, need, skipped = deploy.plan(game, dest_root)
-        self.ui.msg(f"{game.name}: {self._gb(game.size)}, {game.files} file(s)",
-                    "info")
-        if not todo:
-            self.ui.msg(f"{game.name} is already fully on the card — nothing "
-                        "to copy.", "success")
-            return
-        if skipped:
-            self.ui.msg(f"↻ resuming — {skipped} file(s) already there, "
-                        f"{self._gb(need)} still to copy", "info")
-
+        # Measure the picked ones and size the batch against free space.
+        self.ui.msg(f"Measuring {len(chosen)} game(s)…", "dim")
+        plans = []
+        need_total = 0
+        for g in chosen:
+            deploy.measure(g)
+            todo, need, skipped = deploy.plan(g, dest_root)
+            plans.append((g, todo, need, skipped))
+            need_total += need
+        pending = [(g, todo, need, sk) for (g, todo, need, sk) in plans if todo]
+        already = len(chosen) - len(pending)
+        if already:
+            self.ui.msg(f"{already} already fully on the card — skipping those.",
+                        "dim")
+        if not pending:
+            self.ui.msg("Everything picked is already on the card. Setting up "
+                        "shortcuts anyway…", "info")
         free = deploy.free_space(dest_root)
-        self.ui.msg(f"Need {self._gb(need)}, free {self._gb(free)}", "dim")
-        if free and need > free:
-            self.ui.msg(f"Not enough room on {dest_root}: needs "
-                        f"{self._gb(need)}, only {self._gb(free)} free. "
-                        "Freeing space now beats failing at 95%.", "error")
+        self.ui.msg(f"To copy: {self._gb(need_total)} across {len(pending)} "
+                    f"game(s); free {self._gb(free)}", "info")
+        if free and need_total > free:
+            self.ui.msg(f"Not enough room: needs {self._gb(need_total)}, only "
+                        f"{self._gb(free)} free. Deselect some or free space.",
+                        "error")
             return
-        ok = self.ui.choose(f"Copy {game.name} ({self._gb(need)}) to "
-                            f"{dest_root}?", ["✅ Yes, copy", "⬅️  Cancel"])
-        if not ok or not ok[0].startswith("✅"):
-            return
+        if pending:
+            ok = self.ui.choose(
+                f"Copy {len(pending)} game(s) ({self._gb(need_total)})?",
+                ["✅ Yes, copy", "⬅️  Cancel"])
+            if not ok or not ok[0].startswith("✅"):
+                return
 
+        deployed_ok = []
+        for g, todo, need, skipped in plans:
+            dest = dest_root / g.name
+            if todo:
+                if not self._copy_one_game(g, dest_root, need, skipped):
+                    continue
+            deployed = self.cfg.setdefault("deployed", {})
+            prev = deployed.get(g.name, {})
+            deployed[g.name] = {
+                "size": g.size, "sd_dir": str(dest),
+                "shortcut_seen": prev.get("shortcut_seen", False)}
+            store.save_config(self.cfg)
+            deployed_ok.append((g, dest))
+
+        # AUTO-SETUP: create each game's Steam shortcut (+ runner/Proton) so it
+        # lands playable. Fixes stay for 🔧 Apply. One Steam bounce for the lot.
+        self.ui.msg("", "dim")
+        self.ui.msg("── Setting up Steam shortcuts " + "─" * 12, "info")
+        made = 0
+        for g, dest in deployed_ok:
+            if self._setup_shortcut(g.name, dest):
+                made += 1
+        self.flush_vdf_writes()
+        # Latch shortcut_seen for what we just added, so the reclaim scan is
+        # armed WITHOUT needing a prior run while the shortcut existed.
+        for g, _dest in deployed_ok:
+            if self.cfg.get("deployed", {}).get(g.name):
+                self.cfg["deployed"][g.name]["shortcut_seen"] = True
+        store.save_config(self.cfg)
+        self.ui.msg("", "dim")
+        self.ui.msg(f"Deployed {len(deployed_ok)} game(s); {made} now have a "
+                    "Steam shortcut. Use 🔧 Apply Fixes for widescreen/perf/mod "
+                    "recipes.", "success")
+
+    def _copy_one_game(self, game, dest_root, need, skipped) -> bool:
+        """Copy one staged game with a live progress line. Returns success."""
+        if skipped:
+            self.ui.msg(f"↻ {game.name}: resuming, {self._gb(need)} left", "dim")
         started = time.monotonic()
 
-        def _show(done: int, total: int, rel: str) -> None:
+        def _show(done, total, rel):
             pct = (done * 100 // total) if total else 100
             elapsed = max(time.monotonic() - started, 0.001)
             rate = done / elapsed
             eta = (total - done) / rate if rate > 0 else -1
-            name = (rel[:38] + "…") if len(rel) > 39 else rel
+            nm = (rel[:34] + "…") if len(rel) > 35 else rel
             self.ui.progress(
-                f"  {pct:3d}%  {self._gb(done)}/{self._gb(total)}  "
-                f"{rate / (1 << 20):5.1f} MB/s  ETA {self._eta(eta)}  {name}")
+                f"  {game.name[:20]:20s} {pct:3d}%  "
+                f"{self._gb(done)}/{self._gb(total)}  {rate / (1 << 20):5.1f} "
+                f"MB/s  ETA {self._eta(eta)}  {nm}")
 
         try:
             stats = deploy.deploy(game, dest_root, progress=_show,
                                   log=lambda m: self.ui.msg(m, "warn"))
         except OSError as e:
             self.ui.progress_done()
-            self.ui.msg(f"Copy failed: {e}", "error")
-            self.ui.msg("Re-run to resume — finished files are kept.", "warn")
-            return
+            self.ui.msg(f"{game.name}: copy failed — {e} (re-run to resume)",
+                        "error")
+            return False
         except KeyboardInterrupt:
             self.ui.progress_done()
-            self.ui.msg("Cancelled. Re-run to resume where it stopped.", "warn")
-            return
+            self.ui.msg(f"{game.name}: cancelled (re-run to resume)", "warn")
+            return False
         self.ui.progress_done()
-        # Record that GFM deployed this game — the reclaim scan only ever
-        # deletes things it can prove it copied here. Preserve a latched
-        # shortcut_seen if we're re-deploying something.
-        deployed = self.cfg.setdefault("deployed", {})
-        prev = deployed.get(game.name, {})
-        deployed[game.name] = {
-            "size": stats["bytes"], "sd_dir": str(stats["dest"]),
-            "shortcut_seen": prev.get("shortcut_seen", False),
-        }
-        store.save_config(self.cfg)
         secs = stats["seconds"]
         rate = stats["bytes"] / max(secs, 0.001) / (1 << 20)
-        self.ui.msg(f"{game.name} deployed to {stats['dest']}", "success")
-        self.ui.msg(f"  {stats['copied']} file(s), {self._gb(stats['bytes'])} "
-                    f"in {int(secs) // 60}m {int(secs) % 60}s ({rate:.1f} MB/s)"
-                    + (f", {stats['skipped']} already there"
-                       if stats["skipped"] else ""), "dim")
-        self.ui.msg("Now run 📁 Scan SD so the map picks it up, then 🔧 Apply "
-                    "to add its shortcut + fixes.", "dim")
+        self.ui.msg(f"  ✓ {game.name}: {self._gb(stats['bytes'])} in "
+                    f"{int(secs) // 60}m {int(secs) % 60}s ({rate:.1f} MB/s)",
+                    "success")
+        return True
+
+    def _setup_shortcut(self, folder_name: str, dest: Path) -> bool:
+        """Run just the make-it-appear-in-Steam steps for the recipe matching a
+        freshly-deployed folder. Records the path so 🔧 Apply finds it later.
+        Returns True if a matching recipe's shortcut steps ran."""
+        recipe, _sig = sdscan._match_folder(dest, self.recipes)
+        if recipe is None:
+            self.ui.msg(f"  · {folder_name}: no recipe — copied, but no shortcut "
+                        "made (add it in Steam by hand, or write a recipe).",
+                        "dim")
+            return False
+        setup = [s for s in recipe.steps if s["type"] in self.SETUP_STEP_TYPES]
+        if not setup:
+            self.ui.msg(f"  · {recipe.name}: recipe has no shortcut step — "
+                        "nothing to set up.", "dim")
+            return False
+        # Remember where it lives so Apply Fixes never has to prompt for a path.
+        self.cfg.setdefault("game_paths", {})[recipe.id] = str(dest)
+        store.save_config(self.cfg)
+        import dataclasses
+        only_setup = dataclasses.replace(recipe, steps=setup)
+        return self.run_engine(only_setup, dest, engine.apply_recipe)
 
     def _registry_by_appid(self) -> dict:
         """prefix_registry.json entries keyed by appid string."""
@@ -1664,7 +1725,7 @@ class App:
                 "🔧 Apply Fixes",
                 "📋 Status",
                 "↩️  Revert a Game",
-                "⬇️  Deploy Game from NAS (copy game to SD)",
+                "⬇️  Deploy Games from NAS (copy to SD + auto-shortcut)",
                 "🔍 Scan (SD + Steam + prefixes + capture saves/art)",
                 "♻️  Save Restore (prefix backups + game saves)",
                 "⚙️  Settings (NAS, runners, mirror, update, install)",

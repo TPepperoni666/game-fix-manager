@@ -975,6 +975,19 @@ def main():
 
         check("is_deployed: true once it's on the card",
               dep.is_deployed(staged[0], dp_sd))
+        # Deploy auto-creates shortcuts: the SETUP steps (make it appear in
+        # Steam + run) fire on deploy; everything else is left for Apply Fixes.
+        import inspect as _insp
+        import gfm as _gfm
+        check("deploy setup-steps = runner/proton/shortcut only",
+              set(_gfm.App.SETUP_STEP_TYPES)
+              == {"install_runner", "proton_version", "steam_shortcut"})
+        _dsrc = _insp.getsource(_gfm.App.cmd_deploy_game)
+        check("deploy multi-selects games", "multi=True" in _dsrc)
+        check("deploy auto-runs shortcut setup + one Steam bounce",
+              "_setup_shortcut" in _dsrc and "flush_vdf_writes" in _dsrc)
+        check("deploy latches shortcut_seen (arms reclaim without a prior run)",
+              "shortcut_seen" in _dsrc)
 
         again = dep.deploy(staged[0], dp_sd)
         check("re-deploy is a no-op (resume skips identical files)",
