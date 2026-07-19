@@ -1394,6 +1394,52 @@ def main():
         check("pitcrew returns None-path error for a missing data dir",
               _pc._resolve_ci(tmp, "nope/Data_Win32") is None)
 
+        # --- scan records HOW a game launches --------------------------
+        # Recording only the appid meant a hand-edit in Steam (different
+        # Proton, edited launch options) was invisible in the map and had to
+        # be asked about. These assert the round-trip: write a shortcut,
+        # scan, see the actual values.
+        from core import shortcutsvdf as _sc
+        sroot = tmp / "steamlaunch"
+        (sroot / "userdata" / "1" / "config").mkdir(parents=True, exist_ok=True)
+        (sroot / "config").mkdir(parents=True, exist_ok=True)
+        _sc.ensure_shortcut(sroot, "FUEL", "/games/FUEL/SecuLauncher.exe",
+                            "/games/FUEL",
+                            launch_options='WINEDLLOVERRIDES="xlive=n,b" %command%',
+                            appid=1234)
+        desc = _sc.describe(sroot, ["FUEL"])
+        check("describe() finds the shortcut", desc is not None)
+        check("describe() reports the target exe",
+              desc["exe"].endswith("SecuLauncher.exe"))
+        check("describe() reports launch options verbatim",
+              "xlive=n,b" in desc["launch_options"])
+        check("describe() strips Steam's quoting off Exe",
+              not desc["exe"].startswith('"'))
+        check("describe() returns None for an unknown game",
+              _sc.describe(sroot, ["No Such Game"]) is None)
+
+        # A changed launch option must show as changed.
+        _sc.set_launch_options(sroot, ["FUEL"], "PROTON_LOG=1 %command%")
+        check("a hand-edited launch option is visible on re-read",
+              _sc.describe(sroot, ["FUEL"])["launch_options"]
+              == "PROTON_LOG=1 %command%")
+
+        from core import sdmap as _sd
+        class _R:
+            id, name, steam_appid = "fuel", "FUEL", None
+            all_names = ["FUEL"]
+        info = _sd._launch_info(_R(), sroot)
+        check("map records the launch block", "launch" in info)
+        check("map's launch block carries the exe + options",
+              info["launch"]["exe"].endswith("SecuLauncher.exe")
+              and "PROTON_LOG=1" in info["launch"]["launch_options"])
+        check("map still records the shortcut appid",
+              info["shortcut_appid"] == 1234)
+        # A scan must never die on unreadable Steam config.
+        broken = tmp / "nonexistent-steam"
+        check("_launch_info survives a missing steam root",
+              _sd._launch_info(_R(), broken)["shortcut_appid"] is None)
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

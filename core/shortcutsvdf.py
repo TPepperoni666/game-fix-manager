@@ -168,6 +168,37 @@ def get_launch_options(steam_root: Path, names: list[str]) -> dict[str, str]:
     return result
 
 
+def describe(steam_root: Path, names: list[str]) -> dict | None:
+    """Everything about HOW a matching shortcut launches — appid, target exe,
+    start dir, launch options. None if no shortcut matches.
+
+    This is what makes a hand-edit visible in the SD map. Recording only the
+    appid says a shortcut exists; recording this says what it actually does,
+    so a change made in Steam (different Proton, edited launch options, exe
+    repointed) shows up in a scan instead of having to be asked about."""
+    names_norm = {_norm(n) for n in names}
+    for f in _shortcut_files(steam_root):
+        for entry in _entries(loads(f.read_bytes())):
+            if not _matches(entry, names_norm):
+                continue
+
+            def _s(field: str) -> str:
+                _k, _t, v = _get_ci(entry, field)
+                # Steam quotes Exe/StartDir; strip so it compares cleanly
+                # against what a recipe writes.
+                return v.strip('"') if isinstance(v, str) else ""
+
+            _k, t, appid = _get_ci(entry, "appid")
+            return {
+                "appid": appid if t == TYPE_INT else None,
+                "app_name": _s("AppName"),
+                "exe": _s("Exe"),
+                "start_dir": _s("StartDir"),
+                "launch_options": _s("LaunchOptions"),
+            }
+    return None
+
+
 def set_appid(steam_root: Path, names: list[str], new_appid: int) -> int:
     """Rewrite the appid of every shortcut whose AppName matches. Steam
     must be closed. Used when adopting an existing compatdata prefix —

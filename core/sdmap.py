@@ -86,6 +86,46 @@ def default_write_path() -> Path | None:
     return None
 
 
+def _launch_info(recipe, steam_root: Path) -> dict:
+    """How this game actually launches right now: appid, exe, start dir,
+    launch options, and the forced Proton/compat tool.
+
+    Recording only the appid told us a shortcut EXISTED but nothing about
+    what it does — so a change made by hand in Steam (different Proton,
+    edited launch options, exe repointed) was invisible to a scan and had to
+    be asked about instead. This is the difference between the map saying
+    "FUEL has a shortcut" and "FUEL launches SecuLauncher.exe under
+    GE-Proton10-34 with WINEDLLOVERRIDES=...".
+
+    Never raises — a scan must not die because Steam's config is mid-write
+    or a VDF is unreadable. Anything it can't determine is simply absent.
+    """
+    from . import shortcutsvdf, steamvdf
+    out: dict = {}
+    try:
+        info = shortcutsvdf.describe(steam_root, recipe.all_names)
+    except Exception:
+        info = None
+    if info:
+        out["shortcut_appid"] = info.get("appid")
+        out["launch"] = {k: info[k] for k in
+                         ("exe", "start_dir", "launch_options") if k in info}
+    else:
+        out["shortcut_appid"] = None
+
+    appid = out.get("shortcut_appid") or recipe.steam_appid
+    if appid:
+        try:
+            compat = steamvdf.get_compat_tool(steam_root, int(appid))
+        except Exception:
+            compat = None
+        if compat:
+            # "name" is the Proton/GE/CachyOS build Steam is forcing.
+            out.setdefault("launch", {})["compat_tool"] = \
+                compat.get("name", "")
+    return out
+
+
 def write(matched: list, unmatched: list, games_dir: Path,
           dest: Path, existing: dict | None = None,
           steam_root: Path | None = None) -> dict:
@@ -103,11 +143,7 @@ def write(matched: list, unmatched: list, games_dir: Path,
                  "exes": sdscan.find_exes(folder),
                  "readmes": sdscan.find_readmes(folder)}
         if steam_root is not None:
-            try:
-                ids = shortcutsvdf.find_appids(steam_root, recipe.all_names)
-                entry["shortcut_appid"] = ids[0] if ids else None
-            except shortcutsvdf.ShortcutsError:
-                pass
+            entry.update(_launch_info(recipe, steam_root))
         games[recipe.id] = entry
     payload = {
         "_meta": {
