@@ -6,10 +6,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 MANIFEST_NAME = "manifest.json"
+# Step types accepted at LOAD time. This must stay in lockstep with the
+# engine's registry — a name here with no implementation loads fine and then
+# dies at apply time, which is the worst possible place to find out. The
+# smoke test asserts the two sets are equal, so drift fails the build rather
+# than a user's run. ("run_script" lived here unimplemented until 2026-07-20.)
 KNOWN_STEP_TYPES = {"copy_files", "swap_exe", "launch_options", "systemd_unit",
                     "remove_files", "pak_edit", "wine_registry",
                     "proton_version", "symlink", "steam_shortcut",
-                    "install_runner", "run_script"}
+                    "install_runner", "pitcrew_compile"}
 
 
 class ManifestError(Exception):

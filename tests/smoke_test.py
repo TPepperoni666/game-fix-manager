@@ -1349,6 +1349,51 @@ def main():
             check(f"{fn} uses the multi-select picker",
                   "_pick_many" in src and "_pick_one" not in src)
 
+        # --- step-type drift ------------------------------------------
+        # KNOWN_STEP_TYPES gates recipes at LOAD time; the engine registry
+        # is what actually runs them. A name in one but not the other means
+        # either a recipe dies mid-apply (declared, unimplemented — this is
+        # what "run_script" did) or a valid step is rejected at startup.
+        from core import engine as _eng, manifest as _man
+        declared, implemented = _man.KNOWN_STEP_TYPES, set(_eng._REGISTRY)
+        check("no step type declared without an implementation",
+              not (declared - implemented))
+        check("no step implemented without being declared",
+              not (implemented - declared))
+
+        # --- pitcrew_compile ------------------------------------------
+        from core.steps import pitcrew_compile as _pc
+        mdata = tmp / "Test.mdata"
+        mdata.write_text(
+            '<metadata><files>'
+            '<file priority="998" loc="Test_entities.xml" />'
+            '<file priority="500" loc="Test_data" />'
+            '</files></metadata>', encoding="utf-8")
+        mod_id, entries = _pc._mod_entries(mdata)
+        check("pitcrew mod id comes from the .mdata filename", mod_id == "Test")
+        check("pitcrew reads file entries with priorities",
+              entries == [("998", "Test_entities.xml"), ("500", "Test_data")])
+        xml = _pc._build_manifest(mod_id, entries, 5)
+        check("pitcrew manifest declares packageversion 5 for The Crew",
+              'packageversion="5"' in xml)
+        check("pitcrew manifest rewrites loc into mods/",
+              'loc="mods/Test_entities.xml"' in xml
+              and 'loc="mods/Test_data"' in xml)
+        check("pitcrew manifest preserves per-file priority",
+              'priority="500"' in xml and 'priority="998"' in xml)
+        # Case-insensitive nested lookup: the game ships "Data_Win32" but
+        # casing varies by repack and ext4 is case-sensitive.
+        (tmp / "the crew" / "data_win32").mkdir(parents=True, exist_ok=True)
+        found = _pc._find_data_dir(tmp, "the crew/Data_Win32")
+        # Compare identity, not spelling: on a case-INSENSITIVE filesystem
+        # the fast path returns the casing we asked for, on ext4 it returns
+        # the casing on disk. Both must land on the same directory.
+        check("pitcrew finds a nested data dir despite case",
+              found is not None
+              and found.samefile(tmp / "the crew" / "data_win32"))
+        check("pitcrew returns None-path error for a missing data dir",
+              _pc._resolve_ci(tmp, "nope/Data_Win32") is None)
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

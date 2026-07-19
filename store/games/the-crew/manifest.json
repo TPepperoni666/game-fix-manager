@@ -1,11 +1,21 @@
 {
   "id": "the-crew",
   "name": "The Crew",
-  "aliases": ["The Crew Unlimited", "TCU", "TheCrew", "The Crew (TCU)"],
+  "aliases": [
+    "The Crew Unlimited",
+    "TCU",
+    "TheCrew",
+    "The Crew (TCU)"
+  ],
   "steam_appid": 241560,
   "detect": {
-    "install_dir_names": ["TheCrew", "The Crew"],
-    "marker_files": ["the crew/thecrew.exe"]
+    "install_dir_names": [
+      "TheCrew",
+      "The Crew"
+    ],
+    "marker_files": [
+      "the crew/thecrew.exe"
+    ]
   },
   "save_paths": [
     "{game_dir}/the crew/data.bin",
@@ -25,6 +35,13 @@
       "start": true
     },
     {
+      "type": "pitcrew_compile",
+      "optional": true,
+      "payload": "racesaplenty",
+      "data_dir": "the crew/Data_Win32",
+      "package_version": 5
+    },
+    {
       "type": "steam_shortcut",
       "exe": "the crew/thecrew.exe",
       "start_dir": "{game_dir}/the crew",
@@ -33,5 +50,5 @@
     }
   ],
   "post_apply_message": "The Crew (TCU offline) — this recipe does NOT touch the game files (Tony's TCU patch is already applied and working; we keep it as-is). It only:\n1. AUTO-ADDS the Steam shortcut ('the crew/thecrew.exe', game folder as start dir, gospel appid 3585568980, the dinput8 override that loads TCU's offline server, GE-Proton 10.34). Steam closes briefly to write it.\n2. Installs the LOCAL-SERVER WORKAROUND as a boot service (tcu-network.service): unprivileged port 443 + iptables DNAT of public-ubiservices.ubi.com to 127.0.0.1 (DAKResearcher's script, automated).\nStage GE-Proton 10.34 first with 'gfm stage-runner' so the runner is present (install_runner is optional, so if it's missing everything else still applies and you set Proton manually). If the systemd step fails with a sudo error, run 'passwd' once and re-apply. Verify anytime with 'gfm test-crew'. The offline save (data.bin) lives in the game folder — TODO: add it to the save-capture feature.",
-  "notes": "The Crew servers died 2024; TCU (thecrewunlimited.com) revives it via a local offline server inside dinput8.dll (already installed in Tony's game dir — 'the crew/' subfolder). REWORKED 2026-07-10 per Tony: DO NOT mod the game (dropped the TCUServer fetch + the patch/config/tculauncher copy_files) — it's working and we keep it. Recipe now = (1) install_runner GE-Proton10-34, (2) tcu-network.service = DAKResearcher's script automated (sysctl unprivileged port 443 + iptables DNAT public-ubiservices.ubi.com -> 127.0.0.1), (3) steam_shortcut auto-add. Game is NESTED at <folder>/the crew/thecrew.exe (lowercase subfolder), so exe/start_dir/marker all point there. Gospel appid = 3585568980 (Tony's new working non-Steam shortcut; old 3251365350 prefix went bad). Save = data.bin in the game folder (not the prefix) — needs the save-capture feature. Health check: gfm test-crew."
+  "notes": "The Crew servers died 2024; TCU (thecrewunlimited.com) revives it via a local offline server inside dinput8.dll (already installed in Tony's game dir — 'the crew/' subfolder). REWORKED 2026-07-10 per Tony: DO NOT mod the game (dropped the TCUServer fetch + the patch/config/tculauncher copy_files) — it's working and we keep it. Recipe now = (1) install_runner GE-Proton10-34, (2) tcu-network.service = DAKResearcher's script automated (sysctl unprivileged port 443 + iptables DNAT public-ubiservices.ubi.com -> 127.0.0.1), (3) steam_shortcut auto-add. Game is NESTED at <folder>/the crew/thecrew.exe (lowercase subfolder), so exe/start_dir/marker all point there. Gospel appid = 3585568980 (Tony's new working non-Steam shortcut; old 3251365350 prefix went bad). Save = data.bin in the game folder (not the prefix) — needs the save-capture feature. Health check: gfm test-crew.\n\nRACES A PLENTY / PITCREW (2026-07-20). Added a pitcrew_compile step (optional:true, so a missing mod payload warns instead of failing the recipe). PitCrew is an OFFLINE file tool — it merges mod archives into the game's startup.fat/.dat and writes loose files to Data_Win32/mods/ — so we run the NATIVE LINUX build even though the game is under Proton: the game only sees files on disk, and native means no .NET inside the prefix and a CLI we can drive. Needs .NET Runtime 8.x on the host. packageversion 5 = The Crew 1 (6 = Crew 2); the oodle/liboo2corelinux64.so requirement is CREW 2 ONLY, so it doesn't apply to us.\n\nThe file list is NOT hand-maintained: every PitCrew mod ships a .mdata whose <files> nodes are exactly the manifest's mod entries, so the step reads that and re-emits it. A mod update needs no recipe change.\n\nSETUP (once): unpack the PitCrew Linux zip to <SD>/steamos_restore/game_fixes/tools/PitCrew-Linux/ (the zip is built on Windows so nothing has the +x bit — core/pitcrew.py chmods the compiler and libminilzo itself). Then drop the unpacked mod into the NAS local payload at Game Fixes/the-crew/payload/racesaplenty/ (its .mdata plus the data files, no subfolder). Off-git deliberately, same as other payloads.\n\nRe-running is the normal path: a redeploy from the NAS restores clean game files, and applying the recipe recompiles the mod back in — which is why this belongs in the recipe rather than being a manual GUI step."
 }
