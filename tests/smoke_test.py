@@ -1229,6 +1229,44 @@ def main():
               len(_found) == 1 and _found[0].appid == "4242"
               and _found[0].has_pfx)
 
+        # Inventory: old-tool backups dragged in are IDENTIFIED, not just found.
+        _inv_root = tmp / "inv" / "steamos_restore" / "prefix_backups"
+        for _sn, _aid in (("The_Crew", "3585568980"), ("Barnyard", "3702111588"),
+                          ("Some_Old_Game", "999888777")):
+            (_inv_root / _sn / _aid / "pfx" / "drive_c").mkdir(parents=True)
+            (_inv_root / _sn / _aid / "pfx" / "drive_c" / "f.dat"
+             ).write_bytes(b"x" * 512)
+        (_inv_root / "Empty_One" / "111").mkdir(parents=True)   # no pfx/
+        _recs = [manifest.Recipe(id="the-crew", name="The Crew", aliases=[],
+                                 steam_appid=None, detect={}, steps=[], notes="",
+                                 post_apply_message="", remote_payloads=[],
+                                 requires_game=True, save_paths=[], dir=tmp),
+                 manifest.Recipe(id="barnyard", name="Barnyard", aliases=[],
+                                 steam_appid=None, detect={}, steps=[], notes="",
+                                 post_apply_message="", remote_payloads=[],
+                                 requires_game=True, save_paths=[], dir=tmp)]
+        _reg = {"3585568980": {"appid": 3585568980, "name": "The Crew",
+                               "recipe_id": "the-crew"}}
+        _inv = {e["safe_name"]: e for e in
+                pbk.inventory(_recs, _reg, roots=[_inv_root])}
+        check("inventory matches a backup by pinned gospel appid",
+              _inv["The_Crew"]["matched_by"] == "registry"
+              and _inv["The_Crew"]["recipe_id"] == "the-crew")
+        check("inventory matches a backup by recipe name",
+              _inv["Barnyard"]["matched_by"] == "recipe")
+        check("unrecognised backup is flagged, not dropped",
+              _inv["Some_Old_Game"]["matched_by"] == "unknown")
+        check("backup with no pfx/ is flagged empty",
+              _inv["Empty_One"]["has_pfx"] is False)
+        _mp = tmp / "inv_map" / "sd_map.json"
+        from core import sdmap as _sdm
+        _sdm.write_prefix_backups_section(list(_inv.values()), _mp,
+                                          {"games": {"keep": "me"}})
+        _read = json.loads(_mp.read_text(encoding="utf-8"))
+        check("inventory written to the map without clobbering other sections",
+              _read["games"] == {"keep": "me"}
+              and len(_read["prefix_backups"]) == 4)
+
         # ---- CLI wiring ---------------------------------------------------
         # A command in the parser's choices but missing a handler used to fall
         # through to the interactive menu — the command would silently "do

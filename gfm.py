@@ -582,6 +582,49 @@ class App:
         self.ui.msg(f"{name}: prefix restored to {dst} ({files} files)",
                     "success")
 
+    def _scan_prefix_backups(self) -> int:
+        """Inventory the prefix backups on the SD, identify each one, and
+        record it in sd_map.json. This is what makes a pile of folders dragged
+        in from the old tool legible — they're matched to games by gospel appid
+        or recipe name, and anything unrecognised is flagged rather than lost."""
+        reg = {str(e["appid"]): e for e in self._registry_entries()}
+        entries = prefixbackup.inventory(self.recipes, reg)
+        if not entries:
+            self.ui.msg("No prefix backups on the SD yet "
+                        "(<SD>/steamos_restore/prefix_backups/).", "dim")
+            return 0
+        known = [e for e in entries if e["matched_by"] != "unknown"]
+        unknown = [e for e in entries if e["matched_by"] == "unknown"]
+        total = sum(e["size"] for e in entries)
+        self.ui.msg(f"{len(entries)} prefix backup(s), {self._gb(total)} — "
+                    f"{len(known)} identified, {len(unknown)} unrecognised:",
+                    "info")
+        for e in entries:
+            tag = {"registry": "gospel appid", "recipe": "recipe name",
+                   "unknown": "❓ not matched"}[e["matched_by"]]
+            warn = "" if e["has_pfx"] else "  [no pfx/ — empty]"
+            self.ui.msg(f"    {e['name']}  (appid {e['appid']}, "
+                        f"{self._gb(e['size'])}) — {tag}{warn}",
+                        "dim" if e["matched_by"] != "unknown" else "warn")
+        dest = sdmap.default_write_path()
+        if dest is not None:
+            sdmap.write_prefix_backups_section(entries, dest,
+                                               sdmap.load_first())
+            self.ui.msg(f"Recorded in {dest.name}.", "dim")
+        if unknown:
+            self.ui.msg("Unrecognised ones still restore fine (the folder name "
+                        "and appid are the manifest) — they just aren't tied to "
+                        "a recipe. Add an alias to a recipe and re-scan to name "
+                        "them.", "dim")
+        return len(entries)
+
+    def _registry_entries(self) -> list:
+        reg = self.store_root / "prefix_registry.json"
+        try:
+            return json.loads(reg.read_text(encoding="utf-8")).get("entries", [])
+        except (OSError, ValueError):
+            return []
+
     def cmd_backup_prefixes(self):
         """Back up Proton prefixes to the SD, in the same layout
         📥 Import Prefix Backups reads. Replaces the old Linux Prefix Manager's
@@ -617,6 +660,21 @@ class App:
             return
         opted = set(self.cfg.get("prefix_backup_cloud", []))
         cloud_total = sum(1 for p in allp if p.has_cloud and p.appid not in opted)
+
+        # --auto (the weekly timer): back up the remembered selection, no UI.
+        if getattr(self.args, "auto", False):
+            remembered = set(self.cfg.get("prefix_backup_selection", []))
+            chosen = [p for p in allp if p.appid in remembered]
+            if not chosen:
+                self.ui.msg("Weekly prefix backup: nothing selected yet — run "
+                            "💼 Back Up Prefixes once by hand to choose what to "
+                            "keep, and the timer will maintain it from then on.",
+                            "warn")
+                return
+            self.ui.msg(f"Weekly prefix backup: {len(chosen)} remembered "
+                        "prefix(es).", "info")
+            self._run_prefix_backups(chosen, dest)
+            return
 
         show_cloud = False
         chosen = []
@@ -654,9 +712,12 @@ class App:
         if newly:
             opted |= set(newly)
             self.cfg["prefix_backup_cloud"] = sorted(opted)
-            store.save_config(self.cfg)
             self.ui.msg(f"{len(newly)} cloud game(s) remembered — they'll show "
                         "in the main list from now on.", "dim")
+        # Remember the whole selection so the weekly timer maintains exactly
+        # this set without asking.
+        self.cfg["prefix_backup_selection"] = sorted(p.appid for p in chosen)
+        store.save_config(self.cfg)
 
         total = 0
         for p in chosen:
@@ -672,7 +733,11 @@ class App:
                             ["✅ Yes, back up", "⬅️  Cancel"])
         if not ok or not ok[0].startswith("✅"):
             return
+        self._run_prefix_backups(chosen, dest)
 
+    def _run_prefix_backups(self, chosen, dest) -> int:
+        """Copy the chosen prefixes with progress. Shared by the interactive
+        picker and the weekly --auto run."""
         done_n = 0
         for p in chosen:
             started = time.monotonic()
@@ -708,6 +773,7 @@ class App:
         self.ui.msg(f"Backed up {done_n} prefix(es) to {dest}.", "success")
         self.ui.msg("📥 Import Prefix Backups restores these after a reimage.",
                     "dim")
+        return done_n
 
     def cmd_import_prefixes(self):
         """Restore prefixes backed up by the old Linux Prefix Manager into
@@ -988,9 +1054,11 @@ class App:
         self.cmd_scan_sd()
         self.ui.msg("── 2/4  Scanning Steam libraries " + "─" * 9, "info")
         self.cmd_scan_steam()
-        self.ui.msg("── 3/4  Reconciling prefixes " + "─" * 13, "info")
+        self.ui.msg("── 3/5  Reconciling prefixes " + "─" * 13, "info")
         self.cmd_reconcile()
-        self.ui.msg("── 4/4  Capturing art + saves + settings " + "─" * 1,
+        self.ui.msg("── 4/5  Inventorying prefix backups " + "─" * 6, "info")
+        self._scan_prefix_backups()
+        self.ui.msg("── 5/5  Capturing art + saves + settings " + "─" * 1,
                     "info")
         self._capture_all()
         self.ui.msg("", "dim")
@@ -1029,6 +1097,22 @@ class App:
         auto = getattr(self.args, "auto", False)
         self.ui.header("🧹 RECLAIM SD SPACE")
         self._refresh_map()
+        if auto:
+            # The weekly timer is the only unattended run, so it does the whole
+            # maintenance pass — otherwise backups only happen when Tony
+            # remembers to Scan, which defeats the point of automating.
+            self.ui.msg("── weekly maintenance: capture " + "─" * 10, "info")
+            try:
+                self._capture_all()
+            except Exception as e:              # never let upkeep kill the run
+                self.ui.msg(f"capture skipped: {e}", "warn")
+            self.ui.msg("── weekly maintenance: prefix backup " + "─" * 4,
+                        "info")
+            try:
+                self.cmd_backup_prefixes()
+            except Exception as e:
+                self.ui.msg(f"prefix backup skipped: {e}", "warn")
+            self.ui.msg("── weekly maintenance: reclaim " + "─" * 10, "info")
         if self.steam_root is None:
             self.ui.msg("No Steam root — can't tell which shortcuts exist. "
                         "Nothing reclaimed.", "warn")

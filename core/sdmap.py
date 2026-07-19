@@ -146,6 +146,25 @@ def write_steam_section(games: list, dest: Path,
     return payload
 
 
+def write_prefix_backups_section(entries: list, dest: Path,
+                                 existing: dict | None = None) -> dict:
+    """Merge/overwrite the prefix_backups section — what's actually sitting in
+    <SD>/steamos_restore/prefix_backups/, and which game each one belongs to.
+    Lets a pile of backups dragged in from the old tool be identified rather
+    than just found. Preserves everything else in the file."""
+    import socket
+    import time
+    payload = dict(existing or {})
+    payload.setdefault("_meta", {}).update({
+        "host": socket.gethostname(),
+        "prefix_backups_scanned_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    })
+    payload["prefix_backups"] = entries
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return payload
+
+
 def diff(before: dict, after: dict) -> dict:
     """Human-readable diff for the UI: added/changed/removed games."""
     b = before.get("games", {})

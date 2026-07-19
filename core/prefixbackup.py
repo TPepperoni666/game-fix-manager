@@ -162,6 +162,76 @@ def candidates(all_prefixes: list[PrefixInfo], opted_in: set[str],
     return out
 
 
+def inventory(recipes, registry: dict | None = None,
+              roots: list[Path] | None = None) -> list[dict]:
+    """Inventory the prefix backups sitting on the SD and work out what each
+    one IS — so old backups dragged in from the previous tool are identified,
+    not just found.
+
+    Matching, best signal first:
+      'registry' — appid is a pinned gospel appid (store/prefix_registry.json)
+      'recipe'   — safe_name matches a recipe's name/aliases/install dir
+      'unknown'  — a backup we can't tie to a game (kept, just flagged)
+
+    Returns plain dicts so this can be written straight into sd_map.json for
+    Tony (and Claude) to see what's on the card.
+    """
+    from . import prefiximport
+    registry = registry or {}
+    reg_by_appid = {str(k): v for k, v in registry.items()}
+    norm_recipes = []
+    for r in recipes:
+        names = {prefixes._norm(n) for n in r.all_names}
+        names |= {prefixes._norm(n)
+                  for n in r.detect.get("install_dir_names", [])}
+        norm_recipes.append((r, {n for n in names if n}))
+
+    out: list[dict] = []
+    for b in prefiximport.list_backups(roots):
+        entry = {
+            "appid": b.appid,
+            "safe_name": b.safe_name,
+            "path": str(b.path),
+            "has_pfx": b.has_pfx,
+            "size": tree_size(b.path),
+            "recipe_id": None,
+            "name": b.safe_name.replace("_", " "),
+            "matched_by": "unknown",
+        }
+        reg = reg_by_appid.get(b.appid)
+        if reg:
+            entry.update(recipe_id=reg.get("recipe_id"),
+                         name=reg.get("name") or entry["name"],
+                         matched_by="registry")
+        else:
+            want = prefixes._norm(b.safe_name)
+            for r, names in norm_recipes:
+                if want in names:
+                    entry.update(recipe_id=r.id, name=r.name,
+                                 matched_by="recipe")
+                    break
+        out.append(entry)
+    out.sort(key=lambda e: e["name"].lower())
+    return out
+
+
+def tree_size(root: Path) -> int:
+    """Bytes under a path, symlinks never followed."""
+    total = 0
+    for dirpath, dirnames, files in os.walk(root):
+        dirnames[:] = [d for d in dirnames
+                       if not os.path.islink(os.path.join(dirpath, d))]
+        for n in files:
+            p = os.path.join(dirpath, n)
+            if os.path.islink(p):
+                continue
+            try:
+                total += os.path.getsize(p)
+            except OSError:
+                continue
+    return total
+
+
 def _skip(rel_posix: str) -> bool:
     return any(rel_posix == s or rel_posix.startswith(s + "/")
                for s in SKIP_RELS)
