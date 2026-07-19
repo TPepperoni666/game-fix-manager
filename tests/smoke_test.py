@@ -1142,6 +1142,35 @@ def main():
         check("empty snapshot -> nothing extracted",
               sp.extract({"UserLocalConfigStore": {}}) == {})
 
+        # ---- Decky settings (per-game TDP/GPU/power) — device-keyed ---------
+        # TDP lives in ~/homebrew/settings/<Plugin>/, NOT localconfig, and is
+        # device-specific, so backups are keyed by hostname and MUST NOT
+        # cross-restore (a Deck's 15W is nonsense on a Legion Go).
+        print("== Decky settings (device-keyed TDP backup) ==")
+        from core import deckysettings as ds
+        dk = tmp / "decky"
+        dhome = dk / "deck_home"
+        (dhome / "homebrew" / "settings" / "SimpleDeckyTDP").mkdir(parents=True)
+        (dhome / "homebrew" / "settings" / "SimpleDeckyTDP" / "s.json"
+         ).write_text('{"tdp":15}')
+        dstate = dk / "_state"
+        check("capture backs up the settings tree",
+              ds.capture(dhome, dstate, host="steamdeck", log=quiet) == 1)
+        lhome = dk / "legion_home"
+        (lhome / "homebrew" / "settings" / "X").mkdir(parents=True)
+        (lhome / "homebrew" / "settings" / "X" / "s.json").write_text('{"tdp":30}')
+        ds.capture(lhome, dstate, host="legion-go-2", log=quiet)
+        check("both device backups listed",
+              set(ds.hosts_available(dstate)) == {"steamdeck", "legion-go-2"})
+        shutil.rmtree(dhome / "homebrew")
+        ds.restore(dstate, dhome, host="steamdeck", log=quiet)
+        _got = (dhome / "homebrew" / "settings" / "SimpleDeckyTDP" / "s.json"
+                ).read_text()
+        check("restore is device-keyed (deck gets 15W, never legion's 30W)",
+              '"tdp":15' in _got and '"tdp":30' not in _got)
+        check("restore for an unknown host is a safe no-op",
+              ds.restore(dstate, dhome, host="mystery-pc", log=quiet) == 0)
+
         # ---- CLI wiring ---------------------------------------------------
         # A command in the parser's choices but missing a handler used to fall
         # through to the interactive menu — the command would silently "do

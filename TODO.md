@@ -7,6 +7,30 @@ Last updated 2026-07-13. Deeper context lives in the Claude memory files
 
 ## 0. NEXT SESSION — start here (Tony's pick, 2026-07-13)
 
+> **Make the weekly reclaim timer ALSO capture (Tony asked 2026-07-19).** Right
+> now capture (art/saves/settings/TDP) only runs on a manual 🔍 Scan; the weekly
+> `gfm reclaim --auto` timer refreshes the map but does NOT capture. So backups
+> only happen when Tony remembers to Scan. Have the `--auto` reclaim run the
+> capture pass too (or capture on its own timer) so data.bin / art / framerate /
+> Decky-TDP backups refresh automatically. Small change: call the capture-all +
+> _snapshot_localconfig (which now also backs up Decky settings) from the auto
+> path, guarded so a read-only mount just skips it.
+
+> **DECK-TEST the new settings restore (built 2026-07-19, untested on hardware):**
+> per-game framerate/tearing (steamperf, surgical localconfig merge) AND per-game
+> TDP/GPU/power (deckysettings — backs up ~/homebrew/settings/ keyed by hostname).
+> Both fold into ♻️ Save Restore step 3/3 + 🎚 in Advanced + `gfm restore-settings`.
+> Verify: run 🔍 Scan (should now report "Backed up N Decky settings for
+> <host>"), confirm _state/decky/<host>/ appears on the NAS, then on a
+> reimage/other run 🎚 restores them. TDP is device-keyed so it won't cross a
+> Deck profile onto the Legion Go. NOTE: confirm WHERE the scaling filter
+> (FSR/integer) actually lives — not in the localconfig Gamescope block we found;
+> may be a Decky-plugin value (would be covered by the homebrew backup) or a
+> gamescope session config (would need finding). Also: Tony's localconfig already
+> carries the OLD PROTON_FSR4_RDNA3_UPGRADE=1 on a game — the new recipes use the
+> current PROTON_FSR4_UPGRADE=1.
+
+
 > **Staging source is now `E:\Games`** (was `F:\games`). Use E:\Games for any
 > future robocopy to NAS `_games/`. Recipe *notes* still cite F:\games as where
 > they were built — harmless, historical; recipes reference the SD game_dir, not

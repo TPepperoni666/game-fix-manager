@@ -23,9 +23,10 @@ import time
 import traceback
 from pathlib import Path
 
-from core import (deploy, detect, engine, fetch, manifest, prefiximport,
-                  prefixes, reclaim, saves, sdmap, sdscan, shortcutsvdf,
-                  steamart, steamperf, steamscan, steamvdf, store)
+from core import (deckysettings, deploy, detect, engine, fetch, manifest,
+                  prefiximport, prefixes, reclaim, saves, sdmap, sdscan,
+                  shortcutsvdf, steamart, steamperf, steamscan, steamvdf,
+                  store)
 from ui import get_ui
 
 STATUS_ICON = {engine.APPLIED: "✅", engine.NOT_APPLIED: "☐ ",
@@ -217,9 +218,14 @@ class App:
         return self._capture_saves(recipe, interactive=interactive) or got
 
     def _snapshot_localconfig(self) -> int:
-        """Snapshot localconfig.vdf — the source of per-game display/perf
-        settings (TDP, scaling, VRR, framerate). Kept whole for now so the
-        surgical per-appid restore can be built against a real file."""
+        """Back up the two device-settings sources:
+          * localconfig.vdf — per-game framerate/tearing/frame-limit (Gamescope
+            section); restored surgically by steamperf.
+          * ~/homebrew/settings/ — the Decky plugins' JSON, where the per-game
+            TDP / GPU clock / power profiles actually live (SimpleDeckyTDP,
+            PowerTools, LegionGoRemapper). Keyed by hostname — TDP is
+            device-specific, and both handhelds share one Steam uid.
+        Returns the localconfig user count (for the existing message)."""
         state = self.local_payloads / "_state"
         snapped = 0
         for cfg in steamvdf._localconfigs(self.steam_root):
@@ -230,6 +236,12 @@ class App:
                 snapped += 1
             except OSError as e:
                 self.ui.msg(f"  localconfig snapshot failed: {e}", "warn")
+        n = deckysettings.capture(Path.home(), state,
+                                  log=lambda m: self.ui.msg(m, "dim"))
+        if n:
+            self.ui.msg(f"Backed up {n} Decky settings file(s) for "
+                        f"{deckysettings.hostname()} (per-game TDP/GPU/power).",
+                        "dim")
         return snapped
 
     def _payloads_writable(self) -> bool:
@@ -729,11 +741,18 @@ class App:
                         "warn")
             return
         plan = self._settings_restore_plan()
+        state = self.local_payloads / "_state"
+        host = deckysettings.hostname()
+        have_decky = host in deckysettings.hosts_available(state)
+        if not plan and not have_decky:
+            self.ui.msg("No captured settings for this device. Run 🔍 Scan (or "
+                        "🎨 Capture) on a machine that HAS the settings first — "
+                        "framerate lives in _state/localconfig-<uid>.vdf, TDP/GPU"
+                        f" in _state/decky/{host}/.", "warn")
+            return
         if not plan:
-            self.ui.msg("No captured per-game settings for this device's Steam "
-                        "user(s). Run 🔍 Scan (or 🎨 Capture) on a machine that "
-                        "HAS the settings first — the snapshot lives on the NAS "
-                        "at _state/localconfig-<uid>.vdf.", "warn")
+            # Only the Decky (TDP/GPU) side to do — no Steam bounce needed.
+            self._restore_decky()
             return
         total = sum(c for _u, _s, _l, c in plan)
         self.ui.msg(f"{total} per-game setting(s) to restore across "
@@ -741,6 +760,7 @@ class App:
                     " keyed by appid (gospel-pinned games line up).", "info")
         if not self.ui.confirm("Restore them? Steam closes briefly to write "
                                "localconfig.vdf.", danger=True):
+            self._restore_decky()   # still do the no-bounce Decky side
             return
         was_running = steamvdf.steam_running()
         if was_running:
@@ -755,8 +775,31 @@ class App:
                 self.ui.msg(f"  user {uid}: failed — {e}", "error")
         if was_running:
             steamvdf.start_steam(lambda m: self.ui.msg(m, "warn"))
-        self.ui.msg(f"Restored {written} per-game setting(s).",
+        self.ui.msg(f"Restored {written} per-game framerate/tearing setting(s).",
                     "success" if written else "warn")
+        self._restore_decky()
+
+    def _restore_decky(self) -> None:
+        """Restore this host's Decky plugin settings (per-game TDP/GPU/power)."""
+        if self.local_payloads is None:
+            return
+        state = self.local_payloads / "_state"
+        host = deckysettings.hostname()
+        hosts = deckysettings.hosts_available(state)
+        if host not in hosts:
+            if hosts:
+                self.ui.msg(f"Decky TDP/GPU backup: none for THIS device "
+                            f"({host}); backups exist for {', '.join(hosts)}. "
+                            "TDP is device-specific, so I won't cross-restore.",
+                            "warn")
+            return
+        self.ui.msg("Restoring Decky plugin settings (per-game TDP/GPU/power)…",
+                    "dim")
+        n = deckysettings.restore(state, Path.home(), host,
+                                  log=lambda m: self.ui.msg(m, "dim"))
+        self.ui.msg(f"Restored {n} Decky settings file(s) for {host}. Restart "
+                    "Decky (or reboot) so the plugins reload them.",
+                    "success" if n else "warn")
 
     def cmd_restore_saves(self):
         """Put ONE game's captured game-folder saves back. The ♻️ Save Restore
@@ -983,8 +1026,12 @@ class App:
         self.cmd_import_prefixes()
         self.ui.msg("── 2/3  Restoring game-folder saves " + "─" * 6, "info")
         self._restore_saves_all()
-        self.ui.msg("── 3/3  Restoring per-game settings " + "─" * 6, "info")
-        if self._settings_restore_plan():
+        self.ui.msg("── 3/3  Restoring per-game settings (framerate + "
+                    "TDP/GPU) " + "─" * 1, "info")
+        state = (self.local_payloads / "_state") if self.local_payloads else None
+        have_decky = state is not None and \
+            deckysettings.hostname() in deckysettings.hosts_available(state)
+        if self._settings_restore_plan() or have_decky:
             self.cmd_restore_settings()
         else:
             self.ui.msg("No captured per-game settings to restore.", "dim")
