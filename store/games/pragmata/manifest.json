@@ -1,0 +1,25 @@
+{
+  "id": "pragmata",
+  "name": "Pragmata",
+  "aliases": ["PRAGMATA", "Pragmata (2026)"],
+  "detect": {
+    "install_dir_names": ["Pragmata", "PRAGMATA"],
+    "marker_files": ["PRAGMATA.exe"]
+  },
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "proton-cachyos-11.0-20260702-slr-x86_64_v3"
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "PRAGMATA.exe",
+      "start_dir": "{game_dir}",
+      "launch_options": "PROTON_FSR4_UPGRADE=1 %command%",
+      "proton": "proton-cachyos-11.0-20260702-slr-x86_64_v3"
+    }
+  ],
+  "post_apply_message": "Pragmata (RE Engine, non-Steam cracked copy) — Apply auto-adds the Steam shortcut for PRAGMATA.exe on Proton-CachyOS (11.0-20260702), with the FSR 4 upgrade enabled. Stage the runner first with 'gfm stage-runner' (it's already on the NAS _runners/).\n\nWHY CACHYOS + FSR4: this is a modern demanding title, so it uses Proton-CachyOS (which we staged) instead of GE — that build is the one that added AMD's FSR 4 upgrade. The launch option PROTON_FSR4_UPGRADE=1 upgrades the game's FSR 3.1 upscaler to FSR 4 at runtime.\n\nHARDWARE — READ THIS: FSR4 upgrade needs RDNA 3.5+ , so it only does anything on the LEGION GO 2 (Ryzen Z2 Extreme, RDNA 3.5). On the Steam Deck (RDNA 2) the option is simply ignored — CachyOS still runs the game, just no FSR4. And on an iGPU the FSR4 upgrade costs ~25% performance unless your base framerate is already 60+, so if it feels worse than FSR 3.1, drop the launch option. It only helps if the game actually exposes FSR 3.1 in its graphics menu — turn FSR on in-game for the upgrade to hook.\n\nIf CachyOS isn't installed yet, run 'gfm stage-runner' / re-apply so install_runner side-loads it from the NAS.",
+  "notes": "Built 2026-07-19 off Tony's install (E:\\Games\\Pragmata, 60 files / 34.67GB, staged to NAS _games). Exe = PRAGMATA.exe (366MB, root; the 148MB CrashReport.exe is the crash handler, not the game). Cracked (steam_settings/ + steam_api64 Goldberg-style emu) so it runs under Proton. Non-Steam -> computed appid.\n\nRUNNER = Proton-CachyOS 11.0-20260702-slr-x86_64_v3 (staged on NAS _runners/, folder name == internal compat name == display name, so it works for both install_runner and the steam_shortcut proton field). Chosen over GE per Tony for modern titles + FSR4. LAUNCH OPTION PROTON_FSR4_UPGRADE=1 (verified 2026-07-19 via GamingOnLinux + CachyOS forum — the older PROTON_FSR4_RDNA3_UPGRADE was removed; the plain var now covers RDNA3.5). FSR4 upgrade is RDNA3.5+ only (Legion Go 2 Z2 Extreme yes; Steam Deck RDNA2 no-op), ~25% iGPU cost unless base fps>=60, and only hooks if the game's FSR 3.1 is enabled. NOTE: Pragmata was first deployed with a GENERIC shortcut (GE10-34, appid from gfm:deploy:Pragmata); applying this recipe supersedes it by AppName match, repointing to the recipe appid + CachyOS + FSR4."
+}

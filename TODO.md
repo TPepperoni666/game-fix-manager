@@ -43,9 +43,12 @@ Last updated 2026-07-13. Deeper context lives in the Claude memory files
    re-run.
 2. **Test Halo MCC + AlphaRing.** Remember MCC must launch with **anti-cheat
    disabled** or the DLL is inert. Untested.
-3. **Stage the big four** (~280 GB): Death Stranding 2, RE Requiem, College
-   Football 27, Pragmata. DS2 is ~17 GB in from an aborted run — robocopy
-   resumes, doesn't restart.
+3. [x] **Stage the big four** — DONE 2026-07-19. All 11 games now staged on the
+   NAS `_games/` (~510GB), sizes cached in `_games/.gfm-sizes.json`. Deploy
+   proven end-to-end (multi-select, ~100MB/s, resume, auto-shortcut incl.
+   recipe-less games via the exe picker). FUEL's GFWL/xlive fix added.
+   Reclaim's per-game breakdown added. Still to actually WATCH reclaim delete:
+   deploy Pragmata (34.67GB, >floor) -> apply -> delete its shortcut -> reclaim.
 4. **Make the NAS `Game Fixes` share visible from the Windows machine.**
    Likely cause found today: the share is **guest**, and Windows 10/11 blocks
    insecure guest logons by default ("your organization's security policies

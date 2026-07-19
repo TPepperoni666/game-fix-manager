@@ -1,0 +1,27 @@
+{
+  "id": "assassins-creed-shadows",
+  "name": "Assassin's Creed Shadows",
+  "aliases": ["Assassin Creed Shadows", "AC Shadows", "ACShadows",
+              "Assassins Creed Shadows"],
+  "detect": {
+    "install_dir_names": ["Assassin Creed Shadows",
+                          "Assassin's Creed Shadows"],
+    "marker_files": ["ACShadows.exe"]
+  },
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "proton-cachyos-11.0-20260702-slr-x86_64_v3"
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "ACShadows.exe",
+      "start_dir": "{game_dir}",
+      "launch_options": "PROTON_FSR4_UPGRADE=1 %command%",
+      "proton": "proton-cachyos-11.0-20260702-slr-x86_64_v3"
+    }
+  ],
+  "post_apply_message": "Assassin's Creed Shadows (Anvil engine, non-Steam cracked copy) — Apply auto-adds the Steam shortcut for ACShadows.exe on Proton-CachyOS (11.0-20260702) with the FSR 4 upgrade enabled. Stage the runner first with 'gfm stage-runner' (already on the NAS _runners/).\n\nWHY CACHYOS + FSR4: big modern title, so it runs on Proton-CachyOS (which we staged) rather than GE — that build is the one that added AMD's FSR 4 upgrade. PROTON_FSR4_UPGRADE=1 upgrades the game's FSR 3.1 to FSR 4 at runtime; AC Shadows ships FSR 3.1, so it hooks cleanly once you turn FSR on in the graphics menu.\n\nHARDWARE — READ THIS: FSR4 upgrade needs RDNA 3.5+, so it only does anything on the LEGION GO 2 (Ryzen Z2 Extreme, RDNA 3.5). On the Steam Deck (RDNA 2) it's ignored. On an iGPU it costs ~25% performance unless your base framerate is already 60+, so drop the option if it feels worse than plain FSR 3.1. Realistically this is a Legion-Go-2-only game — a 155GB Anvil open-world is far too heavy for the Deck.\n\nIf CachyOS isn't installed yet, run 'gfm stage-runner' / re-apply so install_runner side-loads it from the NAS.",
+  "notes": "Built 2026-07-19 off Tony's install (E:\\Games\\Assassin Creed Shadows — note NO apostrophe in the folder — 595 files / 154.84GB, staged to NAS _games). Exe = ACShadows.exe (423MB, root). Cracked (steam_settings/) so it runs under Proton. Non-Steam -> computed appid. Folder ships AMD FidelityFX + XeSS + DLSS dlls, so FSR 3.1 is present for the FSR4 upgrade to target.\n\nRUNNER = Proton-CachyOS 11.0-20260702-slr-x86_64_v3 (NAS _runners/; name works for install_runner + steam_shortcut proton). LAUNCH OPTION PROTON_FSR4_UPGRADE=1 (verified 2026-07-19; the old RDNA3-specific var was removed, plain var now covers RDNA3.5). FSR4 upgrade = RDNA3.5+ only (Legion Go 2 yes, Deck no-op), ~25% iGPU cost unless base fps>=60, needs the game's FSR 3.1 enabled. Same generic-shortcut supersede note as Pragmata: a prior generic deploy shortcut is repointed by AppName match when this recipe is applied. 155GB = Legion Go 2 target; a Deck won't run it acceptably."
+}
