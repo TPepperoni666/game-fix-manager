@@ -986,6 +986,85 @@ def main():
               len(todo) == 1 and ok_n == 2 and need == 2048)
         check("free space reports something", dep.free_space(dp_sd) > 0)
 
+        # ---- reclaim SD space (the one place the tool DELETES) -------------
+        # Every rule here is a safety rule; assert each guard holds.
+        print("== reclaim (uninstall removed deployed games) ==")
+        from core import reclaim as rc
+        from core import shortcutsvdf as sv
+        rc_root = tmp / "rc"
+        rc_steam = rc_root / "steam"
+        (rc_steam / "userdata" / "1" / "config").mkdir(parents=True)
+        rc_sd = rc_root / "sd" / "Games"
+        rc_sd.mkdir(parents=True)
+        rc_nas = rc_root / "nas"
+        (dep.staged_root(rc_nas)).mkdir(parents=True)
+
+        def rc_recipe(rid, name, sp=None):
+            return manifest.Recipe(
+                id=rid, name=name, aliases=[], steam_appid=None, detect={},
+                steps=[{"type": "steam_shortcut", "exe": "g.exe"}], notes="",
+                post_apply_message="", remote_payloads=[], requires_game=True,
+                save_paths=sp or [], dir=rc_root)
+
+        def rc_game(name, gb, on_nas=True):
+            d = rc_sd / name
+            d.mkdir(parents=True)
+            with open(d / "data.bin", "wb") as f:
+                f.seek(int(gb * (1 << 30)) - 1)
+                f.write(b"\0")
+            if on_nas:
+                (dep.staged_root(rc_nas) / name).mkdir(parents=True)
+
+        def rc_add_sc(name):
+            sv.ensure_shortcut(rc_steam, name, str(rc_sd / name / "g.exe"),
+                               str(rc_sd / name), "", 999000, [])
+
+        def rc_clear():
+            for f in sv._shortcut_files(rc_steam):
+                f.write_bytes(sv.dumps({"shortcuts": (sv.TYPE_MAP, {})}))
+
+        def rc_scan(recipes, deployed):
+            return rc.scan(recipes, rc_steam, deployed, [rc_sd], rc_nas)
+
+        big = rc_recipe("big", "Big"); rc_game("Big", 40); rc_add_sc("Big")
+        r = rc_scan([big], {"Big": {}})
+        check("reclaim: shortcut present -> latch shortcut_seen, no candidate",
+              not r.candidates and r.deployed["Big"]["shortcut_seen"] is True)
+        rc_clear()
+        r = rc_scan([big], r.deployed)
+        check("reclaim: seen-then-removed + big -> candidate",
+              len(r.candidates) == 1 and r.candidates[0].name == "Big")
+        check("reclaim: never-applied (deploy->apply gap) is safe",
+              not rc_scan([big], {"Big": {}}).candidates)
+        sm = rc_recipe("sm", "Small"); rc_game("Small", 5)
+        check("reclaim: under the size floor -> kept",
+              not rc_scan([sm], {"Small": {"shortcut_seen": True}}).candidates)
+        orp = rc_recipe("orp", "Orphan"); rc_game("Orphan", 40, on_nas=False)
+        check("reclaim: not staged on NAS -> refuse (not reversible)",
+              not rc_scan([orp], {"Orphan": {"shortcut_seen": True}}).candidates)
+        cg = rc_recipe("cg", "CrewBig", sp=["{game_dir}/data.bin"])
+        rc_game("CrewBig", 40)
+        check("reclaim: save_paths not captured -> refuse",
+              not rc_scan([cg], {"CrewBig": {"shortcut_seen": True}}).candidates)
+        (rc_nas / "cg" / "saves" / "0").mkdir(parents=True)
+        (rc_nas / "cg" / "saves" / "0" / "data.bin").write_bytes(b"S")
+        (rc_nas / "cg" / "saves" / "index.json").write_text(
+            '{"recipe":"cg","entries":[{"slot":0,"template":"{game_dir}/'
+            'data.bin","names":["data.bin"]}]}')
+        check("reclaim: save_paths captured -> candidate",
+              len(rc_scan([cg], {"CrewBig": {"shortcut_seen": True}})
+                  .candidates) == 1)
+        check("reclaim: no Steam root -> blocked, nothing reclaimed",
+              rc.scan([big], None, {"Big": {"shortcut_seen": True}}, [rc_sd],
+                      rc_nas).blocked)
+        rc_clear()
+        r = rc_scan([big], {"Big": {"shortcut_seen": True}})
+        freed = rc.uninstall(r.candidates[0], r.deployed)
+        check("reclaim: uninstall frees the SD folder but KEEPS the NAS copy",
+              freed > 0 and not (rc_sd / "Big").exists()
+              and (dep.staged_root(rc_nas) / "Big").is_dir()
+              and "Big" not in r.deployed)
+
         # ---- CLI wiring ---------------------------------------------------
         # A command in the parser's choices but missing a handler used to fall
         # through to the interactive menu — the command would silently "do
@@ -1008,7 +1087,8 @@ def main():
                           if not hasattr(gfm_mod.App, m)})
         check("every CLI handler targets a real App method", not unknown)
         for expected in ("scan", "save-restore", "deploy", "import-prefixes",
-                         "restore-saves", "scan-sd", "scan-steam"):
+                         "restore-saves", "scan-sd", "scan-steam", "reclaim",
+                         "setup-reclaim-timer"):
             check(f"CLI exposes '{expected}'", expected in gfm_mod.COMMANDS)
         methods = ("cmd_scan_all", "cmd_save_restore", "cmd_deploy_game",
                    "cmd_import_prefixes", "cmd_restore_saves", "cmd_capture",

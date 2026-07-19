@@ -66,6 +66,15 @@ Everything below is written, unit-tested (159 smoke checks) and pushed, but
       file count / duration on the first import.**
 - [ ] **`deploy`** — the BF3 proof of concept (see §2).
 - [ ] **Save Restore** bundle (import prefixes → restore all game saves).
+- [ ] **🧹 Reclaim SD Space + weekly timer (NEW, built 2026-07-13).** Untested on
+      the Deck. To try: deploy a >34GB game, Apply it (creates the shortcut),
+      run 🧹 Reclaim once (should latch shortcut_seen, find nothing), delete the
+      shortcut from Steam yourself, run 🧹 Reclaim again (should offer to delete
+      it), confirm, check the SD folder is gone and the NAS copy + prefix
+      remain. Then ⚙️ Settings → 🗓 Weekly Reclaim Timer to install the
+      `systemctl --user` timer; verify with `systemctl --user list-timers
+      gfm-reclaim.timer`. The `--auto` path (what the timer runs) refuses a
+      batch of >3 at once as a wiped-vdf guard — worth a deliberate test.
 
 ### Recipes awaiting a Deck test
 - [ ] **Heroes of the Pacific** — it *runs* (needs GE-Proton11-1) but the

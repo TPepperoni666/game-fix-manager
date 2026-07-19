@@ -23,8 +23,8 @@ import traceback
 from pathlib import Path
 
 from core import (deploy, detect, engine, fetch, manifest, prefiximport,
-                  prefixes, saves, sdmap, sdscan, shortcutsvdf, steamart,
-                  steamscan, steamvdf, store)
+                  prefixes, reclaim, saves, sdmap, sdscan, shortcutsvdf,
+                  steamart, steamscan, steamvdf, store)
 from ui import get_ui
 
 STATUS_ICON = {engine.APPLIED: "✅", engine.NOT_APPLIED: "☐ ",
@@ -411,6 +411,16 @@ class App:
             self.ui.msg("Cancelled. Re-run to resume where it stopped.", "warn")
             return
         self.ui.progress_done()
+        # Record that GFM deployed this game — the reclaim scan only ever
+        # deletes things it can prove it copied here. Preserve a latched
+        # shortcut_seen if we're re-deploying something.
+        deployed = self.cfg.setdefault("deployed", {})
+        prev = deployed.get(game.name, {})
+        deployed[game.name] = {
+            "size": stats["bytes"], "sd_dir": str(stats["dest"]),
+            "shortcut_seen": prev.get("shortcut_seen", False),
+        }
+        store.save_config(self.cfg)
         secs = stats["seconds"]
         rate = stats["bytes"] / max(secs, 0.001) / (1 << 20)
         self.ui.msg(f"{game.name} deployed to {stats['dest']}", "success")
@@ -637,6 +647,153 @@ class App:
         self.ui.msg("", "dim")
         self.ui.msg("Scan complete.", "success")
 
+    def _refresh_map(self) -> bool:
+        """Rewrite sd_map.json (SD games + Steam inventory) with NO prompts —
+        so a weekly/background run keeps the map Tony (and Claude, via
+        Syncthing) can see current. Returns True if it wrote anything."""
+        dest = sdmap.default_write_path()
+        if dest is None:
+            self.ui.msg("No SD card mounted — can't refresh the map.", "warn")
+            return False
+        wrote = False
+        for games_dir in sdscan.find_games_dirs():
+            res = sdscan.scan(games_dir, self.recipes)
+            existing = sdmap.load_first()
+            sdmap.write(res["matched"], res["unmatched"], games_dir, dest,
+                        existing, steam_root=self.steam_root)
+            wrote = True
+        if self.steam_root is not None:
+            games = steamscan.scan(self.steam_root)
+            if games:
+                sdmap.write_steam_section(games, dest=dest,
+                                          existing=sdmap.load_first())
+                wrote = True
+        if wrote:
+            self.ui.msg(f"Map refreshed -> {dest}", "dim")
+        return wrote
+
+    def cmd_reclaim(self):
+        """General upkeep scan: refresh the map, then free SD space taken by
+        big tool-deployed games whose Steam shortcut you've since deleted.
+        `--auto` (the weekly timer) skips the prompt and uninstalls what passes
+        every guard, refusing a suspicious batch. Interactive always confirms."""
+        auto = getattr(self.args, "auto", False)
+        self.ui.header("🧹 RECLAIM SD SPACE")
+        self._refresh_map()
+        if self.steam_root is None:
+            self.ui.msg("No Steam root — can't tell which shortcuts exist. "
+                        "Nothing reclaimed.", "warn")
+            return
+        deployed = self.cfg.get("deployed", {})
+        if not deployed:
+            self.ui.msg("No games have been deployed by the tool yet — nothing "
+                        "to reclaim. (Only games ⬇️ Deploy copied are eligible.)",
+                        "dim")
+            return
+        res = reclaim.scan(self.recipes, self.steam_root, deployed,
+                           sdscan.find_games_dirs(), self.local_payloads)
+        # Persist the updated record (latched shortcut_seen, dropped entries)
+        # EVEN on a blocked/empty scan — the latches are how a real deletion is
+        # ever detected later.
+        self.cfg["deployed"] = res.deployed
+        store.save_config(self.cfg)
+        for n in res.notes:
+            self.ui.msg(f"  · {n}", "dim")
+        if res.blocked:
+            self.ui.msg("Failing closed — reclaimed nothing this run.", "warn")
+            return
+        if not res.candidates:
+            self.ui.msg("Nothing to reclaim — every deployed game still has its "
+                        "shortcut (or is under the size floor).", "success")
+            return
+
+        total = sum(c.size for c in res.candidates)
+        self.ui.msg("", "dim")
+        self.ui.msg(f"{len(res.candidates)} game(s) look removed from Steam "
+                    f"({self._gb(total)} reclaimable):", "info")
+        for c in res.candidates:
+            self.ui.msg(f"  🗑  {c.name}  ({self._gb(c.size)})", "warn")
+        self.ui.msg("The NAS copy and the Proton prefix are kept — this only "
+                    "deletes the SD folder, and Deploy puts it back.", "dim")
+
+        if auto:
+            if len(res.candidates) > reclaim.MAX_AUTO_BATCH:
+                self.ui.msg(f"{len(res.candidates)} at once is more than the "
+                            f"auto limit ({reclaim.MAX_AUTO_BATCH}) — that looks "
+                            "like a Steam/vdf problem, not you deleting a couple."
+                            " Refusing; run it by hand to confirm.", "error")
+                return
+            chosen = res.candidates
+        else:
+            chosen = self._pick_reclaim(res.candidates)
+            if not chosen:
+                return
+            names = ", ".join(c.name for c in chosen)
+            if not self.ui.confirm(f"Delete {len(chosen)} game(s) from the SD? "
+                                   f"{names}", danger=True):
+                return
+
+        freed = 0
+        for c in chosen:
+            freed += reclaim.uninstall(c, res.deployed,
+                                       log=lambda m: self.ui.msg(m, "dim"))
+        self.cfg["deployed"] = res.deployed
+        store.save_config(self.cfg)
+        self.ui.msg(f"Reclaimed {self._gb(freed)} across {len(chosen)} game(s).",
+                    "success")
+
+    def _pick_reclaim(self, candidates) -> list:
+        by_label = {f"  {c.name}  ({self._gb(c.size)})": c for c in candidates}
+        picked = self.ui.choose(
+            "Delete which? (←→ toggle, Enter confirm, Esc cancel)",
+            list(by_label), multi=True)
+        return [by_label[p] for p in picked if p in by_label]
+
+    def cmd_setup_reclaim_timer(self):
+        """Install a WEEKLY user systemd timer that runs `gfm reclaim --auto`.
+        User-level (systemctl --user) — no sudo, and the deck user is always
+        logged in in Game Mode so it fires. Persistent so a missed run (Deck
+        off) catches up on next boot."""
+        if os.name == "nt":
+            self.ui.msg("The reclaim timer is Deck/Linux only.", "warn")
+            return
+        self.ui.header("🗓  WEEKLY RECLAIM TIMER")
+        self.ui.msg("Installs a user systemd timer: once a week it refreshes "
+                    "the map and frees SD space from big deployed games whose "
+                    "Steam shortcut you've deleted. It confirms nothing (that's "
+                    "what --auto means), but every safety guard still applies "
+                    "and it refuses a suspicious batch.", "dim")
+        if not self.ui.confirm("Install the weekly reclaim timer?"):
+            return
+        app_dir = Path(__file__).resolve().parent
+        unit_dir = Path.home() / ".config" / "systemd" / "user"
+        unit_dir.mkdir(parents=True, exist_ok=True)
+        py = sys.executable or "python3"
+        (unit_dir / "gfm-reclaim.service").write_text(
+            "[Unit]\nDescription=GFM weekly reclaim (map refresh + free SD "
+            "space)\n\n[Service]\nType=oneshot\n"
+            f"WorkingDirectory={app_dir}\n"
+            f"ExecStart={py} {app_dir / 'gfm.py'} reclaim --auto\n",
+            encoding="utf-8")
+        (unit_dir / "gfm-reclaim.timer").write_text(
+            "[Unit]\nDescription=Run GFM reclaim weekly\n\n[Timer]\n"
+            "OnCalendar=weekly\nPersistent=true\nRandomizedDelaySec=1h\n\n"
+            "[Install]\nWantedBy=timers.target\n", encoding="utf-8")
+        try:
+            subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
+            subprocess.run(["systemctl", "--user", "enable", "--now",
+                            "gfm-reclaim.timer"], check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            self.ui.msg(f"Couldn't enable the timer: {e}", "error")
+            self.ui.msg("Units written to ~/.config/systemd/user/ — enable "
+                        "manually with: systemctl --user enable --now "
+                        "gfm-reclaim.timer", "warn")
+            return
+        self.ui.msg("Installed. Check it with: systemctl --user list-timers "
+                    "gfm-reclaim.timer", "success")
+        self.ui.msg("Runs 'gfm reclaim --auto' weekly. Remove with: systemctl "
+                    "--user disable --now gfm-reclaim.timer", "dim")
+
     def cmd_save_restore(self):
         """Put saves back after a reimage: prefix backups -> game-folder saves.
 
@@ -666,6 +823,8 @@ class App:
             choice = self.ui.choose("Setup & maintenance:", [
                 "🔌 Connect NAS Payloads (SMB automount)",
                 "🧰 Stage GE-Proton Runner to NAS",
+                "🧹 Reclaim SD Space (free removed games now)",
+                "🗓  Weekly Reclaim Timer (set up / remove)",
                 "💾 Mirror Store (offline copy of recipes on SD/NAS)",
                 "⬆️  Update (git pull latest recipes + code)",
                 "🖥️  Install Shortcut (put GFM on Desktop + Game Mode)",
@@ -675,6 +834,10 @@ class App:
                 self.cmd_setup_nas()
             elif choice.startswith("🧰"):
                 self.cmd_stage_runner()
+            elif choice.startswith("🧹"):
+                self.cmd_reclaim()
+            elif choice.startswith("🗓"):
+                self.cmd_setup_reclaim_timer()
             elif choice.startswith("💾"):
                 self.cmd_mirror(None)
             elif choice.startswith("⬆"):
@@ -1559,6 +1722,8 @@ COMMANDS = {
     # setup / diagnostics
     "setup-nas": lambda app, a: app.cmd_setup_nas(),
     "stage-runner": lambda app, a: app.cmd_stage_runner(),
+    "reclaim": lambda app, a: app.cmd_reclaim(),
+    "setup-reclaim-timer": lambda app, a: app.cmd_setup_reclaim_timer(),
     "test-crew": lambda app, a: app.cmd_test_crew(),
 }
 
@@ -1575,6 +1740,8 @@ def main():
                         help="folder of local-only override payloads "
                              "(NAS mount, SD, …); also persisted to config")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--auto", action="store_true",
+                        help="reclaim: no prompts, for the weekly timer")
     args = parser.parse_args()
 
     app = App(args)
