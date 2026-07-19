@@ -59,6 +59,9 @@ class ReclaimScan:
     candidates: list = field(default_factory=list)
     deployed: dict = field(default_factory=dict)   # updated record to persist
     notes: list = field(default_factory=list)       # things skipped, and why
+    considered: list = field(default_factory=list)  # (name, outcome) for EVERY
+    #   deployed game, so the UI can explain why each one is / isn't eligible
+    #   ("why isn't it detecting FUEL?" -> "under the 34GB floor").
     blocked: bool = False                            # fail-closed tripped
 
 
@@ -123,16 +126,18 @@ def scan(recipes, steam_root, deployed: dict, sd_games_dirs,
                 continue
         return None
 
+    floor_gb = min_bytes / (1 << 30)
     for name in list(out.deployed.keys()):
         rec = out.deployed[name]
         recipe = by_name.get(name)
         sd_dir = sd_dir_for(name)
         if sd_dir is None:
             out.deployed.pop(name, None)       # already off the SD — forget it
+            out.considered.append((name, "already off the SD — forgotten"))
             continue
         if recipe is None:
-            out.notes.append(f"{name}: deployed but no recipe — can't track its "
-                             "shortcut, left alone")
+            out.considered.append((name, "kept — no recipe, can't track its "
+                                   "shortcut"))
             continue
         try:
             has_shortcut = bool(
@@ -145,26 +150,31 @@ def scan(recipes, steam_root, deployed: dict, sd_games_dirs,
                                blocked=True)
         if has_shortcut:
             rec["shortcut_seen"] = True         # latch it
+            out.considered.append((name, "kept — still in Steam"))
             continue
         if not rec.get("shortcut_seen"):
-            continue                            # deployed, never applied — skip
+            out.considered.append((name, "kept — deployed but never applied "
+                                   "(no shortcut yet to remove)"))
+            continue
         # shortcut was there, now gone -> the user removed it. Now the guards.
         staged = deploy.staged_root(local_payloads) / name if local_payloads else None
         if staged is None or not _dir_ok(staged):
-            out.notes.append(f"{name}: shortcut gone, but NOT staged on the NAS "
-                             "— refusing to delete something we can't restore")
+            out.considered.append((name, "kept — shortcut gone, but NOT on the "
+                                   "NAS, so deleting it wouldn't be reversible"))
             continue
         if not _saves_safe(recipe, local_payloads):
-            out.notes.append(f"{name}: shortcut gone, but its game-folder saves "
-                             "aren't captured — refusing (run 🔍 Scan first)")
+            out.considered.append((name, "kept — shortcut gone, but its "
+                                   "game-folder saves aren't captured yet"))
             continue
         size = dir_size(sd_dir)
         if size <= min_bytes:
-            out.notes.append(f"{name}: shortcut gone, but {size / (1 << 30):.1f}"
-                             f"GB is under the {min_bytes / (1 << 30):.0f}GB "
-                             "floor — kept")
+            out.considered.append(
+                (name, f"kept — shortcut gone, but {size / (1 << 30):.1f}GB is "
+                       f"under the {floor_gb:.0f}GB floor"))
             continue
         out.candidates.append(Candidate(name, sd_dir, size, recipe))
+        out.considered.append((name, f"REMOVABLE — {size / (1 << 30):.1f}GB, "
+                               "shortcut deleted"))
     return out
 
 

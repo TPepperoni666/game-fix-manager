@@ -763,9 +763,17 @@ class App:
         if res.blocked:
             self.ui.msg("Failing closed — reclaimed nothing this run.", "warn")
             return
+        # Per-game breakdown — so "why isn't it detecting X?" answers itself
+        # (X is under the floor / still has its shortcut / never applied…).
+        if res.considered:
+            self.ui.msg(f"Checked {len(res.considered)} deployed game(s):", "dim")
+            for nm, outcome in res.considered:
+                self.ui.msg(f"    {nm}: {outcome}", "dim")
         if not res.candidates:
-            self.ui.msg("Nothing to reclaim — every deployed game still has its "
-                        "shortcut (or is under the size floor).", "success")
+            self.ui.msg("Nothing to reclaim right now. Reclaim only removes big "
+                        f"(>{int(reclaim.DEFAULT_MIN_BYTES / (1 << 30))}GB) "
+                        "deployed games whose Steam shortcut you've deleted.",
+                        "success")
             return
 
         total = sum(c.size for c in res.candidates)
