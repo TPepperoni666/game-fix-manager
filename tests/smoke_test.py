@@ -1011,6 +1011,22 @@ def main():
               "_setup_shortcut" in _dsrc and "flush_vdf_writes" in _dsrc)
         check("deploy latches shortcut_seen (arms reclaim without a prior run)",
               "shortcut_seen" in _dsrc)
+        # The weekly timer runs unattended — a prompt on that path would hang
+        # the job forever waiting on stdin that never comes.
+        for _fn in ("cmd_reclaim", "cmd_backup_prefixes"):
+            _s = _insp.getsource(getattr(_gfm.App, _fn))
+            _ia = _s.index("if auto:")
+            _prompts = [c for c in ("self.ui.input(", "self.ui.choose(",
+                                    "self.ui.confirm(", "_pick_reclaim(")
+                        if c in _s]
+            check(f"{_fn}: every prompt is after the auto guard",
+                  all(_s.index(c) > _ia for c in _prompts))
+        check("capture/map refresh never prompt (used by the weekly timer)",
+              not any(p in _insp.getsource(getattr(_gfm.App, f))
+                      for f in ("_capture_all", "_refresh_map")
+                      for p in ("self.ui.input(", "self.ui.choose(",
+                                "self.ui.confirm(")))
+
         check("deploy makes a generic shortcut for recipe-less games",
               hasattr(_gfm.App, "_make_generic_shortcut")
               and "_make_generic_shortcut" in _insp.getsource(

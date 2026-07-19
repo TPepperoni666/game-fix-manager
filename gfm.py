@@ -634,8 +634,17 @@ class App:
         if self.steam_root is None:
             self.ui.msg("No Steam root — nothing to back up.", "warn")
             return
+        auto = getattr(self.args, "auto", False)
         cards = store.sd_card_roots()
-        if not cards:
+        if auto:
+            # The weekly timer has no one to ask — NEVER prompt here or the
+            # unattended run hangs forever waiting on stdin.
+            if not cards:
+                self.ui.msg("Weekly prefix backup: no SD card mounted — "
+                            "skipped.", "warn")
+                return
+            sd = cards[0]
+        elif not cards:
             raw = self.ui.input("No SD card found — enter a destination root "
                                 "(blank to cancel)")
             if not raw or not Path(raw).is_dir():
