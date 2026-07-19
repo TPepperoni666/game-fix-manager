@@ -1001,6 +1001,10 @@ def main():
               "_setup_shortcut" in _dsrc and "flush_vdf_writes" in _dsrc)
         check("deploy latches shortcut_seen (arms reclaim without a prior run)",
               "shortcut_seen" in _dsrc)
+        check("deploy makes a generic shortcut for recipe-less games",
+              hasattr(_gfm.App, "_make_generic_shortcut")
+              and "_make_generic_shortcut" in _insp.getsource(
+                  _gfm.App._setup_shortcut))
 
         again = dep.deploy(staged[0], dp_sd)
         check("re-deploy is a no-op (resume skips identical files)",
@@ -1083,6 +1087,21 @@ def main():
         check("reclaim: no Steam root -> blocked, nothing reclaimed",
               rc.scan([big], None, {"Big": {"shortcut_seen": True}}, [rc_sd],
                       rc_nas).blocked)
+        # A deployed game with NO recipe (a generic shortcut made on deploy) is
+        # still tracked — by its folder name, which is the shortcut's AppName.
+        rc_game("NoRecipe", 40)
+        sv.ensure_shortcut(rc_steam, "NoRecipe",
+                           str(rc_sd / "NoRecipe" / "g.exe"),
+                           str(rc_sd / "NoRecipe"), "", 2000000002, [])
+        r = rc.scan([], rc_steam, {"NoRecipe": {"shortcut_seen": True}},
+                    [rc_sd], rc_nas)
+        check("reclaim: recipe-less game with a shortcut -> kept (tracked)",
+              not r.candidates and "still in Steam" in r.considered[0][1])
+        rc_clear()
+        r = rc.scan([], rc_steam, {"NoRecipe": {"shortcut_seen": True}},
+                    [rc_sd], rc_nas)
+        check("reclaim: recipe-less game, shortcut deleted -> removable",
+              len(r.candidates) == 1 and r.candidates[0].name == "NoRecipe")
         rc_clear()
         r = rc_scan([big], {"Big": {"shortcut_seen": True}})
         freed = rc.uninstall(r.candidates[0], r.deployed)

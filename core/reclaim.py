@@ -135,13 +135,12 @@ def scan(recipes, steam_root, deployed: dict, sd_games_dirs,
             out.deployed.pop(name, None)       # already off the SD — forget it
             out.considered.append((name, "already off the SD — forgotten"))
             continue
-        if recipe is None:
-            out.considered.append((name, "kept — no recipe, can't track its "
-                                   "shortcut"))
-            continue
+        # A deployed game may have no recipe (a generic shortcut we made on
+        # deploy) — its Steam AppName is just the folder name, so match by that.
+        match_names = recipe.all_names if recipe is not None else [name]
         try:
             has_shortcut = bool(
-                shortcutsvdf.find_appids(steam_root, recipe.all_names))
+                shortcutsvdf.find_appids(steam_root, match_names))
         except shortcutsvdf.ShortcutsError:
             out.notes.append("shortcuts.vdf went unreadable mid-scan — failing "
                              "closed")

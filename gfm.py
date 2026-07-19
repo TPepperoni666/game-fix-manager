@@ -13,6 +13,7 @@ Options: --store PATH, --steam-root PATH, --dry-run
 from __future__ import annotations
 
 import argparse
+import binascii
 import json
 import os
 import shutil
@@ -480,10 +481,10 @@ class App:
         Returns True if a matching recipe's shortcut steps ran."""
         recipe, _sig = sdscan._match_folder(dest, self.recipes)
         if recipe is None:
-            self.ui.msg(f"  · {folder_name}: no recipe — copied, but no shortcut "
-                        "made (add it in Steam by hand, or write a recipe).",
-                        "dim")
-            return False
+            # No recipe (a modern game we haven't written one for) — still make
+            # it playable: pick the exe from what's on disk and add a plain
+            # shortcut. This is the Pragmata/DS2 case.
+            return self._make_generic_shortcut(folder_name, dest)
         setup = [s for s in recipe.steps if s["type"] in self.SETUP_STEP_TYPES]
         if not setup:
             self.ui.msg(f"  · {recipe.name}: recipe has no shortcut step — "
@@ -495,6 +496,40 @@ class App:
         import dataclasses
         only_setup = dataclasses.replace(recipe, steps=setup)
         return self.run_engine(only_setup, dest, engine.apply_recipe)
+
+    def _make_generic_shortcut(self, folder_name: str, dest: Path) -> bool:
+        """Add a Steam shortcut for a deployed game with NO recipe: propose the
+        exe from what's on disk (find_exes already skips crash/installer/redist
+        junk), let the user confirm or pick another, and queue it on
+        GE-Proton 10.34 with a stable computed appid. Returns True if queued."""
+        exes = sdscan.find_exes(dest)
+        if not exes:
+            self.ui.msg(f"  · {folder_name}: no recipe and no exe found — add it "
+                        "to Steam by hand.", "warn")
+            return False
+        labels = [f"{e['rel']}  ({e['size'] // (1 << 20)} MB)" for e in exes]
+        skip = "⬅️  Skip — don't add a shortcut"
+        self.ui.msg(f"  {folder_name}: no recipe — pick the exe to launch "
+                    "(best guess first):", "info")
+        picked = self.ui.choose(f"Shortcut exe for {folder_name}?",
+                                labels + [skip])
+        if not picked or picked[0] == skip:
+            self.ui.msg(f"  · {folder_name}: skipped — no shortcut.", "dim")
+            return False
+        rel = exes[labels.index(picked[0])]["rel"]
+        exe = str(dest / rel)
+        appid = binascii.crc32(
+            f"gfm:deploy:{folder_name}".encode()) | 0x80000000
+        self.pending_vdf_writes.append({
+            "kind": "add_shortcut", "game": folder_name,
+            "appname": folder_name, "aliases": [], "exe": exe,
+            "start_dir": str(dest), "launch_options": "", "appid": appid})
+        self.pending_vdf_writes.append({
+            "kind": "compat", "game": folder_name, "appid": appid,
+            "tool": "GE-Proton10-34", "priority": "250"})
+        self.ui.msg(f"  + {folder_name}: shortcut queued -> {rel} "
+                    f"(appid {appid}, GE-Proton 10.34)", "success")
+        return True
 
     def _registry_by_appid(self) -> dict:
         """prefix_registry.json entries keyed by appid string."""
