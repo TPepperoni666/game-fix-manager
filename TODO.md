@@ -13,10 +13,15 @@ Last updated 2026-07-13. Deeper context lives in the Claude memory files
 > the source drive.
 
 
-1. **Make the NAS writable on the Deck.** ⬆️ Update, then ⚙️ Settings →
-   🔌 Connect NAS Payloads (needs sudo) to reinstall the mount unit as `rw`.
+1. [x] **Make the NAS writable on the Deck — DONE 2026-07-19.** Verified: the
+   Deck wrote `_state/localconfig-145295182.vdf` + `the-crew/saves/0/data.bin`
+   (7.6KB — The Crew's save is finally backed up off the SD) + HOTP saves, with
+   the read-only errors gone from the log. Capture (art/saves/settings) now
+   works. NEWLY UNBLOCKED: (a) per-game perf/TDP restore — there's now a real
+   localconfig.vdf on the NAS to build the surgical per-appid restore against;
+   (b) capture-to-SD is now resilience, not a fix.
 
-   **THEN build: capture to the SD as well as the NAS (Tony asked 2026-07-13).**
+   **STILL WORTH BUILDING: capture to the SD as well as the NAS (Tony 2026-07-13).**
    Key insight: a reimage wipes the internal SSD, NOT the SD. Game-folder saves
    (on the SD) already survive; but ART (userdata/<id>/config/grid/) and
    SETTINGS (localconfig.vdf) live on the INTERNAL drive and DO get wiped — so
