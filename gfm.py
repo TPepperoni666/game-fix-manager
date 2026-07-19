@@ -1094,6 +1094,15 @@ class App:
                 sdmap.write_steam_section(games, dest=dest,
                                           existing=sdmap.load_first())
                 wrote = True
+        # Inventory the prefix backups too, so an unattended refresh produces
+        # the SAME complete map the menu Scan does — games + steam_games +
+        # prefix_backups. (Runs last: each section write preserves the others,
+        # so ordering only matters in that it must follow them.)
+        try:
+            self._scan_prefix_backups()
+            wrote = True
+        except OSError as e:
+            self.ui.msg(f"prefix-backup inventory skipped: {e}", "warn")
         if wrote:
             self.ui.msg(f"Map refreshed -> {dest}", "dim")
         return wrote

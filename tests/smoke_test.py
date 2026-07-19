@@ -1021,6 +1021,17 @@ def main():
                         if c in _s]
             check(f"{_fn}: every prompt is after the auto guard",
                   all(_s.index(c) > _ia for c in _prompts))
+        # The unattended refresh must write the SAME map sections the menu
+        # Scan does — games + steam_games + prefix_backups — or the weekly run
+        # silently leaves part of the map stale.
+        _rm = _insp.getsource(_gfm.App._refresh_map)
+        check("weekly map refresh covers SD games, Steam and prefix backups",
+              "sdscan.scan" in _rm and "steamscan.scan" in _rm
+              and "_scan_prefix_backups" in _rm)
+        check("prefix-backup inventory never prompts (runs unattended)",
+              not any(p in _insp.getsource(_gfm.App._scan_prefix_backups)
+                      for p in ("self.ui.input(", "self.ui.choose(",
+                                "self.ui.confirm(")))
         check("capture/map refresh never prompt (used by the weekly timer)",
               not any(p in _insp.getsource(getattr(_gfm.App, f))
                       for f in ("_capture_all", "_refresh_map")
