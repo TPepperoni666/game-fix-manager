@@ -358,8 +358,9 @@ class App:
             here = deploy.is_deployed(g, dest_root)
             on_card += here
             mark = "✅" if here else "⬇️ "
-            state = "on the card" if here else "not copied yet"
-            by_label[f"{mark} {g.name} — {state}"] = g
+            size = self._gb(g.size) if g.size is not None else "size ?"
+            state = " · on the card" if here else ""
+            by_label[f"{mark} {g.name}  ({size}){state}"] = g
         picked = self.ui.choose(
             f"Deploy which games?  ({len(games)} staged, {on_card} on the "
             "card) — ←→ toggle, Enter confirm", list(by_label), multi=True)
@@ -372,7 +373,10 @@ class App:
         plans = []
         need_total = 0
         for g in chosen:
+            had_size = g.size is not None
             deploy.measure(g)
+            if not had_size:            # measured for real — cache it for next time
+                deploy.save_size(self.local_payloads, g)
             todo, need, skipped = deploy.plan(g, dest_root)
             plans.append((g, todo, need, skipped))
             need_total += need

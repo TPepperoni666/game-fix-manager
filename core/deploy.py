@@ -27,6 +27,7 @@ Design notes:
 """
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import time
@@ -35,6 +36,7 @@ from pathlib import Path
 from typing import Callable
 
 GAMES_DIR = "_games"
+SIZES_FILE = ".gfm-sizes.json"   # cached {name: {size, files}} in _games/
 _CHUNK = 4 << 20        # 4 MiB — big enough to stream SMB efficiently
 _TICK = 0.25            # seconds between progress callbacks
 
@@ -75,19 +77,53 @@ def measure(game: StagedGame) -> StagedGame:
     return game
 
 
+def load_sizes(local_payloads: Path) -> dict:
+    """The cached {name: {size, files}} manifest in _games/.gfm-sizes.json, or
+    {} if absent/unreadable. Lets the menu show sizes WITHOUT walking every
+    tree (that walk is ~43s over SMB, minutes on the Deck's Wi-Fi). Populated
+    by whoever stages a game and refreshed opportunistically by measure()."""
+    try:
+        data = json.loads(
+            (staged_root(local_payloads) / SIZES_FILE).read_text("utf-8"))
+    except (OSError, ValueError):
+        return {}
+    games = data.get("games", {})
+    return games if isinstance(games, dict) else {}
+
+
+def save_size(local_payloads: Path, game: StagedGame) -> None:
+    """Best-effort update of one game's entry in the sizes manifest. Silently
+    does nothing if the mount is read-only — the cache is an optimisation, not
+    a source of truth."""
+    if game.size is None or game.files is None:
+        return
+    root = staged_root(local_payloads)
+    try:
+        data = json.loads((root / SIZES_FILE).read_text("utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    data.setdefault("games", {})[game.name] = {
+        "size": game.size, "files": game.files}
+    try:
+        (root / SIZES_FILE).write_text(json.dumps(data, indent=1), "utf-8")
+    except OSError:
+        pass   # read-only NAS — fine, we just don't cache
+
+
 def list_staged(local_payloads: Path) -> list[StagedGame]:
-    """Every game staged under _games/ — NAMES ONLY, deliberately.
+    """Every game staged under _games/. One cheap iterdir() for the names, plus
+    sizes from the .gfm-sizes.json manifest when present (no tree walk).
 
     This used to walk each game's whole tree for a size, and the caller then
-    walked them all AGAIN via plan() to work out resume state — two full
-    walks per game, each a round-trip per file, before the menu even drew.
-    With ~32k files staged that's ~65k SMB round-trips to render a list of
-    names, and it took an age. Now it's one cheap iterdir(); size and resume
-    state are measured for the ONE game that gets picked.
+    walked them all AGAIN via plan() — two full walks per game, a round-trip
+    per file, before the menu even drew (~43s with 32k files staged). Now the
+    names are free and the sizes come from the manifest; the picked game's
+    exact bytes-to-copy are still measured in plan() before it copies.
 
     Empty list if the mount is down.
     """
     root = staged_root(local_payloads)
+    cached = load_sizes(local_payloads)
     out: list[StagedGame] = []
     try:
         entries = sorted(root.iterdir())
@@ -99,7 +135,8 @@ def list_staged(local_payloads: Path) -> list[StagedGame]:
                 continue
         except OSError:
             continue
-        out.append(StagedGame(d.name, d))
+        c = cached.get(d.name, {})
+        out.append(StagedGame(d.name, d, c.get("files"), c.get("size")))
     return out
 
 

@@ -940,6 +940,19 @@ def main():
         staged = dep.list_staged(dp_nas)
         check("lists staged games by name",
               len(staged) == 1 and staged[0].name == "Battlefield 3")
+        # Sizes come from a cached manifest so the menu can show them WITHOUT
+        # walking every tree (that walk is the ~43s SMB cost we removed).
+        check("no manifest -> size stays lazy (None)", staged[0].size is None)
+        dep.save_size(dp_nas, dep.StagedGame("Battlefield 3", dp_game, 3, 4096))
+        (dp_nas / dep.GAMES_DIR / "Fake").mkdir()  # a game not in the manifest
+        staged2 = {g.name: g for g in dep.list_staged(dp_nas)}
+        check("manifest size shown without a tree walk",
+              staged2["Battlefield 3"].size == 4096
+              and staged2["Battlefield 3"].files == 3)
+        check("game absent from manifest -> size None (not a crash)",
+              staged2["Fake"].size is None)
+        check(".gfm-sizes.json is not itself listed as a game",
+              not any(g.name.startswith(".") for g in staged2.values()))
         # Drawing the menu must NOT walk every game: over SMB that's a
         # round-trip per file, and with ~32k staged files it took 43s to draw
         # a list of names (and plan() then walked them all again, both sides).
