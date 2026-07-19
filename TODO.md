@@ -15,6 +15,24 @@ Last updated 2026-07-13. Deeper context lives in the Claude memory files
 
 1. **Make the NAS writable on the Deck.** ⬆️ Update, then ⚙️ Settings →
    🔌 Connect NAS Payloads (needs sudo) to reinstall the mount unit as `rw`.
+
+   **THEN build: capture to the SD as well as the NAS (Tony asked 2026-07-13).**
+   Key insight: a reimage wipes the internal SSD, NOT the SD. Game-folder saves
+   (on the SD) already survive; but ART (userdata/<id>/config/grid/) and
+   SETTINGS (localconfig.vdf) live on the INTERNAL drive and DO get wiped — so
+   they must be backed up off it, and the SD is a great target (always present,
+   always writable exFAT — none of the NAS's ro/guest grief — and survives the
+   reimage). NAS stays as the durable mirror against the SD itself dying.
+   Design = capture writes to the SD ALWAYS + NAS when reachable; the current
+   failure (NAS ro -> capture silently backs up nothing) then can't happen.
+   THE CATCH to get right: restore must then SEARCH BOTH locations. Three
+   restore paths touch this — art (via the steam_shortcut step's restore_art),
+   game-folder saves (_restore_saves_one), settings. Build it as: a writable
+   capture-root resolver (NAS-if-writable else SD) + a read-roots list [NAS, SD]
+   that every restore checks in order. Test on the Deck — it's save-restore
+   correctness, don't trust dev-box vdfs. SD dir suggestion:
+   `<SD>/steamos_restore/game_fixes/_local/` (already in the Syncthing folder,
+   so captures would sync to Windows too = a third copy + Claude can see them).
    **Why it matters:** the share is mounted `ro`, and capture WRITES there —
    so right now nothing is backing up **The Crew's `data.bin`** (game-folder
    save, covered by no prefix backup — the one live data-loss risk), your
