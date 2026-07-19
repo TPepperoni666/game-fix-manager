@@ -133,16 +133,23 @@ Everything below is written, unit-tested (159 smoke checks) and pushed, but
       Steam.** Tony's idea, refined 2026-07-13: a timer (systemd, like
       tcu-network.service) notices when the Steam shortcut for a
       **tool-deployed** game disappears from `shortcuts.vdf` (i.e. Tony deleted
-      it), and if that game is **larger than 50 GB**, removes it from the SD.
+      it), and if that game is **larger than 34 GB**, removes it from the SD.
+      (Started at 50 GB; Tony chose 34 GB on 2026-07-13 to also reclaim the
+      mid-size AAA.)
 
-      **The >50 GB floor is the key safety feature, not just convenience.** Every
+      **The size floor is a key safety feature, not just convenience.** Every
       game whose save lives in the GAME FOLDER (The Crew's `data.bin` 24.6GB,
-      Simpsons' `Save1` 2.2GB, HOTP — all retro titles) is well under 50 GB, so
-      the threshold makes them **ineligible by construction**. What's left over
-      50 GB is big modern AAA (Death Stranding 2 122GB, RE Requiem 75GB) whose
-      saves live in the PREFIX and survive deletion (hazard 4). So the threshold
-      excludes the only case that could actually lose data. Keep the save_paths
-      guard anyway as defence-in-depth, but the floor is what makes this safe.
+      Simpsons' `Save1` 2.2GB, HOTP — all retro titles) is under 34 GB, so the
+      threshold makes them **ineligible by construction**. What's left over 34 GB
+      is modern AAA (Assassin's Creed Shadows 155GB, Death Stranding 2 122GB, RE
+      Requiem 75GB, College Football 47GB, Pragmata 34.7GB) whose saves live in
+      the PREFIX and survive deletion (hazard 4). So the threshold still excludes
+      the only case that could actually lose data — BUT the headroom is now
+      thin: The Crew at 24.6 GB is only ~10 GB under the line (was ~25 at 50 GB).
+      The moment a game-folder-save game exceeds 34 GB the save_paths guard is
+      the ONLY thing standing between it and data loss, so that guard is now
+      load-bearing, not defence-in-depth. Keep it, and re-check this margin if a
+      big game with save_paths ever shows up.
 
       **The trigger, precisely:** a game is a reclaim candidate only if ALL of:
       (a) it was DEPLOYED by the tool from NAS `_games/` — needs a deployed-games
@@ -150,7 +157,7 @@ Everything below is written, unit-tested (159 smoke checks) and pushed, but
       steam_shortcut + pinned gospel appid; (c) that appid was in LAST week's
       `shortcuts.vdf` snapshot but is ABSENT now; (d) it's still staged in NAS
       `_games/` (so deletion is a re-copy away, never a loss); (e) its on-SD size
-      is > 50 GB. Non-Steam shortcuts live in `shortcuts.vdf` (binary — we
+      is > 34 GB. Non-Steam shortcuts live in `shortcuts.vdf` (binary — we
       already parse it via `core/shortcutsvdf.py`), NOT the `appmanifest_*.acf`
       files (those are Steam-owned games).
 
