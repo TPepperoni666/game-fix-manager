@@ -168,6 +168,54 @@ def get_launch_options(steam_root: Path, names: list[str]) -> dict[str, str]:
     return result
 
 
+def list_shortcuts(steam_root: Path) -> list[dict]:
+    """Every non-Steam shortcut Steam knows about, as
+    {appid, name, exe, start_dir, launch_options}. This is the raw material
+    for adopting hand-added games: the user adds a game to Steam however they
+    like, and a scan sees it here without the tool needing its own add flow."""
+    out: list[dict] = []
+    seen = set()
+    for f in _shortcut_files(steam_root):
+        try:
+            root = loads(f.read_bytes())
+        except Exception:
+            continue
+        for entry in _entries(root):
+            _k, t, appid = _get_ci(entry, "appid")
+            if t != TYPE_INT or not appid:
+                continue
+            appid &= 0xFFFFFFFF
+            if appid in seen:
+                continue
+            seen.add(appid)
+
+            def _s(field: str) -> str:
+                _kk, _tt, v = _get_ci(entry, field)
+                return v.strip('"') if isinstance(v, str) else ""
+
+            out.append({"appid": appid, "name": _s("AppName"),
+                        "exe": _s("Exe"), "start_dir": _s("StartDir"),
+                        "launch_options": _s("LaunchOptions")})
+    return out
+
+
+def untracked_shortcuts(shortcuts: list[dict], recipe_names_norm: set[str],
+                        tracked_appids: set) -> list[dict]:
+    """The shortcuts worth ADOPTING: non-Steam games that no recipe already
+    covers and that aren't already pinned in the registry. Pure so it's
+    testable without a Steam install. tracked_appids may hold ints or strings;
+    both are compared as strings."""
+    tracked = {str(a) for a in tracked_appids}
+    out = []
+    for s in shortcuts:
+        if str(s.get("appid")) in tracked:
+            continue
+        if _norm(s.get("name", "")) in recipe_names_norm:
+            continue
+        out.append(s)
+    return out
+
+
 def describe(steam_root: Path, names: list[str]) -> dict | None:
     """Everything about HOW a matching shortcut launches — appid, target exe,
     start dir, launch options. None if no shortcut matches.

@@ -1509,6 +1509,51 @@ def main():
         check("diagnostics walks the full tree for exes",
               "full tree" in diag)
 
+        # --- adopt hand-added Steam games ------------------------------
+        from core import shortcutsvdf as _sv
+        # untracked_shortcuts: pure filter is the heart of adoption.
+        shortcuts = [
+            {"appid": 2556953410, "name": "FUEL", "exe": "/g/sec.exe"},
+            {"appid": 111, "name": "Already Pinned", "exe": "/g/ap.exe"},
+            {"appid": 999, "name": "Skate 3", "exe": "/g/s3.exe"},
+            {"appid": 222, "name": "", "exe": "/g/blank.exe"},
+        ]
+        recipe_names = {_sv._norm("FUEL")}
+        got = _sv.untracked_shortcuts(shortcuts, recipe_names, {111, "333"})
+        got_names = {g["name"] for g in got}
+        check("adopt skips recipe-covered shortcuts", "FUEL" not in got_names)
+        check("adopt skips already-pinned appids",
+              "Already Pinned" not in got_names)
+        check("adopt surfaces a genuinely new hand-add", "Skate 3" in got_names)
+        check("adopt compares appids as strings (int vs str safe)",
+              _sv.untracked_shortcuts(
+                  [{"appid": 333, "name": "X"}], set(), {"333"}) == [])
+        check("adopt is exposed on the CLI", "adopt" in gfm_mod.COMMANDS)
+        for m in ("cmd_adopt", "_adopt_shortcuts", "_append_registry_entries"):
+            check(f"App.{m} exists", hasattr(gfm_mod.App, m))
+        scan_src = _i.getsource(gfm_mod.App.cmd_scan_all)
+        refr_src = _i.getsource(gfm_mod.App._refresh_map)
+        check("scan adopts interactively",
+              "_adopt_shortcuts(interactive=True)" in scan_src)
+        check("background refresh adopts automatically",
+              "_adopt_shortcuts(interactive=False)" in refr_src)
+        # Adopted entries must be legible to the prefix-backup inventory:
+        # a registry entry with recipe_id=None still counts as "registry".
+        from core import prefixbackup as _pbk
+        reg = {"999": {"appid": 999, "name": "Skate 3", "recipe_id": None}}
+        class _B:
+            appid = "999"; safe_name = "Skate_3"
+            path = tmp; has_pfx = True
+        import core.prefiximport as _pi
+        _orig = _pi.list_backups
+        _pi.list_backups = lambda roots=None: [_B()]
+        try:
+            inv = _pbk.inventory([], reg)
+        finally:
+            _pi.list_backups = _orig
+        check("adopted game reads as 'registry' in the inventory",
+              inv and inv[0]["matched_by"] == "registry")
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

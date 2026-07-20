@@ -681,6 +681,100 @@ class App:
         except (OSError, ValueError):
             return []
 
+    def _append_registry_entries(self, new: list) -> bool:
+        """Add entries to prefix_registry.json, preserving everything else in
+        the file. Returns True if it wrote. This is the ONE writer of adopted
+        pins, so the gospel file's shape and comments stay intact."""
+        if not new:
+            return False
+        reg = self.store_root / "prefix_registry.json"
+        try:
+            data = json.loads(reg.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            self.ui.msg("Can't read prefix_registry.json — not adopting.",
+                        "error")
+            return False
+        data.setdefault("entries", []).extend(new)
+        reg.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+                       encoding="utf-8")
+        return True
+
+    def cmd_adopt(self, args=None):
+        """Standalone: adopt hand-added Steam games (also part of 🔍 Scan)."""
+        self.ui.header("🎁 ADOPT HAND-ADDED GAMES")
+        self.ui.msg("Finds non-Steam games you've added to Steam yourself and "
+                    "pins them so the tool tracks them (prefix backup, restore, "
+                    "the map). Nothing in Steam changes.", "dim")
+        n = self._adopt_shortcuts(interactive=True)
+        if n:
+            self.ui.msg(f"Adopted {n} game(s).", "success")
+
+    def _adopt_shortcuts(self, interactive: bool = True) -> int:
+        """Find non-Steam shortcuts the user added to Steam by hand that no
+        recipe covers and that aren't pinned yet, and ADOPT them: pin Steam's
+        OWN appid into the gospel registry with a name. Nothing in Steam
+        changes — adopting only records what's already there, so the game
+        becomes first-class for prefix backup/restore and shows in the map.
+
+        interactive lets you pick which to adopt; unattended adopts them all
+        (safe — it's a record, not a mutation)."""
+        if self.steam_root is None:
+            return 0
+        try:
+            shortcuts = shortcutsvdf.list_shortcuts(self.steam_root)
+        except Exception as e:
+            if interactive:
+                self.ui.msg(f"Couldn't read shortcuts.vdf: {e}", "warn")
+            return 0
+        recipe_names = set()
+        for r in self.recipes:
+            recipe_names |= {sdscan._norm(n) for n in r.all_names}
+        tracked = {e["appid"] for e in self._registry_entries()}
+        cand = shortcutsvdf.untracked_shortcuts(shortcuts, recipe_names, tracked)
+        # A shortcut with no name is Steam mid-edit; skip rather than pin junk.
+        cand = [c for c in cand if c.get("name")]
+        if not cand:
+            if interactive:
+                self.ui.msg("No new hand-added games to adopt — every "
+                            "non-Steam shortcut is already a recipe or pinned.",
+                            "dim")
+            return 0
+
+        if interactive:
+            self.ui.msg(f"{len(cand)} non-Steam game(s) added to Steam that the "
+                        "tool doesn't track yet:", "info")
+            labels = [f"{c['name']}  (appid {c['appid']})" for c in cand]
+            picked = self.ui.choose(
+                "Adopt which? (pins Steam's own appid — nothing in Steam "
+                "changes) — ←→ toggle, Enter confirm", labels, multi=True)
+            if not picked:
+                self.ui.msg("Adopted nothing.", "dim")
+                return 0
+            chosen = [cand[labels.index(p)] for p in picked if p in labels]
+        else:
+            chosen = cand
+
+        new = []
+        for c in chosen:
+            name = c["name"]
+            new.append({
+                "appid": c["appid"],
+                "name": name,
+                "safe_name": prefixbackup.safe_name(name),
+                "kind": "non_steam",
+                "recipe_id": None,
+                "source": "adopted",
+                "exe": c.get("exe", ""),
+                "notes": "Adopted from a hand-added Steam shortcut on "
+                         + time.strftime("%Y-%m-%d") + ". Steam's own appid "
+                         "pinned so prefix backup/restore keep it stable.",
+            })
+        if self._append_registry_entries(new):
+            for c in chosen:
+                self.ui.msg(f"  🎁 adopted {c['name']} (appid {c['appid']})",
+                            "success")
+        return len(new)
+
     def cmd_backup_prefixes_saved(self):
         """Re-run the backup over the selection you picked last time — no
         picker, no re-ticking. Same thing the weekly timer does, on demand."""
@@ -1149,6 +1243,10 @@ class App:
         self.ui.msg("── 3/5  Reconciling prefixes " + "─" * 13, "info")
         self.cmd_reconcile()
         self.ui.msg("── 4/5  Inventorying prefix backups " + "─" * 6, "info")
+        adopted = self._adopt_shortcuts(interactive=True)
+        if adopted:
+            self.ui.msg(f"Adopted {adopted} hand-added game(s) — they'll show "
+                        "in prefix backup and restore from now on.", "success")
         self._scan_prefix_backups()
         self.ui.msg("── 5/5  Capturing art + saves + settings " + "─" * 1,
                     "info")
@@ -1181,6 +1279,7 @@ class App:
         # the SAME complete map the menu Scan does — games + steam_games +
         # prefix_backups. (Runs last: each section write preserves the others,
         # so ordering only matters in that it must follow them.)
+        self._adopt_shortcuts(interactive=False)   # auto-pin new hand-adds
         try:
             self._scan_prefix_backups()
             wrote = True
@@ -2389,6 +2488,7 @@ COMMANDS = {
     # bundles (the two headline menu entries)
     "scan": lambda app, a: app.cmd_scan_all(),
     "diagnose": lambda app, a: app.cmd_diagnose(a),
+    "adopt": lambda app, a: app.cmd_adopt(a),
     "save-restore": lambda app, a: app.cmd_save_restore(),
     # the individual steps those bundles wrap
     "scan-sd": lambda app, a: app.cmd_scan_sd(),
