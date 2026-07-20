@@ -1,23 +1,26 @@
 {
   "id": "deadpool",
   "name": "Deadpool",
-  "aliases": ["Deadpool (2013)", "Deadpool The Game"],
+  "aliases": [
+    "Deadpool (2013)",
+    "Deadpool The Game"
+  ],
   "detect": {
-    "install_dir_names": ["Deadpool"],
-    "marker_files": ["Deadpool.exe"]
+    "install_dir_names": [
+      "Deadpool"
+    ],
+    "marker_files": [
+      "Deadpool.exe"
+    ]
   },
   "steps": [
-    {
-      "type": "install_runner",
-      "name": "GE-Proton10-34"
-    },
     {
       "type": "steam_shortcut",
       "exe": "Deadpool.exe",
       "start_dir": "{game_dir}",
-      "proton": "GE-Proton10-34"
+      "proton": "proton_9"
     }
   ],
   "post_apply_message": "Deadpool (non-Steam, delisted 2017) — setup:\n1. Game folder on the SD card (GFM detects it).\n2. Apply this fix — it AUTO-ADDS the Steam shortcut for you (Deadpool.exe, start dir = game folder, gospel appid) and forces GE-Proton 10.34 (install it via ProtonUp-Qt first — Steam doesn't auto-fetch GE builds; if the mapping shows missing, that's why). No manual 'add to Steam' needed. Steam closes briefly to write it.\n3. DO NOT add any framerate-unlock launch option — Deadpool soft-locks with an unlocked framerate (e.g. Chapter 5 before the toilet scene). Leave it at default.\n4. Only preset graphics options exist (Coalesced.ini is encrypted); pick a preset in-game.\nThe readme's launch target is Deadpool.exe (Binaries/DP.exe is the engine exe if the launcher misbehaves under Proton). If you hit missing-DLL errors, the crack ships vcredist_x86 + DirectX (DXSETUP) in _Redist.",
-  "notes": "Deadpool (High Moon, 2013), delisted from Steam Nov 2017 (Marvel licence). Tony's copy is a cracked non-Steam build (ChemicalFlood repack; NAS \\192.168.1.33\\Rom_Library\\roms\\win\\Deadpool.zip). Runs on Deck via forced Proton 9 (ProtonDB/community). Launch exe per the crack's _HOW TO RUN GAME!!.txt = Deadpool.exe (Binaries/DP.exe is the 20MB engine exe). Key gotcha: framerate unlock causes a progression soft-lock — keep default fps. No resolution config (encrypted Coalesced.ini, presets only), so no 1920x1200 ini step. Recipe is just the Proton pin + docs; add the game as a non-Steam shortcut first so proton_version can key off it."
+  "notes": "Deadpool (High Moon, 2013), delisted from Steam Nov 2017 (Marvel licence). Tony's copy is a cracked non-Steam build (ChemicalFlood repack; NAS \\192.168.1.33\\Rom_Library\\roms\\win\\Deadpool.zip). Runs on Deck via forced Proton 9 (ProtonDB/community). Launch exe per the crack's _HOW TO RUN GAME!!.txt = Deadpool.exe (Binaries/DP.exe is the 20MB engine exe). Key gotcha: framerate unlock causes a progression soft-lock — keep default fps. No resolution config (encrypted Coalesced.ini, presets only), so no 1920x1200 ini step. Recipe is just the Proton pin + docs; add the game as a non-Steam shortcut first so proton_version can key off it.\n\nPROTON CORRECTED TO proton_9 (2026-07-20). The recipe specified GE-Proton10-34, but the scan showed the live shortcut running Valve proton_9 and Tony confirms the game WORKS that way. Recipes must record what is verified, not what was guessed — applying the old value would have switched a working game onto an untested runner. The install_runner step went with it: Valve Protons ship with Steam, so there is nothing to stage."
 }

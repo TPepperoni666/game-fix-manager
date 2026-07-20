@@ -1,19 +1,26 @@
 {
   "id": "hawx-1",
   "name": "Tom Clancy's H.A.W.X",
-  "aliases": ["HAWX", "HAWX 1", "H.A.W.X", "Tom Clancys H A W X",
-              "Tom Clancy's HAWX", "Tom Clancy's H.A.W.X."],
+  "aliases": [
+    "HAWX",
+    "HAWX 1",
+    "H.A.W.X",
+    "Tom Clancys H A W X",
+    "Tom Clancy's HAWX",
+    "Tom Clancy's H.A.W.X."
+  ],
   "detect": {
-    "install_dir_names": ["Tom Clancys H A W X", "Tom Clancy's H.A.W.X",
-                          "Tom Clancy's H.A.W.X.", "HAWX"],
-    "marker_files": ["HAWX.exe"]
+    "install_dir_names": [
+      "Tom Clancys H A W X",
+      "Tom Clancy's H.A.W.X",
+      "Tom Clancy's H.A.W.X.",
+      "HAWX"
+    ],
+    "marker_files": [
+      "HAWX.exe"
+    ]
   },
   "steps": [
-    {
-      "type": "install_runner",
-      "optional": true,
-      "name": "GE-Proton10-34"
-    },
     {
       "type": "remove_files",
       "targets": [
@@ -30,9 +37,9 @@
       "type": "steam_shortcut",
       "exe": "HAWX.exe",
       "start_dir": "{game_dir}",
-      "proton": "GE-Proton10-34"
+      "proton": "proton_5"
     }
   ],
   "post_apply_message": "Tom Clancy's H.A.W.X (2009, non-Steam) — Apply auto-adds the Steam shortcut and skips the intro logos. Stage GE first with 'gfm stage-runner'.\n\nTHE KEY BIT — THE RIGHT EXE: the game ships TWO near-identical 10.5MB executables. HAWX.exe runs D3D9; HAWX_dx10.exe runs D3D10 and BLACK-SCREENS on launch for lots of people (worse under Proton). The shortcut points at HAWX.exe deliberately. If you ever re-add it by hand, do not grab the dx10 one.\n\nAlso applied: the 7 intro/logo videos are renamed to .gfm-orig (~162MB of them — teaser_logo.bik alone is 142MB). Mission briefings (brf_*.bik) and the menu background (bg_movie.bik) are left alone. Revert puts them all back.\n\nNOTHING ELSE IS NEEDED: controller is native full XInput (the game ships xinput1_3.dll) so Steam Input just works — no x360ce, no mod. Widescreen is native up to 4K, so set 1920x1200 in the in-game video options. Your copy is already v1.02, the latest patch. Saves + config live in the prefix (Saved Games/Tom Clancy's H.A.W.X/Profiles), so a prefix backup covers them — no save_paths needed.\n\nIF IT MISBEHAVES:\n· Black screen on launch → it's starting at a bad resolution. Edit _settings_0.1.525.ini in the prefix's Saved Games/Tom Clancy's H.A.W.X/Profiles and set windowd = true under [Video].\n· Freezes for ~20s every minute → the game is phoning home to Ubisoft's servers, dead since Oct 2015. Play offline / block its network. Tell me if it happens and we'll add a block.",
-  "notes": "Built 2026-07-13 straight off Tony's Windows install at F:\\games\\Tom Clancys H A W X (21,519 files / 6.8GB) — no SD scan needed, which is why this shipped ahead of the SD copy. Retail H.A.W.X has NO third-party DRM (CD-key was for online only), so the copy just runs; that is the whole reason HAWX 1 is viable while HAWX 2 is DROPPED (HAWX 2 is stuck behind Uplay — its scan shows orbit/uplay.exe + ubisoftgamelauncher.exe, the same dead-launcher trap as Driver SF).\n\nVerified against the real install: BOTH HAWX.exe (10.5MB, D3D9) and HAWX_dx10.exe (10.5MB, D3D10) exist at the root; only nested exes are DetectionTool/detectionui_r.exe + Uninstall/unins000.exe (no repack SP launcher). ReadMe [EN].txt confirms v1.02. xinput1_3.dll present at root. All 7 PCGW-listed intro biks confirmed present in Data/Movies with the exact casing used above.\n\nPCGW (Tom_Clancy's_H.A.W.X): DX10 features need the separate exe; Steam users report the DX10 exe black-screening; widescreen + 4K native; full controller support incl. XInput/remapping/sensitivity; config+saves at %USERPROFILE%/Saved Games/Tom Clancy's H.A.W.X/Profiles (_settings_0.1.525.ini, [Video] windowd=true fixes the bad-resolution black screen); freezing every ~minute = dead Ubisoft online services (delisted 2015, services off Oct 2015); patch 1.02 is the last. Steam appid was 21900 (delisted 2015) but Tony's is a non-Steam DODI repack -> computed appid, not in the gospel registry.\n\nDEPLOY NOTE: at 21,519 files this is the one game where a folder copy over SMB would crawl (a round-trip per file) — unlike BF3's 368 files. If it ever gets staged for `gfm deploy`, stage it as an ARCHIVE, not a folder."
+  "notes": "Built 2026-07-13 straight off Tony's Windows install at F:\\games\\Tom Clancys H A W X (21,519 files / 6.8GB) — no SD scan needed, which is why this shipped ahead of the SD copy. Retail H.A.W.X has NO third-party DRM (CD-key was for online only), so the copy just runs; that is the whole reason HAWX 1 is viable while HAWX 2 is DROPPED (HAWX 2 is stuck behind Uplay — its scan shows orbit/uplay.exe + ubisoftgamelauncher.exe, the same dead-launcher trap as Driver SF).\n\nVerified against the real install: BOTH HAWX.exe (10.5MB, D3D9) and HAWX_dx10.exe (10.5MB, D3D10) exist at the root; only nested exes are DetectionTool/detectionui_r.exe + Uninstall/unins000.exe (no repack SP launcher). ReadMe [EN].txt confirms v1.02. xinput1_3.dll present at root. All 7 PCGW-listed intro biks confirmed present in Data/Movies with the exact casing used above.\n\nPCGW (Tom_Clancy's_H.A.W.X): DX10 features need the separate exe; Steam users report the DX10 exe black-screening; widescreen + 4K native; full controller support incl. XInput/remapping/sensitivity; config+saves at %USERPROFILE%/Saved Games/Tom Clancy's H.A.W.X/Profiles (_settings_0.1.525.ini, [Video] windowd=true fixes the bad-resolution black screen); freezing every ~minute = dead Ubisoft online services (delisted 2015, services off Oct 2015); patch 1.02 is the last. Steam appid was 21900 (delisted 2015) but Tony's is a non-Steam DODI repack -> computed appid, not in the gospel registry.\n\nDEPLOY NOTE: at 21,519 files this is the one game where a folder copy over SMB would crawl (a round-trip per file) — unlike BF3's 368 files. If it ever gets staged for `gfm deploy`, stage it as an ARCHIVE, not a folder.\n\nPROTON CORRECTED TO proton_5 (2026-07-20). Recipe said GE-Proton10-34; the scan showed the live shortcut on Valve proton_5 and Tony confirms HAWX works that way. proton_5 (Proton 5.0) being the winner on a 2009 DX9 title is plausible, not a mistake — old Protons often beat new ones on that era. install_runner dropped: Valve Protons ship with Steam. The intro-bik removal step is unaffected."
 }
