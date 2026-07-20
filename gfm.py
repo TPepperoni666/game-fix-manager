@@ -2201,13 +2201,18 @@ class App:
         self.ui.msg("  'Keyboard (WASD) and Mouse' template (or map D-pad to arrow", "dim")
         self.ui.msg("  keys, A to Enter, B to Esc).", "dim")
 
-    # ---- TEMPORARY: remove with the Halo MCC investigation ---------------
-    # Added 2026-07-20 so game-folder listings and live launch settings land
-    # in gfm.log (which Syncthings to the workstation) instead of Tony having
-    # to drop to a terminal in game mode. Self-contained on purpose — deleting
-    # this method, its COMMANDS entry and its menu line removes it entirely.
     def cmd_diagnose(self, args=None):
-        """Dump a game's folder layout + live launch settings to the log."""
+        """Dump a game's folder layout + live launch settings to gfm.log.
+
+        Written during the Halo MCC hunt to answer 'what is the launcher
+        binary actually called' without dropping to a terminal in game
+        mode, and kept because that question comes up constantly: what is
+        in this folder, which exe should we launch, and what is Steam
+        ACTUALLY running it with right now.
+
+        Everything goes through ui.msg, so it lands in gfm.log — which
+        Syncthings to the workstation. That's the point: the answer
+        arrives without anyone copy-pasting terminal output."""
         self.ui.header("🔬 DIAGNOSTIC DUMP (temporary)")
         recipe = self._pick_one("🔬 DIAGNOSTIC DUMP",
                                 "Dump which game's layout to the log?")
@@ -2299,7 +2304,7 @@ class App:
                 "♻️  Save Restore (prefix backups + game saves)",
                 "⚙️  Settings (NAS, runners, mirror, update, install)",
                 "🛠  Advanced (individual steps)",
-                "🔬 Diagnostic Dump (temporary — for the MCC hunt)",
+                "🔬 Diagnostics (game layout + launch settings)",
                 "❌ Exit"])
             choice = choice[0] if choice else "❌ Exit"
             if choice.startswith("🔧"):
@@ -2323,7 +2328,7 @@ class App:
                 self.menu_settings()
             elif choice.startswith("🛠"):
                 self.menu_advanced()
-            elif choice.startswith("🔬"):        # TEMPORARY
+            elif choice.startswith("🔬"):
                 self.cmd_diagnose()
                 self.ui.input("Press Enter to continue")
             else:
@@ -2345,7 +2350,6 @@ COMMANDS = {
     "deploy": lambda app, a: app.cmd_deploy_game(),
     # bundles (the two headline menu entries)
     "scan": lambda app, a: app.cmd_scan_all(),
-    # TEMPORARY — remove with the Halo MCC investigation (2026-07-20).
     "diagnose": lambda app, a: app.cmd_diagnose(a),
     "save-restore": lambda app, a: app.cmd_save_restore(),
     # the individual steps those bundles wrap

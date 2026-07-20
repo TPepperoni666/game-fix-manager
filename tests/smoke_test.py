@@ -1477,6 +1477,18 @@ def main():
         check("_art_appid survives an unreadable shortcuts.vdf",
               "except Exception" in aa)
 
+        # --- diagnostics is a permanent feature ------------------------
+        check("CLI exposes 'diagnose'", "diagnose" in gfm_mod.COMMANDS)
+        check("App has cmd_diagnose", hasattr(gfm_mod.App, "cmd_diagnose"))
+        menu_src = _i.getsource(gfm_mod.App.menu)
+        check("Diagnostics is on the main menu and dispatched",
+              "Diagnostics" in menu_src and "cmd_diagnose" in menu_src)
+        # It was added as a throwaway for the MCC hunt and then kept; make
+        # sure no "temporary" wording survives to imply it's disposable.
+        check("no leftover TEMPORARY markers in gfm.py",
+              "TEMPORARY" not in (Path(gfm_mod.__file__)
+                                  .read_text(encoding="utf-8")))
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
