@@ -273,6 +273,7 @@ class App:
                         "--local-payloads at a writable path.", "warn")
             return
         hits = 0
+        no_art = []
         for recipe in self.recipes:
             if recipe.requires_game and \
                     self.game_dir_for(recipe, interactive=False) is None:
@@ -281,10 +282,21 @@ class App:
             try:
                 if self._capture_one(recipe, interactive=False):
                     hits += 1
+                else:
+                    no_art.append(recipe.name)
             except OSError as e:
                 self.ui.msg(f"  ! {recipe.name}: capture failed — {e}", "warn")
         self.ui.msg(f"Captured art/saves for {hits} game(s).",
                     "success" if hits else "dim")
+        # Say what produced NOTHING, and why. Silence here reads as failure:
+        # Pragmata captured no art and the scan didn't mention it, so it
+        # looked broken when in fact no custom art had ever been set for it.
+        # GFM snapshots artwork you've set — it never sources any.
+        if no_art:
+            self.ui.msg(f"No art/saves to capture for {len(no_art)}: "
+                        + ", ".join(sorted(no_art)), "dim")
+            self.ui.msg("(That's normal — art is only captured once you've set "
+                        "it in Steam. Set it, then re-scan.)", "dim")
         snapped = self._snapshot_localconfig()
         if snapped:
             self.ui.msg(f"Snapshotted localconfig.vdf for {snapped} user(s) "
