@@ -2201,6 +2201,88 @@ class App:
         self.ui.msg("  'Keyboard (WASD) and Mouse' template (or map D-pad to arrow", "dim")
         self.ui.msg("  keys, A to Enter, B to Esc).", "dim")
 
+    # ---- TEMPORARY: remove with the Halo MCC investigation ---------------
+    # Added 2026-07-20 so game-folder listings and live launch settings land
+    # in gfm.log (which Syncthings to the workstation) instead of Tony having
+    # to drop to a terminal in game mode. Self-contained on purpose — deleting
+    # this method, its COMMANDS entry and its menu line removes it entirely.
+    def cmd_diagnose(self, args=None):
+        """Dump a game's folder layout + live launch settings to the log."""
+        self.ui.header("🔬 DIAGNOSTIC DUMP (temporary)")
+        recipe = self._pick_one("🔬 DIAGNOSTIC DUMP",
+                                "Dump which game's layout to the log?")
+        if recipe is None:
+            return
+        game_dir = self.game_dir_for(recipe, interactive=True)
+        self.ui.msg(f"=== DIAGNOSTIC: {recipe.name} ({recipe.id}) ===", "info")
+        self.ui.msg(f"game_dir: {game_dir}", "info")
+        if game_dir is None or not Path(game_dir).is_dir():
+            self.ui.msg("Game folder not found — nothing to list.", "warn")
+            return
+
+        root = Path(game_dir)
+        # Top level: what launches the game usually lives here.
+        try:
+            for e in sorted(root.iterdir(), key=lambda p: p.name.lower()):
+                try:
+                    size = e.stat().st_size if e.is_file() else 0
+                except OSError:
+                    size = 0
+                tag = "DIR " if e.is_dir() else f"{size:>12,}"
+                self.ui.msg(f"  {tag}  {e.name}", "dim")
+        except OSError as e:
+            self.ui.msg(f"  ! cannot list: {e}", "warn")
+
+        # Every .exe anywhere shallow-ish, since the launch target is the
+        # thing we're usually hunting.
+        self.ui.msg("--- executables (depth <= 4) ---", "info")
+        found = 0
+        for dirpath, dirnames, names in os.walk(root):
+            depth = len(Path(dirpath).relative_to(root).parts)
+            if depth >= 4:
+                dirnames[:] = []
+            for n in sorted(names):
+                if n.lower().endswith(".exe"):
+                    rel = Path(dirpath).relative_to(root) / n
+                    try:
+                        sz = (Path(dirpath) / n).stat().st_size
+                    except OSError:
+                        sz = 0
+                    self.ui.msg(f"  {sz:>12,}  {rel.as_posix()}", "dim")
+                    found += 1
+                    if found >= 60:
+                        break
+            if found >= 60:
+                self.ui.msg("  … truncated at 60", "dim")
+                break
+
+        # What Steam currently launches it with.
+        self.ui.msg("--- live launch settings ---", "info")
+        if self.steam_root is None:
+            self.ui.msg("  no Steam root", "warn")
+        else:
+            try:
+                info = shortcutsvdf.describe(self.steam_root, recipe.all_names)
+            except Exception as e:
+                info = None
+                self.ui.msg(f"  shortcut read failed: {e}", "warn")
+            if info:
+                for k in ("appid", "exe", "start_dir", "launch_options"):
+                    self.ui.msg(f"  {k}: {info.get(k)!r}", "dim")
+            else:
+                self.ui.msg("  no non-Steam shortcut (Steam-native game)", "dim")
+            appid = (info or {}).get("appid") or recipe.steam_appid
+            if appid:
+                try:
+                    compat = steamvdf.get_compat_tool(self.steam_root,
+                                                      int(appid))
+                except Exception:
+                    compat = None
+                self.ui.msg(f"  compat_tool ({appid}): "
+                            f"{(compat or {}).get('name', '(Steam default)')}",
+                            "dim")
+        self.ui.msg("=== END DIAGNOSTIC — it's all in gfm.log ===", "success")
+
     def menu(self):
         while True:
             self.ui.header("🔧 GAME FIX MANAGER")
@@ -2217,6 +2299,7 @@ class App:
                 "♻️  Save Restore (prefix backups + game saves)",
                 "⚙️  Settings (NAS, runners, mirror, update, install)",
                 "🛠  Advanced (individual steps)",
+                "🔬 Diagnostic Dump (temporary — for the MCC hunt)",
                 "❌ Exit"])
             choice = choice[0] if choice else "❌ Exit"
             if choice.startswith("🔧"):
@@ -2240,6 +2323,9 @@ class App:
                 self.menu_settings()
             elif choice.startswith("🛠"):
                 self.menu_advanced()
+            elif choice.startswith("🔬"):        # TEMPORARY
+                self.cmd_diagnose()
+                self.ui.input("Press Enter to continue")
             else:
                 return
 
@@ -2259,6 +2345,8 @@ COMMANDS = {
     "deploy": lambda app, a: app.cmd_deploy_game(),
     # bundles (the two headline menu entries)
     "scan": lambda app, a: app.cmd_scan_all(),
+    # TEMPORARY — remove with the Halo MCC investigation (2026-07-20).
+    "diagnose": lambda app, a: app.cmd_diagnose(a),
     "save-restore": lambda app, a: app.cmd_save_restore(),
     # the individual steps those bundles wrap
     "scan-sd": lambda app, a: app.cmd_scan_sd(),
