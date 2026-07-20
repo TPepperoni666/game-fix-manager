@@ -46,6 +46,28 @@ SKIP_RELS = (
 )
 
 
+# Valve's own tools get compatdata dirs just like games do, and they were
+# cluttering the picker — a Proton runner is not something you back up, it's
+# reinstalled by Steam on demand. Filtered by appid AND by name, because the
+# appid list goes stale every time Valve ships a new Proton.
+TOOL_APPIDS = {
+    "228980",                      # Steamworks Common Redistributables
+    "1070560", "1391110", "1628350",   # Steam Linux Runtime scout/soldier/sniper
+    "1493710",                     # Proton Experimental
+    "858280", "930400", "961940", "1054830", "1113280",   # Proton 3.7 – 4.11
+    "1245040", "1420170", "1580130", "1887720",           # Proton 5.0 – 7.0
+    "2180100", "2230260", "2805730", "3658110",           # Proton 8.0 – hotfix
+}
+
+_TOOL_NAME_RE = re.compile(
+    r"^(proton\b|steam linux runtime|steamworks common|steam-?play)", re.I)
+
+
+def is_tool(appid: str, name: str) -> bool:
+    """Is this prefix a Valve runtime/compat tool rather than a game?"""
+    return appid in TOOL_APPIDS or bool(_TOOL_NAME_RE.match(name.strip()))
+
+
 @dataclass
 class PrefixInfo:
     appid: str
@@ -122,9 +144,19 @@ def has_cloud(steam_root: Path, appid: str) -> bool:
 
 
 def enumerate_prefixes(steam_root: Path, sd_root: Path | None = None,
-                       measure: bool = True) -> list[PrefixInfo]:
-    """Every prefix in compatdata, identified and classified. `measure=False`
-    skips the size walk (fast listing)."""
+                       measure: bool = True,
+                       include_tools: bool = False) -> list[PrefixInfo]:
+    """Every prefix in compatdata, identified and classified.
+
+    measure=False skips the size walk. That walk is the whole cost of this
+    function — it stats every file in every prefix, which measured 67s of
+    dead silence on Tony's Deck before the picker even appeared, and he
+    abandoned the run. The picker doesn't need sizes: plan() reports exact
+    incremental bytes for the CHOSEN prefixes a moment later, which is the
+    number that actually matters. Same lesson as the deploy menu.
+
+    include_tools=False drops Valve runtimes and Proton builds, which are
+    reinstalled by Steam on demand and have no business in a backup list."""
     shortcuts = _shortcut_names(steam_root)
     gbm = prefixes.load_gbm_csv()
     out: list[PrefixInfo] = []
@@ -135,6 +167,8 @@ def enumerate_prefixes(steam_root: Path, sd_root: Path | None = None,
         is_steam = steam_name is not None
         name = (steam_name or shortcuts.get(appid) or gbm.get(appid)
                 or f"appid {appid}")
+        if not include_tools and is_tool(appid, name):
+            continue
         info = PrefixInfo(
             appid=appid, name=name, path=pfx, is_steam=is_steam,
             has_cloud=has_cloud(steam_root, appid) if is_steam else False)

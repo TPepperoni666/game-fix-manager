@@ -674,7 +674,12 @@ class App:
         self.ui.msg("(Sync that folder to the NAS with Syncthing for an "
                     "off-device copy.)", "dim")
         self.ui.msg("Scanning compatdata…", "dim")
-        allp = prefixbackup.enumerate_prefixes(self.steam_root, sd)
+        # measure=False: sizing every prefix up front cost 67s of silence
+        # before the picker appeared. Exact bytes come from plan() once a
+        # selection exists, which is the number that actually matters
+        # (it's incremental — a re-run is usually near zero).
+        allp = prefixbackup.enumerate_prefixes(self.steam_root, sd,
+                                               measure=use_saved)
         if not allp:
             self.ui.msg("No prefixes found in compatdata.", "warn")
             return
@@ -720,7 +725,8 @@ class App:
                 if p.has_cloud:
                     kind += " · ☁" + (" opted in" if p.appid in opted else "")
                 mark = "✅" if p.backed_up else "  "
-                lbl = (f"{mark} {p.name}  ({self._gb(p.size)})  {kind}")
+                # No size here on purpose — see enumerate_prefixes(measure=).
+                lbl = f"{mark} {p.name}  {kind}"
                 labels.append(lbl)
                 by_label[lbl] = p
             hidden = "" if show_cloud else f", {cloud_total} cloud hidden"

@@ -1440,6 +1440,28 @@ def main():
         check("_launch_info survives a missing steam root",
               _sd._launch_info(_R(), broken)["shortcut_appid"] is None)
 
+        # --- prefix-backup picker: tools out, no size walk --------------
+        from core import prefixbackup as _pb
+        check("Valve runtimes are filtered from the backup list",
+              _pb.is_tool("1070560", "Steam Linux Runtime - Sniper")
+              and _pb.is_tool("2230260", "Proton 9.0 (Beta)")
+              and _pb.is_tool("1493710", "Proton Experimental"))
+        check("real games are not filtered as tools",
+              not _pb.is_tool("47920", "Shift 2 Unleashed")
+              and not _pb.is_tool("244210", "Assetto Corsa")
+              and not _pb.is_tool("12345", "Protonaut"))
+        check("unknown Proton builds are caught by name, not just appid",
+              _pb.is_tool("9999999", "Proton 99.0"))
+        # The picker must not pay for a size walk: measure=False has to leave
+        # sizes at 0 rather than quietly walking anyway.
+        import inspect as _i
+        src = _i.getsource(_pb.enumerate_prefixes)
+        check("enumerate_prefixes only measures when asked",
+              "if measure:" in src)
+        check("backup picker calls enumerate_prefixes without eager sizing",
+              "measure=use_saved" in _i.getsource(
+                  gfm_mod.App.cmd_backup_prefixes))
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
