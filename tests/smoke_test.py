@@ -1489,6 +1489,26 @@ def main():
               "TEMPORARY" not in (Path(gfm_mod.__file__)
                                   .read_text(encoding="utf-8")))
 
+        # --- case-collision detection ----------------------------------
+        # The Halo MCC bug: game root held both "mcc" and "MCC", the recipe
+        # wrote lowercase, and the DLL landed in a directory the game never
+        # reads. Undetectable on Windows/NTFS, which is why it survived.
+        cc = gfm_mod.case_collisions
+        check("case_collisions spots the MCC-style clash",
+              cc(["mcc", "MCC", "Data", "mcclauncher.exe"])
+              == {"mcc": ["MCC", "mcc"]})
+        check("case_collisions is quiet when there's no clash",
+              cc(["Data", "halo1", "halo2", "Engine"]) == {})
+        check("case_collisions finds several clashes at once",
+              set(cc(["a", "A", "b", "B", "c"])) == {"a", "b"})
+        check("case_collisions groups deterministically (sorted)",
+              cc(["zz", "ZZ"])["zz"] == ["ZZ", "zz"])
+        diag = _i.getsource(gfm_mod.App.cmd_diagnose)
+        check("diagnostics reports case collisions",
+              "case_collisions" in diag)
+        check("diagnostics walks the full tree for exes",
+              "full tree" in diag)
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

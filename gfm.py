@@ -35,6 +35,23 @@ STATUS_TEXT = {engine.APPLIED: "applied", engine.NOT_APPLIED: "not applied",
                engine.PARTIAL: "PARTIAL — some steps missing", "not_found": "game not found"}
 
 
+def case_collisions(entries):
+    """Names in one directory that differ ONLY by case, grouped.
+
+    Legal on ext4, impossible on NTFS — which is why a path written from
+    memory on Windows lands in the wrong directory on the Deck and every
+    downstream step silently misbehaves. Halo MCC shipped both "mcc" and
+    "MCC"; AlphaRing went into the wrong one and could never load.
+
+    Pure so it can be tested on a case-insensitive filesystem, where the
+    situation it detects cannot even be created.
+    """
+    seen = {}
+    for e in entries:
+        seen.setdefault(e.lower(), []).append(e)
+    return {low: sorted(g) for low, g in seen.items() if len(g) > 1}
+
+
 class App:
     def __init__(self, args):
         self.args = args
@@ -2238,14 +2255,13 @@ class App:
         except OSError as e:
             self.ui.msg(f"  ! cannot list: {e}", "warn")
 
-        # Every .exe anywhere shallow-ish, since the launch target is the
-        # thing we're usually hunting.
-        self.ui.msg("--- executables (depth <= 4) ---", "info")
+        # Every .exe in the tree. Depth was capped at 4 and that was a
+        # mistake: a second copy of the shipping binary deeper down would
+        # have been invisible, and "which exe actually runs" is usually the
+        # whole question.
+        self.ui.msg("--- executables (full tree) ---", "info")
         found = 0
         for dirpath, dirnames, names in os.walk(root):
-            depth = len(Path(dirpath).relative_to(root).parts)
-            if depth >= 4:
-                dirnames[:] = []
             for n in sorted(names):
                 if n.lower().endswith(".exe"):
                     rel = Path(dirpath).relative_to(root) / n
@@ -2255,11 +2271,33 @@ class App:
                         sz = 0
                     self.ui.msg(f"  {sz:>12,}  {rel.as_posix()}", "dim")
                     found += 1
-                    if found >= 60:
+                    if found >= 300:
                         break
-            if found >= 60:
-                self.ui.msg("  … truncated at 60", "dim")
+            if found >= 300:
+                self.ui.msg("  … truncated at 300", "dim")
                 break
+        self.ui.msg(f"  ({found} exe(s) total)", "dim")
+
+        # CASE COLLISIONS. Two directories differing only in case are legal
+        # on ext4 and impossible on NTFS, so a path written from memory lands
+        # in the wrong one and everything downstream silently misbehaves.
+        # That is exactly what broke Halo MCC (mcc/ vs MCC/) and cost a day,
+        # so the tool now looks for it rather than waiting to be asked.
+        self.ui.msg("--- case collisions ---", "info")
+        collisions = 0
+        for dirpath, dirnames, names in os.walk(root):
+            if len(Path(dirpath).relative_to(root).parts) >= 3:
+                dirnames[:] = []
+            for _low, group in sorted(
+                    case_collisions(list(dirnames) + list(names)).items()):
+                rel = Path(dirpath).relative_to(root).as_posix()
+                self.ui.msg(f"  ⚠ {rel or '.'} -> {group}", "warn")
+                collisions += 1
+        if not collisions:
+            self.ui.msg("  none", "dim")
+        else:
+            self.ui.msg(f"  {collisions} collision(s) — a path written in the "
+                        "wrong case lands in the wrong one.", "warn")
 
         # What Steam currently launches it with.
         self.ui.msg("--- live launch settings ---", "info")
