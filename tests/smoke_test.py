@@ -1462,6 +1462,21 @@ def main():
               "measure=use_saved" in _i.getsource(
                   gfm_mod.App.cmd_backup_prefixes))
 
+        # --- art capture must not require a gospel pin -----------------
+        # It did, so 5 of 13 mapped games were silently skipped and their
+        # artwork never captured. A pin is needed to RESTORE onto the same
+        # shortcut; it is not needed to READ art out of the grid folder.
+        art_src = _i.getsource(gfm_mod.App._capture_one)
+        check("capture keys art by _art_appid, not the gospel pin",
+              "_art_appid" in art_src and "_gospel_appid" not in art_src)
+        aa = _i.getsource(gfm_mod.App._art_appid)
+        check("_art_appid falls back to the live shortcut appid",
+              "find_appids" in aa)
+        check("_art_appid falls back to a Steam appid last",
+              "steam_appid" in aa)
+        check("_art_appid survives an unreadable shortcuts.vdf",
+              "except Exception" in aa)
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

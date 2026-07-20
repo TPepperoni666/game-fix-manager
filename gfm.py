@@ -195,16 +195,43 @@ class App:
                 return int(e["appid"])
         return None
 
+    def _art_appid(self, recipe):
+        """The appid Steam files this game's custom artwork under.
+
+        Artwork used to be keyed by the GOSPEL appid alone, so any recipe
+        without a pin was skipped entirely — silently, during a bulk scan.
+        That was exactly 8 of 13 mapped games captured and 5 (Pragmata, Blur,
+        FUEL, HAWX 1, BF3) never even looked at, which read as "the tool
+        didn't grab my artwork" because that is precisely what happened.
+
+        A pin isn't needed to READ art: Steam names grid files after whatever
+        appid the shortcut currently has. So fall back to the live shortcut,
+        then to a Steam appid for Steam-native games. This stays symmetric
+        with restore, which keys off the same appid the shortcut step writes.
+        """
+        pinned = self._gospel_appid(recipe)
+        if pinned is not None:
+            return pinned
+        if self.steam_root is not None:
+            try:
+                ids = shortcutsvdf.find_appids(self.steam_root,
+                                               recipe.all_names)
+                if ids:
+                    return ids[0]
+            except Exception:
+                pass          # unreadable vdf must never break a scan
+        return recipe.steam_appid
+
     def _capture_one(self, recipe, interactive: bool = True) -> bool:
         """Art + game-folder saves for one recipe. Returns True if anything
         was captured. interactive=False in bulk runs — otherwise a sweep over
         32 recipes would stop and ask for a path on every undetected game."""
         got = False
-        appid = self._gospel_appid(recipe)
+        appid = self._art_appid(recipe)
         if appid is None:
             if interactive:
-                self.ui.msg(f"No gospel appid for {recipe.name} — skipping art "
-                            "(nothing to key it by).", "warn")
+                self.ui.msg(f"No appid for {recipe.name} (no pin, no shortcut) "
+                            "— skipping art.", "warn")
         else:
             dest = self.local_payloads / recipe.id / "artwork"
             n = steamart.capture(self.steam_root, appid, dest)
