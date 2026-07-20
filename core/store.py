@@ -87,6 +87,37 @@ def _sd_card_stores() -> list[Path]:
     return found
 
 
+# Per-recipe data (payload overrides + captured artwork + saves) lives one
+# folder deep under the local-payloads root, so the root holds only the four
+# tidy system dirs (_recipes, _games, _runners, _state) instead of a folder
+# per game littering it. Reads fall back to the legacy flat location so a
+# not-yet-migrated NAS keeps working; new writes always use _recipes/.
+RECIPE_DATA_DIR = "_recipes"
+
+
+def recipe_data_root(local_payloads: Path) -> Path:
+    return local_payloads / RECIPE_DATA_DIR
+
+
+def recipe_data_dir(local_payloads: Path, recipe_id: str, *sub: str,
+                    for_write: bool = False) -> Path:
+    """A recipe's data folder (optionally a subpath like 'artwork'/'saves').
+
+    for_write=True always returns the new _recipes/<id>/… home. For reads it
+    prefers the new home but falls back to the legacy flat <root>/<id>/… when
+    the new one doesn't exist yet — so migration can happen in any order."""
+    new = recipe_data_root(local_payloads).joinpath(recipe_id, *sub)
+    if for_write:
+        return new
+    legacy = local_payloads.joinpath(recipe_id, *sub)
+    try:
+        if not new.exists() and legacy.exists():
+            return legacy
+    except OSError:
+        pass
+    return new
+
+
 def resolve_local_payloads(cli_arg: str | None, cfg: dict) -> Path | None:
     """Where local-only override payloads live (NAS mount, SD folder, …).
     Order: --local-payloads → GFM_LOCAL_PAYLOADS env → config → SD default.

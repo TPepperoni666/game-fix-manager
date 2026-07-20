@@ -94,7 +94,9 @@ def _saves_safe(recipe, local_payloads: Path | None) -> bool:
         return True
     if local_payloads is None:
         return False
-    return bool(saves.read_index(local_payloads / recipe.id / "saves"))
+    from . import store
+    return bool(saves.read_index(
+        store.recipe_data_dir(local_payloads, recipe.id, "saves")))
 
 
 def scan(recipes, steam_root, deployed: dict, sd_games_dirs,

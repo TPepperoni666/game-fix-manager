@@ -250,7 +250,8 @@ class App:
                 self.ui.msg(f"No appid for {recipe.name} (no pin, no shortcut) "
                             "— skipping art.", "warn")
         else:
-            dest = self.local_payloads / recipe.id / "artwork"
+            dest = store.recipe_data_dir(self.local_payloads, recipe.id,
+                                         "artwork", for_write=True)
             n = steamart.capture(self.steam_root, appid, dest)
             if n:
                 self.ui.msg(f"  🎨 {recipe.name}: {n} art file(s)", "success")
@@ -1034,7 +1035,8 @@ class App:
                 self.ui.msg(f"{recipe.name} not located — skipping save "
                             "capture.", "warn")
             return False
-        dest = self.local_payloads / recipe.id / "saves"
+        dest = store.recipe_data_dir(self.local_payloads, recipe.id, "saves",
+                                     for_write=True)
         entries, files = saves.capture(
             recipe, game_dir, self.steam_root, dest,
             log=(lambda m: self.ui.msg(m, "dim")) if interactive
@@ -1052,7 +1054,7 @@ class App:
         """(src_dir, entries) for a recipe's captured saves, or (None, [])."""
         if not recipe.save_paths or self.local_payloads is None:
             return None, []
-        src = self.local_payloads / recipe.id / "saves"
+        src = store.recipe_data_dir(self.local_payloads, recipe.id, "saves")
         return src, saves.read_index(src)
 
     def _restore_saves_one(self, recipe, interactive: bool = True) -> int:

@@ -74,19 +74,28 @@ class Ctx:
         return Path(out)
 
     def payload_path(self, rel: str) -> Path:
-        """Resolve a payload reference. A local override at
-        <local_payloads_dir>/<recipe_id>/<rel> wins when present; otherwise
-        the recipe's own folder is used. A down NAS mount (OSError on access)
-        is treated as 'override not present' — never crashes."""
+        """Resolve a payload reference. A local override wins when present;
+        otherwise the recipe's own folder is used. A down NAS mount (OSError
+        on access) is treated as 'override not present' — never crashes.
+
+        The override lives at <root>/_recipes/<id>/<rel> (tidy home), with the
+        legacy flat <root>/<id>/<rel> tried as a fallback so a not-yet-migrated
+        NAS still resolves."""
         mount_err = None
         if self.local_payloads_dir is not None:
-            try:
-                base = (self.local_payloads_dir / self.recipe.id).resolve()
-                cand = (base / rel).resolve()
-                if (base == cand or base in cand.parents) and cand.exists():
-                    return cand
-            except OSError as e:
-                mount_err = e  # local-payloads mount unreachable (dead NAS)
+            from . import store
+            bases = [store.recipe_data_root(self.local_payloads_dir)
+                     / self.recipe.id,
+                     self.local_payloads_dir / self.recipe.id]
+            for base in bases:
+                try:
+                    base_r = base.resolve()
+                    cand = (base_r / rel).resolve()
+                    if (base_r == cand or base_r in cand.parents) \
+                            and cand.exists():
+                        return cand
+                except OSError as e:
+                    mount_err = e  # local-payloads mount unreachable (dead NAS)
         p = (self.recipe.dir / rel).resolve()
         rd = self.recipe.dir.resolve()
         if rd not in p.parents and p != rd:

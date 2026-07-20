@@ -1554,6 +1554,40 @@ def main():
         check("adopted game reads as 'registry' in the inventory",
               inv and inv[0]["matched_by"] == "registry")
 
+        # --- tidy per-recipe data under _recipes/ ----------------------
+        from core import store as _st
+        proot = tmp / "payroot"; proot.mkdir()
+        check("recipe data writes go to _recipes/<id>/",
+              _st.recipe_data_dir(proot, "barnyard", "artwork", for_write=True)
+              == proot / "_recipes" / "barnyard" / "artwork")
+        (proot / "legacygame" / "saves").mkdir(parents=True)
+        check("recipe data reads fall back to the legacy flat path",
+              _st.recipe_data_dir(proot, "legacygame", "saves")
+              == proot / "legacygame" / "saves")
+        (proot / "_recipes" / "newgame" / "saves").mkdir(parents=True)
+        (proot / "newgame" / "saves").mkdir(parents=True)
+        check("recipe data reads prefer the new _recipes/ path when present",
+              _st.recipe_data_dir(proot, "newgame", "saves")
+              == proot / "_recipes" / "newgame" / "saves")
+        # engine.payload_path must resolve BOTH locations.
+        from core import engine as _eng, manifest as _man
+        def _mkrec(rid):
+            d = tmp / "st2" / "games" / rid
+            d.mkdir(parents=True)
+            return _man.Recipe(id=rid, name=rid, aliases=[], steam_appid=None,
+                detect={}, steps=[], notes="", post_apply_message="",
+                remote_payloads=[], requires_game=True, save_paths=[], dir=d)
+        newp = proot / "_recipes" / "rnew" / "payload" / "a.dat"
+        newp.parent.mkdir(parents=True); newp.write_bytes(b"x")
+        ctx_n = _eng.Ctx(_mkrec("rnew"), tmp, local_payloads_dir=proot)
+        check("engine resolves a payload in _recipes/",
+              ctx_n.payload_path("payload/a.dat") == newp.resolve())
+        legp = proot / "rleg" / "payload" / "b.dat"
+        legp.parent.mkdir(parents=True); legp.write_bytes(b"y")
+        ctx_l = _eng.Ctx(_mkrec("rleg"), tmp, local_payloads_dir=proot)
+        check("engine still resolves a legacy flat payload",
+              ctx_l.payload_path("payload/b.dat") == legp.resolve())
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
