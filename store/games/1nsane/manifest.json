@@ -18,10 +18,21 @@
     },
     {
       "type": "copy_files",
-      "optional": true,
       "from": "payload/widescreen",
       "to": "{game_dir}",
       "backup_originals": true
+    },
+    {
+      "type": "wine_registry",
+      "optional": true,
+      "hive": "system",
+      "key": "Software\\Wow6432Node\\Codemasters\\Insane",
+      "values": {
+        "cam_ext_dist": 33554432,
+        "cam_ext_dist2": 33554432,
+        "cam_heli_dist": 33554432,
+        "cam_heli_dist2": 33554432
+      }
     },
     {
       "type": "steam_shortcut",
@@ -30,6 +41,6 @@
       "proton": "GE-Proton10-34"
     }
   ],
-  "post_apply_message": "1NSANE (2000, Codemasters, GOG, DRM-free) — Apply adds the Steam shortcut on GE-Proton 10.34 (launch exe Game.exe).\n\nWIDESCREEN — NEEDS A MOD YOU DROP IN. The engine lists widescreen resolutions but STRETCHES them from 4:3 unless patched. The fix is the community '1nsane widescreen mod' by Bayron/Black_Lotus (PCGamingWiki community files, mod #27): it only supports 16:9 and 16:10 (1280x800 works). Your GOG copy already includes Patch 2 (patch2.txt is present), which the mod requires.\n\nTo enable it: drop the mod's PATCH folder contents into the NAS local payload at\n   Game Fixes/_recipes/1nsane/payload/widescreen/\nthen re-apply — the optional copy_files step overlays it onto the SD copy (originals backed up as .gfm-orig). Off-git on purpose, same as other sourced payloads. Until you add it, the game still runs, just 4:3-stretched.\n\nCONTROLLER: native gamepad support — Steam Input's default layout works.",
-  "notes": "Built 2026-07-21 from Tony's GOG copy at NAS _games/1NSANE (goggame markers — DRM-free, delisted). Launch exe Game.exe (0.9MB); 'Language Setup.exe' is a setup tool. No resolution config on disk — settings generate in the prefix/registry on first run, and widescreen genuinely needs the Bayron widescreen mod (extract PATCH into game dir), not just a resolution set (native resolutions stretch from 4:3). So the widescreen step is an OPTIONAL BYO copy_files payload at payload/widescreen/ — Tony sources the mod, drops it in, re-applies. Patch 2 prerequisite already satisfied (patch2.txt present). Non-Steam -> computed appid. UNTESTED; widescreen inert until the mod payload is supplied."
+  "post_apply_message": "1NSANE (2000, Codemasters, GOG, DRM-free) — Apply installs the widescreen-patched Game.exe, sets the camera-distance registry values, and adds the Steam shortcut on GE-Proton 10.34.\n\nWIDESCREEN: your copy uses the Bayron/Black_Lotus 16:10 widescreen mod. The core of it — the resolution/aspect patch — is a modified Game.exe, which the recipe overlays (your original is backed up as Game.exe.gfm-orig). Native 16:10 resolutions (1280x800 for the Deck) now render correctly instead of stretching from 4:3. The camera-distance tweak (cam_*_dist in HKLM\\...\\Codemasters\\Insane) pulls the chase camera out to suit the wider view; that step is optional and needs the prefix, so run the game once then RE-APPLY if it reports 'no prefix yet'.\n\nHUD DIALS — OPTIONAL POLISH NOT YET APPLIED: the mod also un-stretches the 2D speedo/dials by repacking Data/Data.idf with IDFmaker (a Windows tool). That part isn't automated — the 3D game renders correct widescreen without it; only the dial gauges stay 4:3-proportioned. If it bothers you, run the mod's 16-10.bat on Windows against the game folder once (it's on the NAS at X:\\_games\\1NSANE) and the repacked Data.idf will deploy with the game.\n\nCONTROLLER: native gamepad support — Steam Input's default layout works.",
+  "notes": "Built 2026-07-21 from Tony's GOG copy at NAS _games/1NSANE (goggame markers — DRM-free, delisted). Launch exe Game.exe (0.9MB). Patch 2 already applied (patch2.txt present) — the widescreen mod's prerequisite.\n\nWIDESCREEN mod = Bayron/Black_Lotus (PCGW community file #27), Tony sourced '1nsane widescreen mod.zip' 2026-07-21. It's aspect-specific; we use the 16-10 set for the Deck's 1280x800. Staged OFF-GIT to NAS _recipes/1nsane/payload/widescreen/: just the patched Game.exe (sha256 4542...883ED, vs stock 441D...9DF34). copy_files overlays it (backup .gfm-orig); NAS _games copy stays clean. Camera reg via wine_registry (values dword:02000000 = 33554432, faithful to the mod's camera1.reg; targets Wow6432Node for the 32-bit game).\n\nNOT automated: the mod's Data.idf repack (extract with IDFmaker.exe -x, swap arrosped.png + dials.cfg, repack) — that fixes only the 2D HUD dials. IDFmaker is a headless-unfriendly 2000-era tool; won't run it blind and risk a corrupt archive. Game.exe alone gives correct widescreen 3D. Documented as an optional 'run 16-10.bat on Windows' step. Non-Steam -> computed appid. UNTESTED."
 }
