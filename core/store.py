@@ -118,6 +118,16 @@ def recipe_data_dir(local_payloads: Path, recipe_id: str, *sub: str,
     return new
 
 
+def artwork_dir(local_payloads: Path, appid) -> Path:
+    """Where a NON-recipe managed game's captured artwork lives, keyed by its
+    (stable) appid: <local_payloads>/_state/artwork/<appid>/. Recipe games keep
+    their art under _recipes/<id>/artwork/; this is the home for adopted and
+    generic-deploy games so EVERY managed game's art is captured and
+    restorable, not just ones with a hand-written recipe. Art is
+    device-agnostic (grid files are the same everywhere), so no host key."""
+    return local_payloads / "_state" / "artwork" / str(appid)
+
+
 def resolve_local_payloads(cli_arg: str | None, cfg: dict) -> Path | None:
     """Where local-only override payloads live (NAS mount, SD folder, …).
     Order: --local-payloads → GFM_LOCAL_PAYLOADS env → config → SD default.

@@ -1754,6 +1754,19 @@ def main():
               == str(grid / "555_icon.ico"))
         check("App._restore_art_for exists (deploy re-applies art)",
               hasattr(gfm_mod.App, "_restore_art_for"))
+        # Art is managed for EVERY game, not just recipes.
+        check("App._capture_managed_art exists (non-recipe games too)",
+              hasattr(gfm_mod.App, "_capture_managed_art"))
+        check("scan captures art for adopted/generic games",
+              "_capture_managed_art" in _i.getsource(gfm_mod.App._capture_all))
+        from core import store as _stx
+        check("non-recipe art has an appid-keyed home",
+              _stx.artwork_dir(tmp, 12345)
+              == tmp / "_state" / "artwork" / "12345")
+        check("_restore_art_for handles a no-recipe generic deploy",
+              "gfm:deploy:" in _i.getsource(gfm_mod.App._restore_art_for))
+        check("reimage shortcut-restore also re-applies art",
+              "artwork_dir" in _i.getsource(gfm_mod.App.cmd_restore_shortcuts))
         check("deploy re-applies artwork after the shortcut is made",
               "_restore_art_for" in _i.getsource(gfm_mod.App.cmd_deploy_game))
         check("capture also grabs the icon",

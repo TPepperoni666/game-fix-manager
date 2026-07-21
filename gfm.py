@@ -270,6 +270,33 @@ class App:
                             "warn")
         return self._capture_saves(recipe, interactive=interactive) or got
 
+    def _capture_managed_art(self) -> int:
+        """Capture grid art + icon for every managed NON-recipe game — the ones
+        the tool tracks via shortcut-state (adopted + generic deploys). Keyed by
+        the shortcut's appid, stored under _state/artwork/<appid>/. This is what
+        makes 'set it up once, it's preserved' true for games without a
+        hand-written recipe. Returns how many captured something."""
+        if self.steam_root is None or self.local_payloads is None:
+            return 0
+        got = 0
+        recipe_appids = {self._art_appid(r) for r in self.recipes}
+        for entry in shortcutstate.load(self.local_payloads):
+            appid = entry.get("appid")
+            if appid is None or appid in recipe_appids:
+                continue      # recipe games are already captured above
+            dest = store.artwork_dir(self.local_payloads, appid)
+            n = steamart.capture(self.steam_root, appid, dest)
+            try:
+                info = shortcutsvdf.describe(self.steam_root,
+                                             [entry.get("name", "")])
+            except Exception:
+                info = None
+            if info and steamart.capture_icon(appid, info.get("icon", ""), dest):
+                n += 1
+            if n:
+                got += 1
+        return got
+
     def _snapshot_localconfig(self) -> int:
         """Back up the two device-settings sources:
           * localconfig.vdf — per-game framerate/tearing/frame-limit (Gamescope
@@ -339,6 +366,12 @@ class App:
                     no_art.append(recipe.name)
             except OSError as e:
                 self.ui.msg(f"  ! {recipe.name}: capture failed — {e}", "warn")
+        # Art for EVERY managed game, not just recipes — adopted and
+        # generic-deploy games matter just as much. Keyed by their appid.
+        managed = self._capture_managed_art()
+        if managed:
+            self.ui.msg(f"Captured art for {managed} non-recipe game(s) too "
+                        "(adopted / deployed).", "success")
         self.ui.msg(f"Captured art/saves for {hits} game(s).",
                     "success" if hits else "dim")
         # Say what produced NOTHING, and why. Silence here reads as failure:
@@ -620,10 +653,18 @@ class App:
         if self.steam_root is None or self.local_payloads is None:
             return 0
         recipe, _sig = sdscan._match_folder(dest, self.recipes)
-        if recipe is None:
-            return 0
-        appid = self._art_appid(recipe)
-        art = store.recipe_data_dir(self.local_payloads, recipe.id, "artwork")
+        if recipe is not None:
+            appid = self._art_appid(recipe)
+            names = recipe.all_names
+            art = store.recipe_data_dir(self.local_payloads, recipe.id,
+                                        "artwork")
+        else:
+            # No recipe — a generic deploy. Its shortcut appid is computed from
+            # the folder name, and its art lives keyed by that appid.
+            appid = binascii.crc32(
+                f"gfm:deploy:{dest.name}".encode()) | 0x80000000
+            names = [dest.name]
+            art = store.artwork_dir(self.local_payloads, appid)
         if appid is None or not art.is_dir():
             return 0
         try:
@@ -640,7 +681,7 @@ class App:
                 if landed.is_file():
                     try:
                         shortcutsvdf.set_icon(self.steam_root,
-                                              recipe.all_names, str(landed))
+                                              names, str(landed))
                     except Exception:
                         pass
                     break
@@ -913,8 +954,30 @@ class App:
                         f"(appid {e['appid']}, {e.get('runner') or 'default'})",
                         "success")
         self.flush_vdf_writes()
+        # Now the shortcuts exist, put their captured art (grid + icon) back.
+        art = 0
+        for e in entries:
+            appid = e.get("appid")
+            src = store.artwork_dir(self.local_payloads, appid) \
+                if appid is not None else None
+            if src is None or not src.is_dir():
+                continue
+            try:
+                if steamart.restore(self.steam_root, appid, src):
+                    art += 1
+                    icon = steamart.captured_icon(src, appid)
+                    if icon is not None:
+                        for grid in steamart._grid_dirs(self.steam_root):
+                            landed = grid / icon.name
+                            if landed.is_file():
+                                shortcutsvdf.set_icon(self.steam_root,
+                                                      [e["name"]], str(landed))
+                                break
+            except (OSError, Exception):
+                pass
         self.ui.msg(f"Restored {queued} shortcut(s)"
                     + (f", {missing} skipped (files absent)" if missing else "")
+                    + (f"; re-applied art for {art}" if art else "")
                     + ".", "success" if queued else "dim")
         return queued
 
