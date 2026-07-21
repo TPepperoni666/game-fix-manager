@@ -1694,6 +1694,28 @@ def main():
             check(f"recipe {rid} loads with shortcut -> {exe}",
                   sc is not None and sc.get("exe") == exe)
 
+        # --- PROTON_LOG baked into the wrapper-dependent recipes -------
+        def _launch_opts(rid):
+            r = recs.get(rid)
+            for s in (r.steps if r else []):
+                v = s.get("launch_options") or (
+                    s.get("value") if s["type"] == "launch_options" else None)
+                if v:
+                    return v
+            return ""
+        for rid in ("mohpa", "true-crime-nyc", "halo-mcc"):
+            check(f"{rid} enables PROTON_LOG for diagnosis",
+                  "PROTON_LOG=1" in _launch_opts(rid))
+
+        # --- Proton log collection to the NAS --------------------------
+        check("CLI exposes 'collect-logs'", "collect-logs" in gfm_mod.COMMANDS)
+        check("App._collect_proton_logs exists",
+              hasattr(gfm_mod.App, "_collect_proton_logs"))
+        check("scan collects Proton logs",
+              "_collect_proton_logs" in _i.getsource(gfm_mod.App.cmd_scan_all))
+        check("weekly refresh collects Proton logs",
+              "_collect_proton_logs" in _i.getsource(gfm_mod.App._refresh_map))
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

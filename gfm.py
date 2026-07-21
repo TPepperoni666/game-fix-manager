@@ -680,6 +680,53 @@ class App:
             n += 1
         return n
 
+    def cmd_collect_logs(self, args=None):
+        """Standalone: gather Proton's per-game logs to the NAS (also part of
+        🔍 Scan). Recipes that set PROTON_LOG=1 write ~/steam-<appid>.log on
+        the Deck, which doesn't sync anywhere — this copies them to the NAS
+        _state so they ride Syncthing to the workstation and can be read."""
+        if not getattr(args, "auto", False):
+            self.ui.header("🪵 COLLECT PROTON LOGS")
+        n = self._collect_proton_logs()
+        if n:
+            dest = self.local_payloads / "_state" / "proton-logs" \
+                if self.local_payloads else "?"
+            self.ui.msg(f"Collected {n} Proton log(s) -> {dest}", "success")
+        else:
+            self.ui.msg("No Proton logs found (~/steam-*.log). Launch a game "
+                        "whose recipe sets PROTON_LOG=1 first.", "dim")
+        return n
+
+    # Proton logs bigger than this are almost certainly a verbose/looping run;
+    # skip rather than push tens of MB through Syncthing every scan.
+    _MAX_LOG_BYTES = 60 * (1 << 20)
+
+    def _collect_proton_logs(self) -> int:
+        """Copy ~/steam-<appid>.log files to _state/proton-logs/<host>/ on the
+        NAS. Newest first, size-capped, best-effort (a down mount never fails a
+        scan). Returns the number copied."""
+        if self.local_payloads is None:
+            return 0
+        home = Path.home()
+        try:
+            logs = sorted(home.glob("steam-*.log"),
+                          key=lambda p: p.stat().st_mtime, reverse=True)
+        except OSError:
+            return 0
+        dest = (self.local_payloads / "_state" / "proton-logs"
+                / shortcutstate.hostname())
+        copied = 0
+        for log in logs[:40]:
+            try:
+                if log.stat().st_size > self._MAX_LOG_BYTES:
+                    continue
+                dest.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(log, dest / log.name)
+                copied += 1
+            except OSError:
+                continue
+        return copied
+
     def cmd_restore_shortcuts(self, args=None):
         """Rebuild the generic (no-recipe) Steam shortcuts saved for THIS
         device — the reimage recovery step. Recipe games rebuild themselves via
@@ -1378,6 +1425,10 @@ class App:
             self.ui.msg(f"Adopted {adopted} hand-added game(s) — they'll show "
                         "in prefix backup and restore from now on.", "success")
         self._sync_shortcut_state()   # keep the reimage net complete
+        logs = self._collect_proton_logs()
+        if logs:
+            self.ui.msg(f"Collected {logs} Proton log(s) to the NAS "
+                        "(PROTON_LOG=1 recipes).", "dim")
         self._scan_prefix_backups()
         self.ui.msg("── 5/5  Capturing art + saves + settings " + "─" * 1,
                     "info")
@@ -1412,6 +1463,7 @@ class App:
         # so ordering only matters in that it must follow them.)
         self._adopt_shortcuts(interactive=False)   # auto-pin new hand-adds
         self._sync_shortcut_state()                # keep the reimage net complete
+        self._collect_proton_logs()                # gather PROTON_LOG output
         try:
             self._scan_prefix_backups()
             wrote = True
@@ -2624,6 +2676,7 @@ COMMANDS = {
     "diagnose": lambda app, a: app.cmd_diagnose(a),
     "adopt": lambda app, a: app.cmd_adopt(a),
     "restore-shortcuts": lambda app, a: app.cmd_restore_shortcuts(a),
+    "collect-logs": lambda app, a: app.cmd_collect_logs(a),
     "save-restore": lambda app, a: app.cmd_save_restore(),
     # the individual steps those bundles wrap
     "scan-sd": lambda app, a: app.cmd_scan_sd(),

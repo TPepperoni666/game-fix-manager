@@ -23,7 +23,7 @@
       "type": "steam_shortcut",
       "exe": "True Crime® New York City.exe",
       "start_dir": "{game_dir}",
-      "launch_options": "WINEDLLOVERRIDES=\"d3d9=n,b\" %command%",
+      "launch_options": "PROTON_LOG=1 WINEDLLOVERRIDES=\"d3d9=n,b\" %command%",
       "proton": "GE-Proton10-34"
     }
   ],

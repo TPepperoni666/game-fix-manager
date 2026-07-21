@@ -40,7 +40,7 @@
     },
     {
       "type": "launch_options",
-      "value": "WINEDLLOVERRIDES=\"WTSAPI32=n,b\" %command%"
+      "value": "PROTON_LOG=1 WINEDLLOVERRIDES=\"WTSAPI32=n,b\" %command%"
     }
   ],
   "post_apply_message": "Halo MCC + AlphaRing — local SPLITSCREEN across all MCC games.\n\nInstalled: AlphaRing's proxy DLL as WTSAPI32.dll into\n    <game>/MCC/Binaries/Win64/          (note the CASE — it matters)\nplus the launch option WINEDLLOVERRIDES=\"WTSAPI32=n,b\" %command%.\nBoth match the author's own video (Jack Bittner, M26Mzan8SNM) exactly.\n\nNOW TEST IT: launch MCC and press F4 (or Controller Back + Start). If the\nAlphaRing menu opens, you're done — use its Bind buttons to assign each\ncontroller to a player.\n\nTRY ANTI-CHEAT ON FIRST. Until 2026-07-20 this recipe installed the DLL to\na lowercase 'mcc/binaries/win64' — a DIFFERENT directory on Linux — so the\nmod was never beside the exe and could not load in EITHER anti-cheat mode.\nEvery previous conclusion about EAC came from that broken state, so it is\nall untested now. Anti-cheat ON is the mode that actually launches, so try\nit first.\n\nIf F4 does nothing with anti-cheat ON, then EAC really is blocking the DLL\nand it needs anti-cheat OFF — which on this Deck refuses to launch even\nwith a stock game folder. The lead there is to bypass MCC's launcher and\nrun MCC/Binaries/Win64/MCC-Win64-Shipping.exe directly (the root launcher\nis mcclauncher.exe), which is what anti-cheat-disabled does anyway.\n\nRecipe pins AlphaRing 1.3.3 by sha256 (00474043…). kirklandsig and\nmegabitt01 are collaborators, not rival forks — no better build to chase.",
