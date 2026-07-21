@@ -22,6 +22,34 @@ _CHECK = "\x1b[38;5;46m"
 _DIM = "\x1b[38;5;240m"
 _RESET = "\x1b[0m"
 
+MAX_WINDOW = 15   # cap the viewport like gum's single-select does
+
+
+def _truncate(text: str, width: int) -> str:
+    """Clip a label to width columns with an ellipsis, so it never wraps to a
+    second terminal row (wrapping is what threw off the old redraw math)."""
+    if width <= 1:
+        return text[:max(0, width)]
+    return text if len(text) <= width else text[:width - 1] + "…"
+
+
+def _window_height(total: int, rows: int, header_lines: int) -> int:
+    """How many option rows fit, leaving room for header, a blank, the
+    position line, a blank and the controls hint — and never taller than the
+    terminal (which is what made the whole thing overflow before)."""
+    avail = rows - header_lines - 5          # blank+position+blank+hint+margin
+    return max(1, min(total, avail, MAX_WINDOW))
+
+
+def _scroll_top(cursor: int, top: int, total: int, height: int) -> int:
+    """New top-of-window index that keeps the cursor visible without scrolling
+    past either end. Pure so the scroll logic is testable off a TTY."""
+    if cursor < top:
+        top = cursor
+    elif cursor >= top + height:
+        top = cursor - height + 1
+    return max(0, min(top, max(0, total - height)))
+
 
 def _read_key() -> str:
     """One keypress from stdin, decoded to a symbolic name."""
@@ -59,13 +87,16 @@ def _read_key() -> str:
 
 
 def multiselect_arrows(header: str, options: list[str]) -> list[str]:
-    """Interactive multi-select with arrow-key toggling.
+    """Interactive multi-select with arrow-key toggling and a scrolling
+    viewport, so long lists (Deploy, Apply, Back Up Prefixes) and long labels
+    stay readable on the Deck instead of overflowing.
 
     Controls:
-      Up / Down (D-pad)   — move highlight
+      Up / Down (D-pad)     — move highlight (window scrolls to follow)
       Left / Right or SPACE — toggle current item
-      Enter (A on Deck)   — confirm selected items
-      Esc (B on Deck)     — cancel, return []
+      a                     — toggle ALL on/off
+      Enter (A on Deck)     — confirm selected items
+      Esc (B on Deck)       — cancel, return []
     """
     if os.name == "nt":
         raise NotImplementedError("raw TTY unsupported on Windows")
@@ -76,25 +107,45 @@ def multiselect_arrows(header: str, options: list[str]) -> list[str]:
 
     selected = [False] * len(options)
     cursor = 0
+    top = 0
     drawn = 0
+    header_lines = len(header.splitlines())
 
     def draw() -> None:
-        nonlocal drawn
+        nonlocal drawn, top
+        try:
+            cols, rows = os.get_terminal_size()
+        except OSError:
+            cols, rows = 80, 24
+        height = _window_height(len(options), rows, header_lines)
+        top = _scroll_top(cursor, top, len(options), height)
+        scrolling = len(options) > height
+        label_w = max(10, cols - 9)   # cursor + "[x]" + spaces + margin
+
         buf = []
         if drawn:
-            # Move up and clear from there so we redraw in place
-            buf.append(f"\x1b[{drawn}A\x1b[J")
+            buf.append(f"\x1b[{drawn}A\x1b[J")   # redraw in place
         for line in header.splitlines():
             buf.append(f"{_HEADER}{line}{_RESET}\n")
         buf.append("\n")
-        for i, opt in enumerate(options):
+        end = min(top + height, len(options))
+        for i in range(top, end):
+            opt = _truncate(options[i], label_w)
             mark = f"{_CHECK}✔{_RESET}" if selected[i] else " "
             if i == cursor:
                 buf.append(f" {_CURSOR}▶ [{mark}{_CURSOR}] {opt}{_RESET}\n")
             else:
                 buf.append(f"   [{mark}]  {opt}\n")
-        buf.append(f"\n{_DIM}↑↓ move  •  ←→ toggle  •  Enter confirm  "
-                   f"•  Esc cancel{_RESET}\n")
+        if scrolling:                            # position line only when it scrolls
+            more = []
+            if top > 0:
+                more.append(f"▲ {top} above")
+            if end < len(options):
+                more.append(f"▼ {len(options) - end} below")
+            buf.append(f"   {_DIM}({end - top} of {len(options)}"
+                       + ("  " + "  ".join(more) if more else "") + f"){_RESET}\n")
+        buf.append(f"\n{_DIM}↑↓ move  •  ←→ toggle  •  a all  •  Enter "
+                   f"confirm  •  Esc cancel{_RESET}\n")
         text = "".join(buf)
         drawn = text.count("\n")
         sys.stdout.write(text)
@@ -110,6 +161,9 @@ def multiselect_arrows(header: str, options: list[str]) -> list[str]:
                 cursor = (cursor + 1) % len(options)
             elif key in ("left", "right", "space"):
                 selected[cursor] = not selected[cursor]
+            elif key in ("a", "A"):              # toggle all on/off
+                new = not all(selected)
+                selected = [new] * len(options)
             elif key == "enter":
                 return [opt for opt, sel in zip(options, selected) if sel]
             elif key in ("esc", "ctrl-c"):

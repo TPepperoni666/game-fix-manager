@@ -1880,6 +1880,36 @@ def main():
               "steam_games" in _md and "manual_games" in _md
               and "games" in _md and "unmatched" in _md)
 
+        # --- multi-select scrolling viewport (#2) ----------------------
+        from ui import multiselect as _ms
+        check("truncate clips long labels with an ellipsis (no wrap)",
+              _ms._truncate("hello world", 8) == "hello w…"
+              and _ms._truncate("abc", 5) == "abc")
+        check("window height never overflows the terminal",
+              _ms._window_height(26, 24, 1) <= 24 - 1 - 5 + 1
+              and _ms._window_height(26, 24, 1) <= _ms.MAX_WINDOW)
+        check("window shows a whole short list",
+              _ms._window_height(5, 24, 1) == 5)
+        check("window caps at MAX_WINDOW on a tall terminal",
+              _ms._window_height(50, 60, 1) == _ms.MAX_WINDOW)
+        check("window stays >=1 on a tiny terminal",
+              _ms._window_height(20, 6, 1) >= 1)
+        # scroll_top keeps the cursor visible and never over-scrolls, across a
+        # full up+down sweep of a 30-item list in a 12-row window.
+        top, ok = 0, True
+        for c in list(range(30)) + list(range(29, -1, -1)):
+            top = _ms._scroll_top(c, top, 30, 12)
+            if not (top <= c < top + 12 and 0 <= top <= 30 - 12):
+                ok = False
+                break
+        check("scroll keeps cursor visible without over-scrolling", ok)
+        check("scroll clamps to the end (no blank tail)",
+              _ms._scroll_top(29, 0, 30, 12) == 30 - 12)
+        gsrc = _i.getsource(_ms.multiselect_arrows)
+        check("picker uses the viewport helpers + select-all",
+              "_scroll_top" in gsrc and "_truncate" in gsrc
+              and '"a", "A"' in gsrc)
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
