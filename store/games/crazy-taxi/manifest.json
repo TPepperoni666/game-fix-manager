@@ -1,0 +1,28 @@
+{
+  "id": "crazy-taxi",
+  "name": "Crazy Taxi",
+  "aliases": [
+    "Crazy Taxi (2014)",
+    "CrazyTaxi"
+  ],
+  "detect": {
+    "install_dir_names": ["Crazy Taxi", "CrazyTaxi"],
+    "marker_files": ["2014/Crazy Taxi.exe"]
+  },
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "2014/Crazy Taxi.exe",
+      "start_dir": "{game_dir}/2014",
+      "launch_options": "PROTON_LOG=1 WINEDLLOVERRIDES=\"dinput8=n,b\" %command%",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "Crazy Taxi (SEGA, 2014 re-release — delisted over expired music licensing) — Apply points the shortcut at the 2014 build and loads its patches.\n\nWHY THE WHITE SCREEN + CRASH: the 2014 build relies on SilentPatch (SilentPatchCT.asi) and a Dreamcast Restoration mod (CT-DC.asi), both loaded through a dinput8.dll Ultimate ASI Loader. SilentPatch is what stops it crashing on modern systems — and Wine won't load that local dinput8.dll unless told to, so without the override the game hits a white screen and dies. The shortcut therefore carries WINEDLLOVERRIDES=\"dinput8=n,b\" and points at 2014/Crazy Taxi.exe (NOT AppLauncher.exe, and NOT the data-only 2002 folder) with the working dir set to 2014.\n\nALREADY DEPLOYED IT AS A PLAIN GAME? It picked the wrong exe / no override. Re-scan so it maps to this recipe, then 🔧 Apply Fixes to rewrite the shortcut — or just re-deploy.\n\nIF IT STILL CRASHES: PROTON_LOG=1 is on the shortcut, so launch, quit, run 🔍 Scan, and I'll read the log for dinput8/SilentPatch to confirm the ASI loaded. Performance option: the repack ships DXVK 2.3 in 2014/Vulkan/ (copy its d3d9.dll into 2014/) — but Proton already provides DXVK, so try without first.\n\nCONTROLLER: native pad support — Steam Input's gamepad layout works.",
+  "notes": "Built 2026-07-21 after Tony hit a white-screen crash deploying it as a simple game. Repack (magipacks, 'Repack Notes.txt') bundles a 2002 edition (data-only .afs in 2002/, no exe in this pack) and the 2014 edition (build 403161) in 2014/. Delisted from Steam: the repack restores the Dreamcast music because the PC version's licensed music (Offspring/Bad Religion) expired — the reason SEGA pulled it — so it's the delisted/abandonware lane, not a current-sale title (steam_api.dll + steam_appid.txt are the delisted Steam build + emu).\n\nLaunch = 2014/Crazy Taxi.exe, working dir 2014. SilentPatchCT.asi + CT-DC.asi load via 2014/dinput8.dll (Ultimate ASI Loader) — hence WINEDLLOVERRIDES=\"dinput8=n,b\"; without it SilentPatch doesn't run and the game white-screens/crashes (same ASI-loader pattern as Turok). PROTON_LOG=1 to confirm the loader. DXVK 2.3 is in 2014/Vulkan but Proton provides its own, so not wired. Non-Steam -> computed appid. UNTESTED as of build — this is the hypothesised fix for Tony's crash."
+}
