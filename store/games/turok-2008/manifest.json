@@ -1,0 +1,28 @@
+{
+  "id": "turok-2008",
+  "name": "Turok (2008)",
+  "aliases": [
+    "Turok",
+    "Turok 2008"
+  ],
+  "detect": {
+    "install_dir_names": ["Turok"],
+    "marker_files": ["Binaries/TurokGame.exe"]
+  },
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "Binaries/TurokGame.exe",
+      "start_dir": "{game_dir}/Binaries",
+      "launch_options": "PROTON_LOG=1 WINEDLLOVERRIDES=\"dinput8=n,b\" %command%",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "Turok (2008, delisted) — Apply adds the Steam shortcut on GE-Proton 10.34.\n\nTHE RIGHT EXE: the shortcut points at Binaries/TurokGame.exe with the working dir set to Binaries — NOT 'Play Turok.exe' at the root. The crack's own readme (ChemicalFlood) says as much: \"The Game's Real .EXE is called TurokGame.exe and is inside the Binaries folder, just in case you're not on Windows (Steamdeck!)\".\n\nWIDESCREEN + FOV — already handled, via the d-input ASI loader: your copy bundles Turok2008FOVFix.asi (a widescreen/FOV fix) plus a dinput8.dll that is an Ultimate ASI Loader. Wine has to load THAT local dinput8.dll for the fix to inject, so the shortcut carries WINEDLLOVERRIDES=\"dinput8=n,b\". The fix auto-detects the display resolution (its ini has Width=0/Height=0) and corrects the FOV to match — so on the Deck's panel it just works, nothing to set. If the game looks zoomed/4:3, that means the ASI didn't load: PROTON_LOG=1 is already on the shortcut, so launch, quit, run 🔍 Scan, and I'll read ~/steam-<appid>.log for 'dinput8'/'Turok2008FOVFix' to confirm.\n\nDO NOT answer 'Yes' to the question at first launch (it can break the game's PostFX). If you already did, the crack ships a '_Fix PostFX.bat' that restores the config from its medi/ backup folder — run it on Windows against the game folder.\n\nCONTROLLER: native XInput support (xinput1_3.dll is bundled) — Steam Input's default gamepad layout works.",
+  "notes": "Built 2026-07-21 from Tony's copy at NAS _games/Turok (ChemicalFlood crack, delisted 2008 reboot — abandonware lane). UE3 engine. Launch = Binaries/TurokGame.exe, working dir Binaries (RunMe.bat does exactly this: pushd Binaries, run turokgame.exe). FOV/widescreen fix is Turok2008FOVFix.asi loaded by Binaries/dinput8.dll (Ultimate ASI Loader) — the .log confirms it loads into TurokGame.exe and auto-detects desktop resolution for the FOV calc (Width/Height=0 in its ini). Hence WINEDLLOVERRIDES=\"dinput8=n,b\" so Wine uses the local loader. The fix ships INSIDE the game folder (deploys with the game) so no payload/copy_files is needed. PROTON_LOG=1 added because the fix depends on the ASI loader loading — same 'did the wrapper load' question as MoH:PA / TC-NYC. _Fix PostFX.bat is a recovery script for a first-launch prompt gotcha (documented, not applied). Native XInput. Non-Steam -> computed appid. UNTESTED on hardware."
+}

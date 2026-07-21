@@ -1687,7 +1687,8 @@ def main():
             else {}
         for rid, exe in [("mohaa", "MOHAA.exe"), ("mohpa", "mohpa.exe"),
                          ("1nsane", "Game.exe"),
-                         ("true-crime-la", "TrueCrime.exe")]:
+                         ("true-crime-la", "TrueCrime.exe"),
+                         ("turok-2008", "Binaries/TurokGame.exe")]:
             r = recs.get(rid)
             sc = next((s for s in r.steps if s["type"] == "steam_shortcut"),
                       None) if r else None
@@ -1703,7 +1704,7 @@ def main():
                 if v:
                     return v
             return ""
-        for rid in ("mohpa", "true-crime-nyc", "halo-mcc"):
+        for rid in ("mohpa", "true-crime-nyc", "halo-mcc", "turok-2008"):
             check(f"{rid} enables PROTON_LOG for diagnosis",
                   "PROTON_LOG=1" in _launch_opts(rid))
 
