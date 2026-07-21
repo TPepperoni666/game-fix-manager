@@ -1627,6 +1627,14 @@ def main():
         check("save-restore rebuilds shortcuts BEFORE importing prefixes",
               "cmd_restore_shortcuts" in sr
               and sr.index("cmd_restore_shortcuts") < sr.index("import_prefixes"))
+        # The weekly net: both interactive scan and background refresh must
+        # snapshot managed generic shortcuts so the reimage net self-heals.
+        check("cmd_scan_all syncs shortcut state",
+              "_sync_shortcut_state" in _i.getsource(gfm_mod.App.cmd_scan_all))
+        check("background refresh syncs shortcut state (weekly coverage)",
+              "_sync_shortcut_state" in _i.getsource(gfm_mod.App._refresh_map))
+        check("App._sync_shortcut_state exists",
+              hasattr(gfm_mod.App, "_sync_shortcut_state"))
 
         print(f"\nAll {PASS} checks passed.")
     finally:

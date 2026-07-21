@@ -647,6 +647,39 @@ class App:
         except OSError:
             pass
 
+    def _sync_shortcut_state(self) -> int:
+        """Snapshot the body of every MANAGED generic shortcut (adopted /
+        non-recipe, pinned in the registry) into the reimage-surviving state.
+
+        Adopt only saves the ones it pins THIS run, so a game pinned earlier —
+        before this state existed, or on a prior version — would be missing
+        from the reimage net. This runs each scan and backfills them all, so
+        the weekly pass keeps the net complete and self-healing. Idempotent."""
+        if self.steam_root is None or self.local_payloads is None:
+            return 0
+        try:
+            shortcuts = shortcutsvdf.list_shortcuts(self.steam_root)
+        except Exception:
+            return 0
+        generic = {str(e["appid"]) for e in self._registry_entries()
+                   if e.get("recipe_id") is None and e.get("appid")}
+        n = 0
+        for sc in shortcuts:
+            if str(sc.get("appid")) not in generic:
+                continue
+            try:
+                runner = (steamvdf.get_compat_tool(
+                    self.steam_root, int(sc["appid"])) or {}).get("name", "")
+            except Exception:
+                runner = ""
+            folder, exe_rel = self._sd_folder_of(sc.get("exe", ""))
+            self._save_shortcut_state(
+                sc["appid"], sc.get("name", ""), sc.get("exe", ""),
+                sc.get("start_dir", ""), sc.get("launch_options", ""),
+                runner, folder=folder, exe_rel=exe_rel)
+            n += 1
+        return n
+
     def cmd_restore_shortcuts(self, args=None):
         """Rebuild the generic (no-recipe) Steam shortcuts saved for THIS
         device — the reimage recovery step. Recipe games rebuild themselves via
@@ -1344,6 +1377,7 @@ class App:
         if adopted:
             self.ui.msg(f"Adopted {adopted} hand-added game(s) — they'll show "
                         "in prefix backup and restore from now on.", "success")
+        self._sync_shortcut_state()   # keep the reimage net complete
         self._scan_prefix_backups()
         self.ui.msg("── 5/5  Capturing art + saves + settings " + "─" * 1,
                     "info")
@@ -1377,6 +1411,7 @@ class App:
         # prefix_backups. (Runs last: each section write preserves the others,
         # so ordering only matters in that it must follow them.)
         self._adopt_shortcuts(interactive=False)   # auto-pin new hand-adds
+        self._sync_shortcut_state()                # keep the reimage net complete
         try:
             self._scan_prefix_backups()
             wrote = True
