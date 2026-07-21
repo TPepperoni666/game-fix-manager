@@ -1727,6 +1727,43 @@ def main():
             check(f"{rid} enables PROTON_LOG for diagnosis",
                   "PROTON_LOG=1" in _launch_opts(rid))
 
+        # --- icon capture + art re-apply on deploy ---------------------
+        from core import steamart as _sa, shortcutsvdf as _sv2
+        st = tmp / "artsteam"
+        grid = st / "userdata" / "1" / "config" / "grid"; grid.mkdir(parents=True)
+        icn = tmp / "icons" / "t.ico"; icn.parent.mkdir(); icn.write_bytes(b"I")
+        _sv2.ensure_shortcut(st, "ArtGame", "/g/a.exe", "/g", "", 555, [])
+        _sv2.set_icon(st, ["ArtGame"], str(icn))
+        check("shortcut describe now reports the icon path",
+              _sv2.describe(st, ["ArtGame"])["icon"] == str(icn))
+        artdir = tmp / "artcap"
+        check("icon is captured from the shortcut path (not a grid file)",
+              _sa.capture_icon(555, str(icn), artdir)
+              and (artdir / "555_icon.ico").is_file())
+        check("captured_icon finds the saved icon",
+              _sa.captured_icon(artdir, 555) is not None)
+        check("capture_icon is a no-op for an empty/missing path",
+              _sa.capture_icon(555, "", artdir) is False)
+        (artdir / "555.png").write_bytes(b"x")
+        _sa.restore(st, 555, artdir)
+        check("restore lands the icon in the grid folder",
+              (grid / "555_icon.ico").is_file() and (grid / "555.png").is_file())
+        _sv2.set_icon(st, ["ArtGame"], str(grid / "555_icon.ico"))
+        check("shortcut icon repoints to the restored grid icon",
+              _sv2.describe(st, ["ArtGame"])["icon"]
+              == str(grid / "555_icon.ico"))
+        check("App._restore_art_for exists (deploy re-applies art)",
+              hasattr(gfm_mod.App, "_restore_art_for"))
+        check("deploy re-applies artwork after the shortcut is made",
+              "_restore_art_for" in _i.getsource(gfm_mod.App.cmd_deploy_game))
+        check("capture also grabs the icon",
+              "capture_icon" in _i.getsource(gfm_mod.App._capture_one))
+        check("TMNT recipe carries the full proper name",
+              _man.load_all(Path(gfm_mod.__file__).parent / "store") and any(
+                  r.name == "Teenage Mutant Ninja Turtles: Mutants in Manhattan"
+                  for r in _man.load_all(
+                      Path(gfm_mod.__file__).parent / "store")))
+
         # --- deploy menu: sizes up front + SD free space ---------------
         dep_src = _i.getsource(gfm_mod.App.cmd_deploy_game)
         check("deploy menu measures uncached games up front",

@@ -61,6 +61,39 @@ def capture(steam_root: Path, appid: int, dest_dir: Path) -> int:
     return 0
 
 
+def capture_icon(appid: int, icon_path: str, dest_dir: Path) -> bool:
+    """Preserve a non-Steam shortcut's ICON. Unlike the library grid art
+    (capsule/hero/logo, which live in the grid folder named by appid), the icon
+    is a FILE referenced by PATH in shortcuts.vdf — often the exe's own icon or
+    a custom .ico anywhere on disk — so the grid sweep never sees it. We copy
+    that file into the artwork folder as <appid>_icon<ext> so it rides along
+    with the rest and can be restored. Returns True if an icon file was copied."""
+    if not icon_path:
+        return False
+    src = Path(icon_path)
+    try:
+        if not src.is_file():
+            return False
+        dest_dir = Path(dest_dir)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        ext = src.suffix.lower() or ".ico"
+        shutil.copy2(src, dest_dir / f"{appid}_icon{ext}")
+        return True
+    except OSError:
+        return False
+
+
+def captured_icon(src_dir: Path, appid: int) -> Path | None:
+    """The captured icon file for appid inside src_dir, if any."""
+    try:
+        for f in Path(src_dir).glob(f"{appid}_icon.*"):
+            if f.is_file():
+                return f
+    except OSError:
+        pass
+    return None
+
+
 def restore(steam_root: Path, appid: int, src_dir: Path) -> int:
     """Copy captured art from src_dir into every Steam user's grid folder. The
     files are already named by appid, so they land on the right shortcut.

@@ -243,8 +243,29 @@ def describe(steam_root: Path, names: list[str]) -> dict | None:
                 "exe": _s("Exe"),
                 "start_dir": _s("StartDir"),
                 "launch_options": _s("LaunchOptions"),
+                "icon": _s("icon"),
             }
     return None
+
+
+def set_icon(steam_root: Path, names: list[str], icon_path: str) -> int:
+    """Point every matching shortcut's icon field at icon_path. Steam reads the
+    icon from this path (it's not a grid file), so restoring a captured icon
+    means copying the file back AND repointing the shortcut here. Steam closed.
+    Returns the number of shortcut files written."""
+    names_norm = {_norm(n) for n in names}
+    written = 0
+    for f in _shortcut_files(steam_root):
+        root = loads(f.read_bytes())
+        touched = False
+        for entry in _entries(root):
+            if _matches(entry, names_norm):
+                _set_field(entry, "icon", TYPE_STR, icon_path)
+                touched = True
+        if touched:
+            f.write_bytes(dumps(root))
+            written += 1
+    return written
 
 
 def set_appid(steam_root: Path, names: list[str], new_appid: int) -> int:

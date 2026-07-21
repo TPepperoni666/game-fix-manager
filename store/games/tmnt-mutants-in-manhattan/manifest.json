@@ -1,0 +1,31 @@
+{
+  "id": "tmnt-mutants-in-manhattan",
+  "name": "Teenage Mutant Ninja Turtles: Mutants in Manhattan",
+  "aliases": [
+    "TMNT - Mutants in Manhattan",
+    "TMNT: Mutants in Manhattan",
+    "TMNT Mutants in Manhattan"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "TMNT - Mutants in Manhattan",
+      "Teenage Mutant Ninja Turtles Mutants in Manhattan"
+    ],
+    "marker_files": ["TMNT_MiM.exe"]
+  },
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "TMNT_MiM.exe",
+      "start_dir": "{game_dir}",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "Teenage Mutant Ninja Turtles: Mutants in Manhattan (2016, PlatinumGames, delisted 2017) — Apply adds the Steam shortcut on GE-Proton 10.34 under the full proper name.\n\nWHY A RECIPE FOR A 'SIMPLE' GAME: it deployed fine as a plain game, but the generic shortcut took the folder name ('TMNT - Mutants in Manhattan'). This recipe just pins the correct display name and the right exe (TMNT_MiM.exe) so it reads properly in Steam and survives a reimage. No fix beyond that — it's a native, controller-first console-style game.\n\nCONTROLLER: built for a gamepad — Steam Input's default layout works.",
+  "notes": "Built 2026-07-21 so the Steam entry reads 'Teenage Mutant Ninja Turtles: Mutants in Manhattan' instead of the folder name. Delisted from Steam in 2017 (licensing) — abandonware lane. Launch exe TMNT_MiM.exe (marker + shortcut). UE-based, native XInput. No widescreen/perf work known-needed. NOTE: earlier this folder FALSE-MATCHED true-crime-nyc via its generic d3d9.ini marker (fixed in db21a32) and got a bogus 'True Crime: New York City' shortcut; with a real recipe + name-match it now identifies correctly. Non-Steam -> computed appid. UNTESTED beyond 'deploys + names right'."
+}

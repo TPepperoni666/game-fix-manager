@@ -253,6 +253,14 @@ class App:
             dest = store.recipe_data_dir(self.local_payloads, recipe.id,
                                          "artwork", for_write=True)
             n = steamart.capture(self.steam_root, appid, dest)
+            # The icon is a file referenced by PATH in the shortcut, not a grid
+            # file — capture it separately so it isn't lost.
+            try:
+                info = shortcutsvdf.describe(self.steam_root, recipe.all_names)
+            except Exception:
+                info = None
+            if info and steamart.capture_icon(appid, info.get("icon", ""), dest):
+                n += 1
             if n:
                 self.ui.msg(f"  🎨 {recipe.name}: {n} art file(s)", "success")
                 got = True
@@ -525,6 +533,13 @@ class App:
             if self._setup_shortcut(g.name, dest):
                 made += 1
         self.flush_vdf_writes()
+        # Re-apply captured artwork (incl. icon) now the shortcut exists — so a
+        # game pulled from the NAS comes back looking right, not blank.
+        restored = 0
+        for g, dest in deployed_ok:
+            restored += self._restore_art_for(dest)
+        if restored:
+            self.ui.msg(f"🎨 Re-applied artwork for {restored} game(s).", "dim")
         # Latch shortcut_seen for what we just added, so the reclaim scan is
         # armed WITHOUT needing a prior run while the shortcut existed.
         for g, _dest in deployed_ok:
@@ -594,6 +609,42 @@ class App:
         import dataclasses
         only_setup = dataclasses.replace(recipe, steps=setup)
         return self.run_engine(only_setup, dest, engine.apply_recipe)
+
+    def _restore_art_for(self, dest: Path) -> int:
+        """Copy a deployed game's captured artwork back into Steam's grid
+        folder, and repoint its shortcut icon at the restored icon file. Runs
+        after the shortcut exists (post-flush). Returns 1 if art was restored.
+
+        Only recipe games have captured artwork (capture is per-recipe), so a
+        no-recipe generic deploy is a no-op here."""
+        if self.steam_root is None or self.local_payloads is None:
+            return 0
+        recipe, _sig = sdscan._match_folder(dest, self.recipes)
+        if recipe is None:
+            return 0
+        appid = self._art_appid(recipe)
+        art = store.recipe_data_dir(self.local_payloads, recipe.id, "artwork")
+        if appid is None or not art.is_dir():
+            return 0
+        try:
+            n = steamart.restore(self.steam_root, appid, art)
+        except OSError:
+            return 0
+        if not n:
+            return 0
+        # Repoint the shortcut icon at the restored icon file (grid path).
+        icon = steamart.captured_icon(art, appid)
+        if icon is not None:
+            for grid in steamart._grid_dirs(self.steam_root):
+                landed = grid / icon.name
+                if landed.is_file():
+                    try:
+                        shortcutsvdf.set_icon(self.steam_root,
+                                              recipe.all_names, str(landed))
+                    except Exception:
+                        pass
+                    break
+        return 1
 
     def _make_generic_shortcut(self, folder_name: str, dest: Path) -> bool:
         """Add a Steam shortcut for a deployed game with NO recipe: propose the
