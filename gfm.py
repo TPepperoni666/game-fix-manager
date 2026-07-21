@@ -410,14 +410,12 @@ class App:
             return
         root = deploy.staged_root(self.local_payloads)
         self.ui.msg(f"📂 Staged games: {root}", "dim")
-        if not deploy.mount_reachable(self.local_payloads):
-            self.ui.msg(f"The NAS mount looks DOWN ({self.local_payloads} is "
-                        "empty/unreachable).", "error")
-            self.ui.msg("An idle automount drops after a few minutes and the "
-                        "guest re-mount can fail silently. Wake it — open the "
-                        "share once in Files/Dolphin, or re-run 🔌 Connect NAS "
-                        "Payloads — then try again. (A real SMB login instead of"
-                        " guest would stop this; see TODO.)", "warn")
+        if not self._wake_nas():
+            self.ui.msg(f"The NAS mount is DOWN and I couldn't wake it "
+                        f"({self.local_payloads} is empty/unreachable).",
+                        "error")
+            self.ui.msg("Re-run 🔌 Connect NAS Payloads, or open the share once "
+                        "in Files/Dolphin, then try again.", "warn")
             return
         games = deploy.list_staged(self.local_payloads)
         if not games:
@@ -431,11 +429,28 @@ class App:
         dest_root = self._deploy_dest_root()
         if dest_root is None:
             return
+
+        # Sizes: show one for EVERY staged game so you know how big a transfer
+        # is BEFORE picking. Cached sizes are instant; anything new is measured
+        # once here (walking the NAS tree) and cached, so it's only slow the
+        # first time a game appears.
+        uncached = [g for g in games if g.size is None]
+        if uncached:
+            self.ui.msg(f"Measuring {len(uncached)} new game(s) over the NAS "
+                        "(one-time, cached after)…", "dim")
+            for i, g in enumerate(uncached, 1):
+                self.ui.msg(f"   ({i}/{len(uncached)}) {g.name}…", "dim")
+                deploy.measure(g)
+                deploy.save_size(self.local_payloads, g)
+
+        staged_total = sum(g.size or 0 for g in games)
+        free = deploy.free_space(dest_root)
         self.ui.msg(f"🎯 Destination : {dest_root}", "dim")
+        self.ui.msg(f"💾 SD free     : {self._gb(free)}   "
+                    f"│  📦 all staged: {self._gb(staged_total)}", "dim")
         self.ui.msg("", "dim")
 
-        # Multi-select. Names + one is_dir() marker each (cheap) — NOT a tree
-        # walk; the picked games get measured just before they copy.
+        # Multi-select. Sizes are all known now; the ✓ marks what's on the card.
         by_label, on_card = {}, 0
         for g in games:
             here = deploy.is_deployed(g, dest_root)
@@ -446,7 +461,8 @@ class App:
             by_label[f"{mark} {g.name}  ({size}){state}"] = g
         picked = self.ui.choose(
             f"Deploy which games?  ({len(games)} staged, {on_card} on the "
-            "card) — ←→ toggle, Enter confirm", list(by_label), multi=True)
+            f"card, {self._gb(free)} SD free) — ←→ toggle, Enter confirm",
+            list(by_label), multi=True)
         chosen = [by_label[p] for p in picked if p in by_label]
         if not chosen:
             return
@@ -615,6 +631,80 @@ class App:
         self.ui.msg(f"  + {folder_name}: shortcut queued -> {rel} "
                     f"(appid {appid}, GE-Proton 10.34)", "success")
         return True
+
+    def _nas_automount_unit(self) -> str | None:
+        """The systemd automount unit name for the current mount point, e.g.
+        home-deck-mnt-game\\x2dfixes.automount. None off Linux / no mount."""
+        if os.name == "nt" or self.local_payloads is None \
+                or not shutil.which("systemd-escape"):
+            return None
+        try:
+            r = subprocess.run(
+                ["systemd-escape", "-p", "--suffix=automount",
+                 str(self.local_payloads)],
+                capture_output=True, text=True, timeout=5)
+            return r.stdout.strip() or None
+        except (OSError, subprocess.SubprocessError):
+            return None
+
+    def _log_nas_status(self) -> None:
+        """Record why the mount is down — is the automount unit present,
+        enabled, active? This is what tells us whether a reboot wiped the unit
+        (persistence problem) or it's just inactive (a trigger problem). Goes
+        to gfm.log, which syncs, so it can actually be read."""
+        unit = self._nas_automount_unit()
+        if not unit or not shutil.which("systemctl"):
+            return
+        for q in ("is-enabled", "is-active"):
+            try:
+                r = subprocess.run(["systemctl", q, unit],
+                                   capture_output=True, text=True, timeout=5)
+                self.ui.msg(f"   automount {q}: {(r.stdout or r.stderr).strip()}",
+                            "dim")
+            except (OSError, subprocess.SubprocessError):
+                pass
+
+    def _wake_nas(self) -> bool:
+        """Bring the NAS mount up without the user manually reconnecting.
+
+        On SteamOS the mount is a systemd AUTOMOUNT — the kernel mounts it on
+        first ACCESS, no privileges needed — so just touching the path usually
+        revives it after a boot. If that doesn't take, we try to start the
+        automount unit (best-effort; a system unit may need privileges we don't
+        have here, in which case we log its status and fall back to asking the
+        user to reconnect)."""
+        if self.local_payloads is None:
+            return False
+        if deploy.mount_reachable(self.local_payloads):
+            return True
+        # 1. Access-trigger the automount (no sudo). readdir counts as access.
+        for _ in range(2):
+            try:
+                list(self.local_payloads.iterdir())
+            except OSError:
+                pass
+            if deploy.mount_reachable(self.local_payloads):
+                return True
+        # 2. Ask systemd to (re)start the automount unit, then trigger again.
+        unit = self._nas_automount_unit()
+        if unit and shutil.which("systemctl"):
+            self.ui.msg("NAS looks down after boot — waking the automount…",
+                        "dim")
+            for cmd in (["systemctl", "start", unit],
+                        ["sudo", "-n", "systemctl", "start", unit]):
+                try:
+                    subprocess.run(cmd, capture_output=True, timeout=25)
+                except (OSError, subprocess.SubprocessError):
+                    continue
+                try:
+                    list(self.local_payloads.iterdir())
+                except OSError:
+                    pass
+                if deploy.mount_reachable(self.local_payloads):
+                    self.ui.msg("NAS remounted.", "success")
+                    return True
+        self._log_nas_status()
+        return False
 
     def _sd_folder_of(self, exe: str):
         """(folder, exe_rel) if this exe lives under an SD Games dir, else
@@ -2722,6 +2812,14 @@ def main():
         print("No fix store found. Clone the repo, insert the SD card, or pass --store.",
               file=sys.stderr)
         sys.exit(1)
+
+    # Wake the NAS automount early: on SteamOS it drops after a boot and the
+    # user had to reconnect by hand. A no-op when it's already up.
+    if app.local_payloads is not None:
+        try:
+            app._wake_nas()
+        except Exception:
+            pass
 
     handler = COMMANDS.get(args.command)
     try:

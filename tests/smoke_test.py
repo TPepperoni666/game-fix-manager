@@ -1708,6 +1708,34 @@ def main():
             check(f"{rid} enables PROTON_LOG for diagnosis",
                   "PROTON_LOG=1" in _launch_opts(rid))
 
+        # --- deploy menu: sizes up front + SD free space ---------------
+        dep_src = _i.getsource(gfm_mod.App.cmd_deploy_game)
+        check("deploy menu measures uncached games up front",
+              "uncached" in dep_src and "Measuring" in dep_src)
+        check("deploy menu shows SD free space before you pick",
+              "SD free" in dep_src and "free_space" in dep_src)
+
+        # --- NAS self-heal ---------------------------------------------
+        for m in ("_wake_nas", "_nas_automount_unit", "_log_nas_status"):
+            check(f"App.{m} exists", hasattr(gfm_mod.App, m))
+        check("deploy menu tries to wake the NAS before erroring",
+              "_wake_nas" in dep_src)
+        check("startup wakes the NAS", "_wake_nas" in _i.getsource(gfm_mod.main))
+
+        class _WakeUI:
+            def msg(self, *a, **k): pass
+        wa = gfm_mod.App.__new__(gfm_mod.App); wa.ui = _WakeUI()
+        up = tmp / "nasup"; (up / "_games").mkdir(parents=True)
+        wa.local_payloads = up
+        check("_wake_nas returns True when the mount is already up",
+              wa._wake_nas() is True)
+        wa.local_payloads = tmp / "nasdown"; (tmp / "nasdown").mkdir()
+        check("_wake_nas returns False (no crash) when down and unhealable",
+              wa._wake_nas() is False)
+        wa.local_payloads = None
+        check("_wake_nas is safe with no NAS configured",
+              wa._wake_nas() is False)
+
         # --- Proton log collection to the NAS --------------------------
         check("CLI exposes 'collect-logs'", "collect-logs" in gfm_mod.COMMANDS)
         check("App._collect_proton_logs exists",
