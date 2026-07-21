@@ -1695,6 +1695,25 @@ def main():
             check(f"recipe {rid} loads with shortcut -> {exe}",
                   sc is not None and sc.get("exe") == exe)
 
+        # --- no recipe may rely on a GENERIC marker file ---------------
+        # d3d9.ini as True Crime NYC's marker tagged TMNT (which also ships a
+        # d3d9 wrapper) as that game on deploy. A marker must be unique to the
+        # game, never a wrapper/redist/loader that any game can carry.
+        GENERIC_MARKERS = {
+            "d3d9.ini", "d3d9.dll", "dinput8.dll", "dinput8.ini", "binkw32.dll",
+            "steam_api.dll", "steam_api64.dll", "steam_api.ini", "dxwrapper.ini",
+            "dxwrapper.dll", "xlive.dll", "openal32.dll", "physxloader.dll",
+            "fmod.dll", "d3dx9_31.dll", "msvcr100.dll", "cmdlineext.dll",
+            "app.ico", "xinput1_3.dll", "wrap_oal.dll"}
+        offenders = []
+        for r in _m2.load_all(Path(gfm_mod.__file__).parent / "store"):
+            markers = r.detect.get("marker_files", [])
+            if markers and all(
+                    Path(m).name.lower() in GENERIC_MARKERS for m in markers):
+                offenders.append(r.id)
+        check("no recipe identifies itself only by a generic wrapper/redist "
+              "file", not offenders)
+
         # --- PROTON_LOG baked into the wrapper-dependent recipes -------
         def _launch_opts(rid):
             r = recs.get(rid)
