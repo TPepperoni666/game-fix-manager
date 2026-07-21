@@ -1752,6 +1752,12 @@ def main():
                   {"type": "steam_shortcut", "exe": "g.exe"}])))
         check("Apply Fixes filters to games with a fix",
               "fixes_only=True" in _i.getsource(gfm_mod.App.cmd_apply))
+        # Re-deploy reuses the saved exe instead of re-prompting.
+        gsrc = _i.getsource(gfm_mod.App._make_generic_shortcut)
+        check("generic re-deploy reuses the saved exe (no re-prompt)",
+              "_saved_shortcut" in gsrc and "reusing saved exe" in gsrc)
+        check("App._saved_shortcut exists",
+              hasattr(gfm_mod.App, "_saved_shortcut"))
 
         # --- icon capture + art re-apply on deploy ---------------------
         from core import steamart as _sa, shortcutsvdf as _sv2

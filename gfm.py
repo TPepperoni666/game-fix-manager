@@ -692,37 +692,61 @@ class App:
         exe from what's on disk (find_exes already skips crash/installer/redist
         junk), let the user confirm or pick another, and queue it on
         GE-Proton 10.34 with a stable computed appid. Returns True if queued."""
-        exes = sdscan.find_exes(dest)
-        if not exes:
-            self.ui.msg(f"  · {folder_name}: no recipe and no exe found — add it "
-                        "to Steam by hand.", "warn")
-            return False
-        labels = [f"{e['rel']}  ({e['size'] // (1 << 20)} MB)" for e in exes]
-        skip = "⬅️  Skip — don't add a shortcut"
-        self.ui.msg(f"  {folder_name}: no recipe — pick the exe to launch "
-                    "(best guess first):", "info")
-        picked = self.ui.choose(f"Shortcut exe for {folder_name}?",
-                                labels + [skip])
-        if not picked or picked[0] == skip:
-            self.ui.msg(f"  · {folder_name}: skipped — no shortcut.", "dim")
-            return False
-        rel = exes[labels.index(picked[0])]["rel"]
-        exe = str(dest / rel)
         appid = binascii.crc32(
             f"gfm:deploy:{folder_name}".encode()) | 0x80000000
+
+        # RE-DEPLOY: if we saved this game's exe/runner before (its appid is
+        # deterministic from the folder name), reuse it silently — no re-pick.
+        # This is what makes "delete it, bring it back from the NAS" just work.
+        prev = self._saved_shortcut(appid)
+        if prev and prev.get("exe_rel") and (dest / prev["exe_rel"]).is_file():
+            rel, runner = prev["exe_rel"], prev.get("runner") or "GE-Proton10-34"
+            launch = prev.get("launch_options", "")
+            self.ui.msg(f"  {folder_name}: reusing saved exe ({rel}) — no "
+                        "need to re-pick.", "dim")
+        else:
+            exes = sdscan.find_exes(dest)
+            if not exes:
+                self.ui.msg(f"  · {folder_name}: no recipe and no exe found — "
+                            "add it to Steam by hand.", "warn")
+                return False
+            labels = [f"{e['rel']}  ({e['size'] // (1 << 20)} MB)" for e in exes]
+            skip = "⬅️  Skip — don't add a shortcut"
+            self.ui.msg(f"  {folder_name}: no recipe — pick the exe to launch "
+                        "(best guess first):", "info")
+            picked = self.ui.choose(f"Shortcut exe for {folder_name}?",
+                                    labels + [skip])
+            if not picked or picked[0] == skip:
+                self.ui.msg(f"  · {folder_name}: skipped — no shortcut.", "dim")
+                return False
+            rel = exes[labels.index(picked[0])]["rel"]
+            runner, launch = "GE-Proton10-34", ""
+
+        exe = str(dest / rel)
         self.pending_vdf_writes.append({
             "kind": "add_shortcut", "game": folder_name,
             "appname": folder_name, "aliases": [], "exe": exe,
-            "start_dir": str(dest), "launch_options": "", "appid": appid})
+            "start_dir": str(dest), "launch_options": launch, "appid": appid})
         self.pending_vdf_writes.append({
             "kind": "compat", "game": folder_name, "appid": appid,
-            "tool": "GE-Proton10-34", "priority": "250"})
-        self._save_shortcut_state(appid, folder_name, exe, str(dest), "",
-                                  "GE-Proton10-34", folder=folder_name,
-                                  exe_rel=rel)
+            "tool": runner, "priority": "250"})
+        self._save_shortcut_state(appid, folder_name, exe, str(dest), launch,
+                                  runner, folder=folder_name, exe_rel=rel)
         self.ui.msg(f"  + {folder_name}: shortcut queued -> {rel} "
-                    f"(appid {appid}, GE-Proton 10.34)", "success")
+                    f"(appid {appid}, {runner})", "success")
         return True
+
+    def _saved_shortcut(self, appid) -> dict | None:
+        """The saved shortcut-state row for an appid, if any (None off-NAS)."""
+        if self.local_payloads is None:
+            return None
+        try:
+            for e in shortcutstate.load(self.local_payloads):
+                if e.get("appid") == appid:
+                    return e
+        except Exception:
+            pass
+        return None
 
     def _nas_automount_unit(self) -> str | None:
         """The systemd automount unit name for the current mount point, e.g.
