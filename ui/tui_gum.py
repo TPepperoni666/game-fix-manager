@@ -68,10 +68,14 @@ class GumUI(UI):
 
     def confirm(self, question: str, danger: bool = False) -> bool:
         color = "196" if danger else "212"
-        result = subprocess.run(
-            [self.gum, "confirm", question,
-             "--affirmative", "Yes", "--negative", "No",
-             f"--selected.background={color}", "--selected.foreground=0"])
+        args = [self.gum, "confirm", question,
+                "--affirmative", "Yes", "--negative", "No",
+                f"--selected.background={color}", "--selected.foreground=0"]
+        # Destructive prompts (reclaim delete, revert) default to NO — Enter/A
+        # on the Deck must not confirm a delete. gum otherwise highlights Yes.
+        if danger:
+            args.append("--default=false")
+        result = subprocess.run(args)
         return result.returncode == 0
 
     def input(self, prompt: str, default: str = "",

@@ -145,18 +145,21 @@ def write(matched: list, unmatched: list, games_dir: Path,
         if steam_root is not None:
             entry.update(_launch_info(recipe, steam_root))
         games[recipe.id] = entry
-    payload = {
-        "_meta": {
-            "host": socket.gethostname(),
-            "scanned_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-            "sd_root": str(dest.parents[2]) if len(dest.parents) >= 3 else "",
-        },
-        "games_dir": str(games_dir),
-        "games": games,
-        "unmatched": [{"path": str(f), "exes": sdscan.find_exes(f),
-                       "readmes": sdscan.find_readmes(f)}
-                      for f in unmatched],
-    }
+    # Start from `existing` so every OTHER section (steam_games,
+    # prefix_backups, manual_games, …) survives — a later writer re-adds them
+    # during a full 🔍 Scan, but running an INDIVIDUAL step (Advanced → Scan
+    # SD) used to rebuild the file with only games+unmatched and drop the rest.
+    payload = dict(existing)
+    payload.setdefault("_meta", {}).update({
+        "host": socket.gethostname(),
+        "scanned_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "sd_root": str(dest.parents[2]) if len(dest.parents) >= 3 else "",
+    })
+    payload["games_dir"] = str(games_dir)
+    payload["games"] = games
+    payload["unmatched"] = [{"path": str(f), "exes": sdscan.find_exes(f),
+                             "readmes": sdscan.find_readmes(f)}
+                            for f in unmatched]
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return payload

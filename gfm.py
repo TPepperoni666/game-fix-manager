@@ -1740,6 +1740,13 @@ class App:
             self.ui.msg("No Steam root — can't tell which shortcuts exist. "
                         "Nothing reclaimed.", "warn")
             return
+        # NOTE: the deployed record lives in device config (~/.config), NOT in
+        # the reimage-proof NAS shortcut-state — and that is DELIBERATE. It's
+        # wiped on reimage, so after a reimage reclaim sees nothing and deletes
+        # nothing until games are re-deployed. Persisting it to the NAS would be
+        # dangerous: every deployed game's shortcut is gone right after a
+        # reimage, so a surviving record would make them ALL look reclaimable.
+        # Fail-safe by design; the batch guard below is the extra net.
         deployed = self.cfg.get("deployed", {})
         if not deployed:
             self.ui.msg("No games have been deployed by the tool yet — nothing "
@@ -1789,6 +1796,16 @@ class App:
                 return
             chosen = res.candidates
         else:
+            # Same sanity as --auto, but a warning not a refusal: interactively
+            # you can still proceed, but a big batch is the signature of a
+            # Steam/vdf glitch (or a stale deployed record after a reimage),
+            # not you deleting a couple by hand — so flag it before the picker.
+            if len(res.candidates) > reclaim.MAX_AUTO_BATCH:
+                self.ui.msg(f"⚠  {len(res.candidates)} games look reclaimable at "
+                            f"once — more than usual (>{reclaim.MAX_AUTO_BATCH}). "
+                            "That's often a Steam/vdf glitch rather than games "
+                            "you deleted. Check the list carefully before "
+                            "deleting.", "warn")
             chosen = self._pick_reclaim(res.candidates)
             if not chosen:
                 return
@@ -2259,7 +2276,9 @@ class App:
             self._apply_one(recipe)
             if i < len(chosen):
                 self.ui.input("Press Enter for the next game")
-        self.ui.input("Press Enter to continue")
+        # Bounce Steam BEFORE the pause (the menu adds the one "Press Enter to
+        # continue"), so the close/restart happens while you're reading — not
+        # after you've already pressed continue, then again.
         self.flush_vdf_writes()
 
     def cmd_revert(self, ids: list[str]):
@@ -2287,8 +2306,10 @@ class App:
                 self.run_engine(recipe, gd, engine.revert_recipe)
             if i < len(chosen):
                 self.ui.input("Press Enter for the next game")
-        self.ui.input("Press Enter to continue")
+        # Bounce Steam first, THEN pause — revert has no menu-level prompt
+        # after it, so this is the single pause and it should follow the bounce.
         self.flush_vdf_writes()
+        self.ui.input("Press Enter to continue")
 
     def cmd_update(self):
         """Pull the latest recipes and code from GitHub. If code changed,

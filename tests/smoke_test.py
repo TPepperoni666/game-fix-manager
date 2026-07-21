@@ -1851,6 +1851,35 @@ def main():
         check("weekly refresh collects Proton logs",
               "_collect_proton_logs" in _i.getsource(gfm_mod.App._refresh_map))
 
+        # --- audit fixes (1,3,4,5) -------------------------------------
+        # #1 danger confirms default to No in gum
+        from ui import tui_gum as _tg
+        gsrc = _i.getsource(_tg.GumUI.confirm)
+        check("gum danger confirms default to No (no accidental delete)",
+              "default=false" in gsrc and "if danger" in gsrc)
+        # #3 apply flushes before the pause and doesn't double-prompt
+        asrc = _i.getsource(gfm_mod.App.cmd_apply)
+        check("Apply flushes Steam without its own extra prompt",
+              asrc.count("Press Enter to continue") == 0
+              and "flush_vdf_writes" in asrc)
+        rsrc = _i.getsource(gfm_mod.App.cmd_revert)
+        check("Revert flushes before its single pause",
+              rsrc.rindex("flush_vdf_writes")
+              < rsrc.rindex("Press Enter to continue"))
+        # #4 interactive reclaim warns on an oversized batch
+        rcsrc = _i.getsource(gfm_mod.App.cmd_reclaim)
+        check("interactive reclaim warns on a suspicious batch size",
+              "look reclaimable at" in rcsrc)
+        # #5 sdmap.write preserves other sections
+        from core import sdmap as _sd2
+        _dst = tmp / "m" / "n" / "o" / "sd_map.json"
+        _sd2.write([], [], tmp / "G", _dst,
+                   existing={"steam_games": {"1": {}}, "manual_games": [{}]})
+        _md = __import__("json").loads(_dst.read_text())
+        check("sdmap.write preserves steam_games + manual_games sections",
+              "steam_games" in _md and "manual_games" in _md
+              and "games" in _md and "unmatched" in _md)
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
