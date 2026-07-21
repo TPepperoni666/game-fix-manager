@@ -1588,6 +1588,46 @@ def main():
         check("engine still resolves a legacy flat payload",
               ctx_l.payload_path("payload/b.dat") == legp.resolve())
 
+        # --- reimage-surviving generic shortcuts -----------------------
+        # The gap: no-recipe games lose their shortcut on reimage. State is
+        # saved under _state and rebuilt into a fresh shortcuts.vdf.
+        from core import shortcutstate as _sst
+        nas = tmp / "nasstate"; nas.mkdir()
+        _sst.record(nas, {"appid": 42, "name": "Beta", "exe": "/x/b.exe"})
+        _sst.record(nas, {"appid": 41, "name": "Alpha", "exe": "/x/a.exe"})
+        loaded = _sst.load(nas)
+        check("shortcut state persists and sorts by name",
+              [e["name"] for e in loaded] == ["Alpha", "Beta"])
+        _sst.record(nas, {"appid": 42, "name": "Beta2", "exe": "/x/b2.exe"})
+        check("shortcut state upserts by appid (no duplicate)",
+              len([e for e in _sst.load(nas) if e["appid"] == 42]) == 1
+              and len(_sst.load(nas)) == 2)
+        _sst.remove(nas, 41)
+        check("shortcut state can forget an appid",
+              [e["appid"] for e in _sst.load(nas)] == [42])
+        check("shortcut state is keyed per host (survives reimage location)",
+              _sst.manifest_path(nas, "deck").name == "deck.json")
+        # resolve_exe: absolute wins, else relocate by folder, else None
+        gd = tmp / "sdgames" / "Games" / "MyGame"; gd.mkdir(parents=True)
+        (gd / "run.exe").write_bytes(b"x")
+        check("resolve_exe prefers a present absolute path",
+              _sst.resolve_exe({"exe": str(gd / "run.exe")},
+                               []) == gd / "run.exe")
+        check("resolve_exe relocates by folder when the abs path is gone",
+              _sst.resolve_exe(
+                  {"exe": "/old/gone.exe", "folder": "MyGame",
+                   "exe_rel": "run.exe"}, [tmp / "sdgames" / "Games"])
+              == gd / "run.exe")
+        check("resolve_exe returns None when the files are absent",
+              _sst.resolve_exe({"exe": "/nope.exe", "folder": "X",
+                                "exe_rel": "x.exe"}, []) is None)
+        check("CLI exposes 'restore-shortcuts'",
+              "restore-shortcuts" in gfm_mod.COMMANDS)
+        sr = _i.getsource(gfm_mod.App.cmd_save_restore)
+        check("save-restore rebuilds shortcuts BEFORE importing prefixes",
+              "cmd_restore_shortcuts" in sr
+              and sr.index("cmd_restore_shortcuts") < sr.index("import_prefixes"))
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

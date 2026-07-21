@@ -25,8 +25,8 @@ from pathlib import Path
 
 from core import (deckysettings, deploy, detect, engine, fetch, manifest,
                   prefixbackup, prefiximport, prefixes, reclaim, saves, sdmap,
-                  sdscan, shortcutsvdf, steamart, steamperf, steamscan,
-                  steamvdf, store)
+                  sdscan, shortcutsvdf, shortcutstate, steamart, steamperf,
+                  steamscan, steamvdf, store)
 from ui import get_ui
 
 STATUS_ICON = {engine.APPLIED: "✅", engine.NOT_APPLIED: "☐ ",
@@ -609,9 +609,93 @@ class App:
         self.pending_vdf_writes.append({
             "kind": "compat", "game": folder_name, "appid": appid,
             "tool": "GE-Proton10-34", "priority": "250"})
+        self._save_shortcut_state(appid, folder_name, exe, str(dest), "",
+                                  "GE-Proton10-34", folder=folder_name,
+                                  exe_rel=rel)
         self.ui.msg(f"  + {folder_name}: shortcut queued -> {rel} "
                     f"(appid {appid}, GE-Proton 10.34)", "success")
         return True
+
+    def _sd_folder_of(self, exe: str):
+        """(folder, exe_rel) if this exe lives under an SD Games dir, else
+        (None, None). Lets restore relocate the game if the card comes back at
+        a different mount path after a reimage."""
+        if not exe:
+            return None, None
+        p = Path(exe)
+        for games in sdscan.find_games_dirs():
+            try:
+                rel = p.relative_to(games)
+            except ValueError:
+                continue
+            parts = rel.parts
+            if len(parts) >= 2:
+                return parts[0], str(Path(*parts[1:]).as_posix())
+        return None, None
+
+    def _save_shortcut_state(self, appid, name, exe, start_dir, launch_options,
+                             runner, folder=None, exe_rel=None) -> None:
+        """Persist a generic (no-recipe) shortcut so it survives a reimage.
+        Best-effort: a down NAS mount must never fail a deploy/adopt."""
+        if self.local_payloads is None:
+            return
+        try:
+            shortcutstate.record(self.local_payloads, {
+                "appid": appid, "name": name, "exe": exe,
+                "start_dir": start_dir, "launch_options": launch_options,
+                "runner": runner, "folder": folder, "exe_rel": exe_rel})
+        except OSError:
+            pass
+
+    def cmd_restore_shortcuts(self, args=None):
+        """Rebuild the generic (no-recipe) Steam shortcuts saved for THIS
+        device — the reimage recovery step. Recipe games rebuild themselves via
+        Apply Fixes; this handles everything deployed or adopted, forcing each
+        pinned appid so the imported prefix/saves/art line up.
+
+        Only rebuilds games whose files are actually present (skips the rest
+        rather than pointing a shortcut at nothing). Must run BEFORE prefix
+        import, so Steam has the shortcut at the pinned appid to attach to."""
+        if not getattr(args, "auto", False):
+            self.ui.header("🔗 RESTORE SHORTCUTS")
+        if self.steam_root is None or self.local_payloads is None:
+            self.ui.msg("Need Steam + the NAS to restore shortcuts.", "warn")
+            return 0
+        entries = shortcutstate.load(self.local_payloads)
+        if not entries:
+            self.ui.msg("No saved generic shortcuts for this device yet.", "dim")
+            return 0
+        games_dirs = sdscan.find_games_dirs()
+        queued = missing = 0
+        for e in entries:
+            exe = shortcutstate.resolve_exe(e, games_dirs)
+            if exe is None:
+                missing += 1
+                self.ui.msg(f"  · {e.get('name')}: files not found — skipped.",
+                            "dim")
+                continue
+            start_dir = e.get("start_dir") or str(exe.parent)
+            if not Path(start_dir).is_dir():
+                start_dir = str(exe.parent)
+            self.pending_vdf_writes.append({
+                "kind": "add_shortcut", "game": e["name"],
+                "appname": e["name"], "aliases": [], "exe": str(exe),
+                "start_dir": start_dir,
+                "launch_options": e.get("launch_options", ""),
+                "appid": e["appid"]})
+            if e.get("runner"):
+                self.pending_vdf_writes.append({
+                    "kind": "compat", "game": e["name"], "appid": e["appid"],
+                    "tool": e["runner"], "priority": "250"})
+            queued += 1
+            self.ui.msg(f"  🔗 {e['name']} -> {exe.name} "
+                        f"(appid {e['appid']}, {e.get('runner') or 'default'})",
+                        "success")
+        self.flush_vdf_writes()
+        self.ui.msg(f"Restored {queued} shortcut(s)"
+                    + (f", {missing} skipped (files absent)" if missing else "")
+                    + ".", "success" if queued else "dim")
+        return queued
 
     def _registry_by_appid(self) -> dict:
         """prefix_registry.json entries keyed by appid string."""
@@ -770,6 +854,17 @@ class App:
                          + time.strftime("%Y-%m-%d") + ". Steam's own appid "
                          "pinned so prefix backup/restore keep it stable.",
             })
+            # Save the full shortcut body so it can be rebuilt after a reimage.
+            try:
+                runner = (steamvdf.get_compat_tool(
+                    self.steam_root, int(c["appid"])) or {}).get("name", "")
+            except Exception:
+                runner = ""
+            folder, exe_rel = self._sd_folder_of(c.get("exe", ""))
+            self._save_shortcut_state(
+                c["appid"], name, c.get("exe", ""), c.get("start_dir", ""),
+                c.get("launch_options", ""), runner,
+                folder=folder, exe_rel=exe_rel)
         if self._append_registry_entries(new):
             for c in chosen:
                 self.ui.msg(f"  🎁 adopted {c['name']} (appid {c['appid']})",
@@ -1448,11 +1543,13 @@ class App:
         self.ui.msg("Install your games first — Steam wipes compatdata around "
                     "first launch, so restoring last is what sticks.", "warn")
         self.ui.msg("", "dim")
-        self.ui.msg("── 1/3  Importing prefix backups " + "─" * 9, "info")
+        self.ui.msg("── 1/4  Rebuilding non-recipe shortcuts " + "─" * 3, "info")
+        self.cmd_restore_shortcuts()
+        self.ui.msg("── 2/4  Importing prefix backups " + "─" * 9, "info")
         self.cmd_import_prefixes()
-        self.ui.msg("── 2/3  Restoring game-folder saves " + "─" * 6, "info")
+        self.ui.msg("── 3/4  Restoring game-folder saves " + "─" * 6, "info")
         self._restore_saves_all()
-        self.ui.msg("── 3/3  Restoring per-game settings (framerate + "
+        self.ui.msg("── 4/4  Restoring per-game settings (framerate + "
                     "TDP/GPU) " + "─" * 1, "info")
         state = (self.local_payloads / "_state") if self.local_payloads else None
         have_decky = state is not None and \
@@ -2491,6 +2588,7 @@ COMMANDS = {
     "scan": lambda app, a: app.cmd_scan_all(),
     "diagnose": lambda app, a: app.cmd_diagnose(a),
     "adopt": lambda app, a: app.cmd_adopt(a),
+    "restore-shortcuts": lambda app, a: app.cmd_restore_shortcuts(a),
     "save-restore": lambda app, a: app.cmd_save_restore(),
     # the individual steps those bundles wrap
     "scan-sd": lambda app, a: app.cmd_scan_sd(),
