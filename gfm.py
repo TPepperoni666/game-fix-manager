@@ -2113,7 +2113,27 @@ class App:
             return None
         return by_label.get(picked[0])
 
-    def _pick_many(self, title: str, prompt: str) -> list:
+    def _recipe_has_fix(self, recipe) -> bool:
+        """Does this recipe actually FIX something, or is it just a shortcut
+        maker? A fix is any non-setup step (copy_files, ini_edit,
+        wine_registry, …) OR a launch-option override — for many games the
+        override (WINEDLLOVERRIDES, PROTON_FSR4_UPGRADE, …) IS the whole fix, so
+        it counts even though it rides on the steam_shortcut step. A pure
+        shortcut with no override (TMNT, Transformers: The Game) does not — and
+        PROTON_LOG=1 alone is a diagnostic, not a fix, so it doesn't count."""
+        for s in recipe.steps:
+            if s["type"] not in self.SETUP_STEP_TYPES:
+                return True
+            opt = (s.get("launch_options") or s.get("value") or "").strip()
+            # strip the harmless bits and see if anything real is left
+            residue = (opt.replace("%command%", "")
+                          .replace("PROTON_LOG=1", "").strip())
+            if residue:
+                return True
+        return False
+
+    def _pick_many(self, title: str, prompt: str, fixes_only: bool = False) \
+            -> list:
         """Multi-select recipe picker (arrow-key toggle on the Deck).
 
         Only offers games actually present on this device — a list of 33 where
@@ -2121,32 +2141,43 @@ class App:
         full catalogue, including fixes for games you haven't copied over yet,
         lives in 📋 Status.
 
+        fixes_only also drops games whose recipe is just a shortcut with no
+        actual fix — that's what keeps Apply/Revert to the games that genuinely
+        have something to apply, instead of the whole detected catalogue.
+
         Apply/Revert act on SEVERAL games in one pass — which is also why every
         queued VDF write lands behind a single Steam bounce at the end rather
         than one bounce per game."""
         self.ui.header(title)
         options, by_label = [], {}
-        hidden = 0
+        hidden = nofix = 0
         for recipe in self.recipes:
             game_dir = self.game_dir_for(recipe, interactive=False)
             if recipe.requires_game and game_dir is None:
                 hidden += 1
                 continue
+            if fixes_only and not self._recipe_has_fix(recipe):
+                nofix += 1
+                continue
             label = f"  {recipe.name}"
             options.append(label)
             by_label[label] = recipe
         if not options:
-            self.ui.msg("No games detected on this device. Run 🔍 Scan to find "
-                        "them, or ⬇️ Deploy one from the NAS.", "warn")
-            if hidden:
-                self.ui.msg(f"({hidden} recipe(s) exist for games that aren't "
-                            "here — see 📋 Status.)", "dim")
+            self.ui.msg("No games with a fix to apply are on this device. Run "
+                        "🔍 Scan, or ⬇️ Deploy one from the NAS.", "warn")
+            if hidden or nofix:
+                self.ui.msg(f"({hidden} not on this device, {nofix} "
+                            "shortcut-only — see 📋 Status.)", "dim")
             self.ui.input("Press Enter to continue")
             return []
+        notes = []
         if hidden:
-            self.ui.msg(f"Showing {len(options)} detected game(s); {hidden} "
-                        "recipe(s) hidden (game not on this device — see "
-                        "📋 Status).", "dim")
+            notes.append(f"{hidden} not on this device")
+        if nofix:
+            notes.append(f"{nofix} shortcut-only (no fix)")
+        if notes:
+            self.ui.msg(f"Showing {len(options)} game(s) with a fix; "
+                        + ", ".join(notes) + " hidden (see 📋 Status).", "dim")
         picked = self.ui.choose(prompt, options, multi=True)
         return [by_label[p] for p in picked if p in by_label]
 
@@ -2184,7 +2215,8 @@ class App:
         # Multi-select: tick several games, apply them all, ONE Steam bounce.
         chosen = self._pick_many(
             "🔧 APPLY FIXES",
-            "Pick games — ←→ toggle, Enter confirm, Esc cancel")
+            "Pick games — ←→ toggle, Enter confirm, Esc cancel",
+            fixes_only=True)
         if not chosen:
             return
         for i, recipe in enumerate(chosen, 1):
@@ -2205,7 +2237,8 @@ class App:
             return
         chosen = self._pick_many(
             "↩️  REVERT A GAME",
-            "Pick games to revert — ←→ toggle, Enter confirm, Esc cancel")
+            "Pick games to revert — ←→ toggle, Enter confirm, Esc cancel",
+            fixes_only=True)
         if not chosen:
             return
         names = ", ".join(r.name for r in chosen)

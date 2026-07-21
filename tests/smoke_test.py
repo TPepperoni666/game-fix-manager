@@ -1727,6 +1727,32 @@ def main():
             check(f"{rid} enables PROTON_LOG for diagnosis",
                   "PROTON_LOG=1" in _launch_opts(rid))
 
+        # --- Apply Fixes shows only games with an actual fix -----------
+        _app = gfm_mod.App.__new__(gfm_mod.App)
+        def _mkr(steps):
+            return _man.Recipe(id="t", name="t", aliases=[], steam_appid=None,
+                detect={}, steps=steps, notes="", post_apply_message="",
+                remote_payloads=[], requires_game=True, save_paths=[],
+                dir=Path("."))
+        check("shortcut-only recipe is not counted as a fix",
+              not _app._recipe_has_fix(_mkr([
+                  {"type": "install_runner", "name": "x"},
+                  {"type": "steam_shortcut", "exe": "g.exe"}])))
+        check("a launch-option override counts as a fix",
+              _app._recipe_has_fix(_mkr([
+                  {"type": "steam_shortcut", "exe": "g.exe",
+                   "launch_options": 'WINEDLLOVERRIDES="d3d9=n,b" %command%'}])))
+        check("PROTON_LOG=1 alone is not a fix (diagnostic only)",
+              not _app._recipe_has_fix(_mkr([
+                  {"type": "steam_shortcut", "exe": "g.exe",
+                   "launch_options": "PROTON_LOG=1 %command%"}])))
+        check("a real fix step counts as a fix",
+              _app._recipe_has_fix(_mkr([
+                  {"type": "ini_edit", "target": "x", "values": {"a": {"b": 1}}},
+                  {"type": "steam_shortcut", "exe": "g.exe"}])))
+        check("Apply Fixes filters to games with a fix",
+              "fixes_only=True" in _i.getsource(gfm_mod.App.cmd_apply))
+
         # --- icon capture + art re-apply on deploy ---------------------
         from core import steamart as _sa, shortcutsvdf as _sv2
         st = tmp / "artsteam"
