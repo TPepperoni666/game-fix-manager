@@ -1243,12 +1243,23 @@ class App:
         # Skip the picker and use the remembered set (🔁 menu entry, or the
         # weekly timer when unattended).
         if use_saved:
-            remembered = set(self.cfg.get("prefix_backup_selection", []))
-            chosen = [p for p in allp if p.appid in remembered]
+            remembered = {str(x) for x in
+                          self.cfg.get("prefix_backup_selection", [])}
+            # Auto-include EVERY game the tool manages (deployed + adopted), so
+            # a game you set up is protected by the weekly backup without having
+            # to be hand-picked. Their shortcut appid == the compatdata folder
+            # name, so this lines up with what enumerate_prefixes found.
+            try:
+                remembered |= {str(e["appid"]) for e in
+                               shortcutstate.load(self.local_payloads)
+                               if e.get("appid") is not None}
+            except Exception:
+                pass
+            chosen = [p for p in allp if str(p.appid) in remembered]
             if not chosen:
-                self.ui.msg("Nothing selected yet — run 💼 Back Up Prefixes "
-                            "once to choose what to keep. After that this (and "
-                            "the weekly timer) maintains exactly that set.",
+                self.ui.msg("Nothing to back up yet — deploy or adopt a game "
+                            "(auto-included), or run 💼 Back Up Prefixes to pick "
+                            "extras. The weekly timer then maintains the set.",
                             "warn")
                 return
             missing = len(remembered) - len(chosen)

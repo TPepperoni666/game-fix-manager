@@ -1326,7 +1326,7 @@ def main():
         check("--auto implies use_saved (timer reuses the remembered set)",
               "use_saved = use_saved or unattended" in _bp)
         check("empty remembered set reports instead of silently doing nothing",
-              "Nothing selected yet" in _bp)
+              "Nothing to back up yet" in _bp)
         check("🔁 wrapper delegates with use_saved=True",
               "use_saved=True" in _insp.getsource(
                   _gfm.App.cmd_backup_prefixes_saved))
@@ -1758,6 +1758,11 @@ def main():
               "_saved_shortcut" in gsrc and "reusing saved exe" in gsrc)
         check("App._saved_shortcut exists",
               hasattr(gfm_mod.App, "_saved_shortcut"))
+        # The weekly backup auto-includes every managed game, not just the
+        # hand-picked selection — so a deployed/adopted game is protected.
+        bsrc = _i.getsource(gfm_mod.App.cmd_backup_prefixes)
+        check("weekly backup auto-includes managed games from shortcut-state",
+              "shortcutstate.load" in bsrc and "prefix_backup_selection" in bsrc)
 
         # --- icon capture + art re-apply on deploy ---------------------
         from core import steamart as _sa, shortcutsvdf as _sv2
