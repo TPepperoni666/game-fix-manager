@@ -1,0 +1,38 @@
+{
+  "id": "true-crime-la",
+  "name": "True Crime: Streets of LA",
+  "aliases": [
+    "True Crime Streets of LA",
+    "True Crime - Streets of LA",
+    "True Crime SoLA"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "True Crime - Streets of LA",
+      "True Crime Streets of LA"
+    ],
+    "marker_files": ["TrueCrime.exe"]
+  },
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "ini_edit",
+      "target": "{game_dir}/TrueCrime.ini",
+      "values": {
+        "Renderer": { "ScreenWidth": 1280, "ScreenHeight": 800 }
+      }
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "TrueCrime.exe",
+      "start_dir": "{game_dir}",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "True Crime: Streets of LA (2003, Activision, delisted) — Apply adds the Steam shortcut on GE-Proton 10.34 and sets the resolution.\n\nWIDESCREEN: resolution lives in TrueCrime.ini under [Renderer] as ScreenWidth/ScreenHeight — the recipe sets 1280x800 for the Deck's native panel. Setting a wide resolution gives you the full picture, but note this game renders 16:9/16:10 by expanding the vertical view (Vert-) rather than a true Hor+ widescreen, and the HUD sits at 4:3 anchor points; that's a game limitation, not a misconfig. On an external 16:9 screen, re-apply after changing the two values (or edit the ini directly).\n\nCONTROLLER: native pad support (TrueCrime.ini has a [Controller] block) — Steam Input's default gamepad layout works; the game was built around a controller.",
+  "notes": "Built 2026-07-21 from Tony's copy staged at NAS _games/'True Crime - Streets of LA'. TrueCrime.exe (2.8MB) is the only exe. Resolution is [Renderer] ScreenWidth/ScreenHeight in TrueCrime.ini AT THE GAME ROOT (confirmed on disk — arrived set to 1920x1080; recipe overrides to Deck-native 1280x800). This is the first recipe to use the new ini_edit step. Delisted/abandonware (no legit sale channel), so in the fixable lane. Non-Steam -> computed appid. UNTESTED on hardware as of build."
+}

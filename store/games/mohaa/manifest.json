@@ -1,0 +1,39 @@
+{
+  "id": "mohaa",
+  "name": "Medal of Honor: Allied Assault War Chest",
+  "aliases": [
+    "Medal of Honor Allied Assault War Chest",
+    "Medal of Honor: Allied Assault",
+    "MOHAA",
+    "MoH Allied Assault"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "Medal of Honor - Allied Assault War Chest",
+      "Medal of Honor Allied Assault War Chest",
+      "MOHAA"
+    ],
+    "marker_files": ["MOHAA.exe"]
+  },
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "copy_files",
+      "from": "payload/autoexec.cfg",
+      "to": "{game_dir}/main",
+      "backup_originals": true
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "MOHAA.exe",
+      "start_dir": "{game_dir}",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "Medal of Honor: Allied Assault War Chest (2002, GOG, DRM-free) — Apply adds the Steam shortcut on GE-Proton 10.34 and drops a widescreen autoexec.cfg into main/.\n\nWIDESCREEN: the recipe writes main/autoexec.cfg with seta r_mode \"-1\", r_customwidth 1280, r_customheight 800 and cg_fov 100 — 16:10 for the Deck's native panel. idTech3 runs autoexec.cfg every launch, so it sticks without the usual read-only trick. Do NOT change the resolution from the in-game menu or it overrides these until the next launch. On a 16:9 external screen, bump cg_fov toward 106-115.\n\nEXPANSIONS: this is the War Chest, so Spearhead (moh_spearhead.exe) and Breakthrough (moh_breakthrough.exe) are here too — each reads its OWN autoexec.cfg from maintt/ and mainta/ respectively. The recipe only widescreens the BASE game (main/). Say the word and I'll add the expansion configs and separate shortcuts.\n\nCONTROLLER: idTech3 has no native pad support — use a Steam Input layout (there are community MoHAA templates) to map a controller to keyboard+mouse.",
+  "notes": "Built 2026-07-21 from Tony's GOG copy staged at NAS _games/'Medal of Honor - Allied Assault War Chest' (goggame markers present — DRM-free, delisted from sale so squarely in the abandonware lane). Root exes: MOHAA.exe (base, 1.5MB — the launch target), moh_spearhead.exe + moh_breakthrough.exe (expansions), Configure.exe (sets video options). idTech3 (Quake 3) engine: widescreen via r_mode -1 + r_customwidth/height + cg_fov, delivered as main/autoexec.cfg (authored by us — plain cvar text, not copyrighted). autoexec.cfg beats editing main/configs/unnamedsoldier.cfg because it re-applies every launch. FOV math: default 80 is 4:3; ~100 is right for 16:10 (1280x800). copy_files backs up any existing autoexec.cfg as .gfm-orig. Non-Steam -> computed appid. UNTESTED on hardware as of build."
+}

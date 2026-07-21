@@ -1,0 +1,35 @@
+{
+  "id": "1nsane",
+  "name": "1NSANE",
+  "aliases": [
+    "1nsane",
+    "Insane",
+    "Insane (2000)"
+  ],
+  "detect": {
+    "install_dir_names": ["1NSANE", "1nsane", "Insane"],
+    "marker_files": ["Game.exe"]
+  },
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "copy_files",
+      "optional": true,
+      "from": "payload/widescreen",
+      "to": "{game_dir}",
+      "backup_originals": true
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "Game.exe",
+      "start_dir": "{game_dir}",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "1NSANE (2000, Codemasters, GOG, DRM-free) — Apply adds the Steam shortcut on GE-Proton 10.34 (launch exe Game.exe).\n\nWIDESCREEN — NEEDS A MOD YOU DROP IN. The engine lists widescreen resolutions but STRETCHES them from 4:3 unless patched. The fix is the community '1nsane widescreen mod' by Bayron/Black_Lotus (PCGamingWiki community files, mod #27): it only supports 16:9 and 16:10 (1280x800 works). Your GOG copy already includes Patch 2 (patch2.txt is present), which the mod requires.\n\nTo enable it: drop the mod's PATCH folder contents into the NAS local payload at\n   Game Fixes/_recipes/1nsane/payload/widescreen/\nthen re-apply — the optional copy_files step overlays it onto the SD copy (originals backed up as .gfm-orig). Off-git on purpose, same as other sourced payloads. Until you add it, the game still runs, just 4:3-stretched.\n\nCONTROLLER: native gamepad support — Steam Input's default layout works.",
+  "notes": "Built 2026-07-21 from Tony's GOG copy at NAS _games/1NSANE (goggame markers — DRM-free, delisted). Launch exe Game.exe (0.9MB); 'Language Setup.exe' is a setup tool. No resolution config on disk — settings generate in the prefix/registry on first run, and widescreen genuinely needs the Bayron widescreen mod (extract PATCH into game dir), not just a resolution set (native resolutions stretch from 4:3). So the widescreen step is an OPTIONAL BYO copy_files payload at payload/widescreen/ — Tony sources the mod, drops it in, re-applies. Patch 2 prerequisite already satisfied (patch2.txt present). Non-Steam -> computed appid. UNTESTED; widescreen inert until the mod payload is supplied."
+}

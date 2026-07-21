@@ -1,0 +1,32 @@
+{
+  "id": "true-crime-nyc",
+  "name": "True Crime: New York City",
+  "aliases": [
+    "True Crime New York City",
+    "True Crime - New York City",
+    "True Crime NYC"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "True Crime - New York City",
+      "True Crime New York City"
+    ],
+    "marker_files": ["d3d9.ini"]
+  },
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "True Crime® New York City.exe",
+      "start_dir": "{game_dir}",
+      "launch_options": "WINEDLLOVERRIDES=\"d3d9=n,b\" %command%",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "True Crime: New York City (2005, Activision, delisted) — Apply adds the Steam shortcut on GE-Proton 10.34 with the d3d9 override.\n\nTHE KEY BIT — THE d3d9 WRAPPER: your copy already ships a d3d9.dll wrapper (its d3d9.ini is in the game root: FPS limiter + forced-windowed). Wine must load THAT dll, not its own DXVK d3d9 — so the shortcut carries WINEDLLOVERRIDES=\"d3d9=n,b\". Without it the wrapper never loads and you get the vanilla (broken on modern setups) renderer.\n\nWIDESCREEN / DISPLAY: the wrapper's d3d9.ini controls windowing and the 30 FPS cap. It's left as shipped on purpose — this game's physics/animation can misbehave above its intended frame cap, so raise FPSLimit only if you've confirmed it's safe. Edit d3d9.ini in the game folder if you want to tweak it.\n\nCONTROLLER: native pad support — Steam Input's gamepad layout works.",
+  "notes": "Built 2026-07-21 from Tony's copy staged at NAS _games/'True Crime - New York City'. The launch exe name literally contains a registered-trademark sign: 'True Crime® New York City.exe' (19.2MB) — kept verbatim in the shortcut. A d3d9.dll wrapper is bundled (d3d9.ini present: [MAIN] FPSLimit=30, ForceWindowedMode=1, [LAUNCHER] AppExe pointing at the game exe) — the whole fix hinges on Wine loading the local d3d9.dll, hence the WINEDLLOVERRIDES. detect marker is d3d9.ini (stable, unlike the ® exe name). Delisted/abandonware. Non-Steam -> computed appid. UNTESTED on hardware — first thing to confirm is that the d3d9 override actually loads the wrapper (PROTON_LOG grep d3d9 if the game looks wrong)."
+}

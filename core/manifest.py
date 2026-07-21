@@ -14,7 +14,7 @@ MANIFEST_NAME = "manifest.json"
 KNOWN_STEP_TYPES = {"copy_files", "swap_exe", "launch_options", "systemd_unit",
                     "remove_files", "pak_edit", "wine_registry",
                     "proton_version", "symlink", "steam_shortcut",
-                    "install_runner", "pitcrew_compile"}
+                    "install_runner", "pitcrew_compile", "ini_edit"}
 
 
 class ManifestError(Exception):

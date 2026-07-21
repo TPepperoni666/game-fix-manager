@@ -1636,6 +1636,64 @@ def main():
         check("App._sync_shortcut_state exists",
               hasattr(gfm_mod.App, "_sync_shortcut_state"))
 
+        # --- ini_edit step ---------------------------------------------
+        from core.steps.ini_edit import IniEdit
+        from core import engine as _e2, manifest as _m2
+        gdir = tmp / "inigame"; gdir.mkdir()
+        (gdir / "game.ini").write_text(
+            "[Game]\nVol=700\n[Renderer]\nScreenWidth=1920\nScreenHeight=1080\n",
+            encoding="utf-8")
+        rec = _m2.Recipe(id="i", name="i", aliases=[], steam_appid=None,
+            detect={}, steps=[], notes="", post_apply_message="",
+            remote_payloads=[], requires_game=True, save_paths=[], dir=gdir)
+        ctx = _e2.Ctx(rec, gdir, log=lambda _m: None)
+        step = IniEdit({"type": "ini_edit", "target": "{game_dir}/game.ini",
+            "values": {"Renderer": {"ScreenWidth": 1280, "ScreenHeight": 800,
+                                    "VSync": 1}, "Display": {"Windowed": 0}}})
+        check("ini_edit reports not_applied before running",
+              step.verify(ctx) == "not_applied")
+        step.apply(ctx)
+        body = (gdir / "game.ini").read_text()
+        check("ini_edit updates an existing key",
+              "ScreenWidth=1280" in body and "ScreenHeight=800" in body)
+        check("ini_edit inserts a new key into an existing section, cased",
+              "VSync=1" in body)
+        check("ini_edit appends a whole new section",
+              "[Display]" in body and "Windowed=0" in body)
+        check("ini_edit preserves untouched content",
+              "Vol=700" in body and "[Game]" in body)
+        check("ini_edit reports applied after running", step.verify(ctx)=="applied")
+        step.apply(ctx)  # idempotent
+        b2 = (gdir / "game.ini").read_text()
+        check("ini_edit is idempotent (no dupes)",
+              b2.count("ScreenWidth=") == 1 and b2.count("[Renderer]") == 1
+              and b2.count("[Display]") == 1)
+        check("ini_edit writes a .gfm-bak", (gdir/"game.ini.gfm-bak").is_file())
+        step.revert(ctx)
+        check("ini_edit revert restores the original",
+              "ScreenWidth=1920" in (gdir / "game.ini").read_text())
+        # missing file -> StepError (optional steps swallow it)
+        bad = IniEdit({"type": "ini_edit", "target": "{game_dir}/nope.ini",
+                       "values": {"A": {"b": 1}}})
+        try:
+            bad.apply(ctx); missing_raised = False
+        except _e2.StepError:
+            missing_raised = True
+        check("ini_edit raises on a missing target", missing_raised)
+
+        # the 5 new recipes load and point at real exes
+        recs = {r.id: r for r in _m2.load_all(ROOT_STORE)} \
+            if (ROOT_STORE := (Path(gfm_mod.__file__).parent / "store")).is_dir() \
+            else {}
+        for rid, exe in [("mohaa", "MOHAA.exe"), ("mohpa", "mohpa.exe"),
+                         ("1nsane", "Game.exe"),
+                         ("true-crime-la", "TrueCrime.exe")]:
+            r = recs.get(rid)
+            sc = next((s for s in r.steps if s["type"] == "steam_shortcut"),
+                      None) if r else None
+            check(f"recipe {rid} loads with shortcut -> {exe}",
+                  sc is not None and sc.get("exe") == exe)
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
