@@ -1800,8 +1800,9 @@ def main():
         check("non-recipe art has an appid-keyed home",
               _stx.artwork_dir(tmp, 12345)
               == tmp / "_state" / "artwork" / "12345")
-        check("_restore_art_for handles a no-recipe generic deploy",
-              "gfm:deploy:" in _i.getsource(gfm_mod.App._restore_art_for))
+        check("deploy appid resolver handles a no-recipe generic deploy",
+              "gfm:deploy:" in _i.getsource(gfm_mod.App._deployed_appid)
+              and "_deployed_appid" in _i.getsource(gfm_mod.App._restore_art_for))
         check("reimage shortcut-restore also re-applies art",
               "artwork_dir" in _i.getsource(gfm_mod.App.cmd_restore_shortcuts))
         check("deploy re-applies artwork after the shortcut is made",
@@ -1909,6 +1910,35 @@ def main():
         check("picker uses the viewport helpers + select-all",
               "_scroll_top" in gsrc and "_truncate" in gsrc
               and '"a", "A"' in gsrc)
+
+        # --- deploy gap-fillers: runner install + prefix restore -------
+        from core.steps import install_runner as _ir
+        import tarfile as _tf
+        gtmp = tmp / "runnergap"; gtmp.mkdir()
+        gsteam = gtmp / "s"; (gsteam / "compatibilitytools.d").mkdir(parents=True)
+        gnas = gtmp / "nas"; (gnas / "_runners").mkdir(parents=True)
+        rsrc = gtmp / "src" / "GE-Test"; rsrc.mkdir(parents=True)
+        (rsrc / "proton").write_text("x")
+        with _tf.open(gnas / "_runners" / "GE-Test.tar.gz", "w:gz") as t:
+            t.add(rsrc, arcname="GE-Test")
+        check("ensure_installed side-loads a staged runner",
+              _ir.ensure_installed(gsteam, gnas, "GE-Test", log=lambda m: None)
+              and (gsteam / "compatibilitytools.d" / "GE-Test" / "proton").is_file())
+        check("ensure_installed is idempotent when already present",
+              _ir.ensure_installed(gsteam, gnas, "GE-Test", log=lambda m: None))
+        check("ensure_installed returns False (non-fatal) when not staged",
+              _ir.ensure_installed(gsteam, gnas, "Nope", log=lambda m: None) is False)
+        gen = _i.getsource(gfm_mod.App._make_generic_shortcut)
+        check("generic deploy side-loads a missing runner (not Valve builtins)",
+              "ensure_installed" in gen and 'startswith("proton_")' in gen)
+        check("App._restore_prefix_if_missing exists",
+              hasattr(gfm_mod.App, "_restore_prefix_if_missing"))
+        pf = _i.getsource(gfm_mod.App._restore_prefix_if_missing)
+        check("prefix restore only fills a gap (never overwrites a live prefix)",
+              "is_live" in pf)
+        check("deploy restores a missing prefix",
+              "_restore_prefix_if_missing"
+              in _i.getsource(gfm_mod.App.cmd_deploy_game))
 
         print(f"\nAll {PASS} checks passed.")
     finally:

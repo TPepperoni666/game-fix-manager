@@ -567,12 +567,19 @@ class App:
                 made += 1
         self.flush_vdf_writes()
         # Re-apply captured artwork (incl. icon) now the shortcut exists — so a
-        # game pulled from the NAS comes back looking right, not blank.
-        restored = 0
+        # game pulled from the NAS comes back looking right, not blank. And
+        # restore a MISSING prefix from backup (never a live one) — together
+        # these make a NAS deploy after a reimage feel like a fresh install:
+        # files + shortcut + runner + art + prefix, all in one.
+        restored = prefixes_back = 0
         for g, dest in deployed_ok:
             restored += self._restore_art_for(dest)
+            prefixes_back += self._restore_prefix_if_missing(dest)
         if restored:
             self.ui.msg(f"🎨 Re-applied artwork for {restored} game(s).", "dim")
+        if prefixes_back:
+            self.ui.msg(f"🗃  Restored {prefixes_back} prefix(es) from backup "
+                        "(saves/config came back too).", "success")
         # Latch shortcut_seen for what we just added, so the reclaim scan is
         # armed WITHOUT needing a prior run while the shortcut existed.
         for g, _dest in deployed_ok:
@@ -643,29 +650,60 @@ class App:
         only_setup = dataclasses.replace(recipe, steps=setup)
         return self.run_engine(only_setup, dest, engine.apply_recipe)
 
-    def _restore_art_for(self, dest: Path) -> int:
-        """Copy a deployed game's captured artwork back into Steam's grid
-        folder, and repoint its shortcut icon at the restored icon file. Runs
-        after the shortcut exists (post-flush). Returns 1 if art was restored.
-
-        Only recipe games have captured artwork (capture is per-recipe), so a
-        no-recipe generic deploy is a no-op here."""
-        if self.steam_root is None or self.local_payloads is None:
-            return 0
+    def _deployed_appid(self, dest: Path):
+        """(appid, names, artwork_dir) for a deployed folder. A recipe game
+        keys off its gospel/computed appid + _recipes art; a generic deploy off
+        the crc32-of-folder shortcut appid + _state art. Shared by the art and
+        prefix gap-fillers so both agree on the appid."""
         recipe, _sig = sdscan._match_folder(dest, self.recipes)
         if recipe is not None:
             appid = self._art_appid(recipe)
             names = recipe.all_names
             art = store.recipe_data_dir(self.local_payloads, recipe.id,
-                                        "artwork")
+                                        "artwork") if self.local_payloads \
+                else None
         else:
-            # No recipe — a generic deploy. Its shortcut appid is computed from
-            # the folder name, and its art lives keyed by that appid.
             appid = binascii.crc32(
                 f"gfm:deploy:{dest.name}".encode()) | 0x80000000
             names = [dest.name]
-            art = store.artwork_dir(self.local_payloads, appid)
-        if appid is None or not art.is_dir():
+            art = store.artwork_dir(self.local_payloads, appid) \
+                if self.local_payloads else None
+        return appid, names, art
+
+    def _restore_prefix_if_missing(self, dest: Path) -> int:
+        """Restore a deployed game's Proton prefix from backup ONLY if it has
+        none live — this fills the gap after a reimage without ever overwriting
+        a prefix you're actively using (a normal re-deploy is untouched).
+        Returns 1 if a prefix was restored."""
+        if self.steam_root is None:
+            return 0
+        appid, _names, _art = self._deployed_appid(dest)
+        if appid is None:
+            return 0
+        if prefiximport.is_live(self.steam_root, str(appid)):
+            return 0                         # live prefix — leave it alone
+        try:
+            backup = next((b for b in prefiximport.list_backups()
+                           if str(b.appid) == str(appid) and b.has_pfx), None)
+        except Exception:
+            return 0
+        if backup is None:
+            return 0
+        try:
+            prefiximport.restore(backup, self.steam_root,
+                                 log=lambda m: self.ui.msg(m, "dim"))
+            return 1
+        except OSError:
+            return 0
+
+    def _restore_art_for(self, dest: Path) -> int:
+        """Copy a deployed game's captured artwork back into Steam's grid
+        folder, and repoint its shortcut icon at the restored icon file. Runs
+        after the shortcut exists (post-flush). Returns 1 if art was restored."""
+        if self.steam_root is None or self.local_payloads is None:
+            return 0
+        appid, names, art = self._deployed_appid(dest)
+        if appid is None or art is None or not art.is_dir():
             return 0
         try:
             n = steamart.restore(self.steam_root, appid, art)
@@ -723,6 +761,23 @@ class App:
             runner, launch = "GE-Proton10-34", ""
 
         exe = str(dest / rel)
+        # Gap-filler: a generic game has no install_runner step, so make sure
+        # its runner is actually present — side-load the staged NAS copy if
+        # missing (before the flush's Steam bounce, so Steam notices it). Valve
+        # builtins (proton_*) are always available and can't be staged, so skip
+        # them. Non-fatal: the shortcut is still set to the runner either way.
+        if runner and not runner.startswith("proton_"):
+            try:
+                from core.steps.install_runner import ensure_installed
+                if not ensure_installed(self.steam_root, self.local_payloads,
+                                        runner,
+                                        log=lambda m: self.ui.msg(m, "dim")):
+                    self.ui.msg(f"  · {folder_name}: runner {runner} not staged "
+                                "on the NAS — shortcut set to it, but install it "
+                                "(Stage Runner / ProtonUp-Qt) if it's missing.",
+                                "dim")
+            except Exception:
+                pass
         self.pending_vdf_writes.append({
             "kind": "add_shortcut", "game": folder_name,
             "appname": folder_name, "aliases": [], "exe": exe,
