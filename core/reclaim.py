@@ -118,7 +118,19 @@ def scan(recipes, steam_root, deployed: dict, sd_games_dirs,
 
     by_name = {r.name: r for r in recipes}
 
-    def sd_dir_for(name: str):
+    def sd_dir_for(name: str, rec: dict | None = None):
+        """Where this game actually is. Prefer the path the tool RECORDED at
+        deploy (kept current by a Move) over searching the roots by name —
+        with two storage locations a name search could otherwise land on a
+        different drive's copy than the record means."""
+        recorded = (rec or {}).get("sd_dir")
+        if recorded:
+            try:
+                p = Path(recorded)
+                if p.is_dir():
+                    return p
+            except OSError:
+                pass
         for g in sd_games_dirs or []:
             p = g / name
             try:
@@ -132,7 +144,7 @@ def scan(recipes, steam_root, deployed: dict, sd_games_dirs,
     for name in list(out.deployed.keys()):
         rec = out.deployed[name]
         recipe = by_name.get(name)
-        sd_dir = sd_dir_for(name)
+        sd_dir = sd_dir_for(name, rec)
         if sd_dir is None:
             out.deployed.pop(name, None)       # already off the SD — forget it
             out.considered.append((name, "already off the SD — forgotten"))

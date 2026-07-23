@@ -551,7 +551,7 @@ class App:
                 info = shortcutsvdf.describe(self.steam_root, names)
                 if info and info.get("exe"):
                     rel = str(Path(info["exe"]).relative_to(old_dir).as_posix())
-            except (ValueError, Exception):
+            except Exception:      # ValueError (not relative) or vdf trouble
                 rel = None
         if rel and (new_dir / rel).is_file():
             runner = prev.get("runner") or "GE-Proton10-34"
@@ -1954,6 +1954,7 @@ class App:
                 res = sdscan.scan(games_dir, self.recipes)
                 matched.extend(res["matched"])
                 unmatched.extend(res["unmatched"])
+            self._warn_duplicate_games(matched, unmatched)
             sdmap.write(matched, unmatched, games_dirs[0], dest,
                         sdmap.load_first(), steam_root=self.steam_root)
             wrote = True
@@ -2762,6 +2763,34 @@ class App:
         self.ui.msg("It re-mounts on access and after every reboot. Re-run "
                     "this after a reimage.", "dim")
 
+    def _warn_duplicate_games(self, matched, unmatched) -> int:
+        """Flag the same game existing in more than one storage location.
+
+        With two roots (SD + SSD) a folder can exist on both — a stale copy
+        left behind, or an interrupted move. The map can only record ONE path
+        per game, so whichever root is scanned last silently wins, and 🔧 Apply
+        would then patch a copy you might not be launching. Say so loudly
+        rather than picking quietly. Returns the number of duplicated games."""
+        seen: dict = {}
+        for recipe, folder, _sig in matched:
+            seen.setdefault(recipe.name, []).append(folder)
+        for folder in unmatched:
+            seen.setdefault(folder.name, []).append(folder)
+        dupes = {n: fs for n, fs in seen.items() if len(fs) > 1}
+        if not dupes:
+            return 0
+        self.ui.msg("", "dim")
+        self.ui.msg(f"⚠  {len(dupes)} game(s) exist in MORE THAN ONE location:",
+                    "warn")
+        for name, folders in sorted(dupes.items()):
+            self.ui.msg(f"    {name}", "warn")
+            for f in folders:
+                self.ui.msg(f"      · {f}", "dim")
+        self.ui.msg("    The map records ONE path per game, so the last one "
+                    "scanned wins — Apply would patch that copy. Delete the "
+                    "one you don't want (↔️ Move leaves no duplicate).", "warn")
+        return len(dupes)
+
     def cmd_scan_sd(self):
         """Scan EVERY games location — SD card(s) and the internal SSD — in one
         pass, pairing each folder to a recipe. On confirmation, writes the
@@ -2796,6 +2825,7 @@ class App:
         games_dir = games_dirs[0]
         if len(games_dirs) > 1:
             self.ui.msg(f"({len(games_dirs)} locations scanned)", "dim")
+        self._warn_duplicate_games(matched, unmatched)
 
         if not matched and not unmatched:
             self.ui.msg("The Games folder is empty.", "warn")

@@ -2044,6 +2044,40 @@ def main():
         finally:
             _sto.sd_card_roots, _sto.load_config = _o1, _o2
 
+        # --- audit round 2: overwrite protection -----------------------
+        # Art restore must FILL GAPS, not clobber art changed since capture.
+        atmp = tmp / "artgap"
+        ast = atmp / "S"; agrid = ast / "userdata" / "1" / "config" / "grid"
+        agrid.mkdir(parents=True)
+        acap = atmp / "cap"; acap.mkdir()
+        (acap / "777.png").write_bytes(b"OLD")
+        (acap / "777_hero.png").write_bytes(b"OLDHERO")
+        (agrid / "777.png").write_bytes(b"NEWER")     # user changed this one
+        n_ = _sa.restore(ast, 777, acap)
+        check("art restore does NOT clobber art changed since capture",
+              (agrid / "777.png").read_bytes() == b"NEWER")
+        check("art restore still fills in art that's missing",
+              (agrid / "777_hero.png").is_file() and n_ == 1)
+        _sa.restore(ast, 777, acap, only_missing=False)
+        check("explicit overwrite is still available when asked for",
+              (agrid / "777.png").read_bytes() == b"OLD")
+        # Reclaim must trust the RECORDED path over a name search (two drives
+        # can hold the same folder name).
+        from core import reclaim as _rc
+        check("reclaim locates a game by its recorded path first",
+              "sd_dir_for(name, rec)" in _i.getsource(_rc.scan)
+              and "recorded" in _i.getsource(_rc.scan))
+        # The same game in two locations must be flagged, not silently picked.
+        check("App._warn_duplicate_games exists",
+              hasattr(gfm_mod.App, "_warn_duplicate_games"))
+        dsrc2 = _i.getsource(gfm_mod.App._warn_duplicate_games)
+        check("duplicate-location warning names every path",
+              "MORE THAN ONE location" in dsrc2)
+        check("scan and background refresh both check for duplicates",
+              "_warn_duplicate_games" in _i.getsource(gfm_mod.App.cmd_scan_sd)
+              and "_warn_duplicate_games"
+              in _i.getsource(gfm_mod.App._refresh_map))
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

@@ -94,10 +94,18 @@ def captured_icon(src_dir: Path, appid: int) -> Path | None:
     return None
 
 
-def restore(steam_root: Path, appid: int, src_dir: Path) -> int:
+def restore(steam_root: Path, appid: int, src_dir: Path,
+            only_missing: bool = True) -> int:
     """Copy captured art from src_dir into every Steam user's grid folder. The
     files are already named by appid, so they land on the right shortcut.
-    Returns files written. appid is accepted for symmetry / future filtering."""
+    Returns files written.
+
+    only_missing (the default) FILLS GAPS instead of overwriting: art already
+    in the grid is left alone. That matters because restore runs on every
+    deploy — without it, art you'd changed in Steam since the last capture
+    would be silently reverted to the older captured copy. After a reimage the
+    grid is empty, so everything restores anyway. Pass False only for an
+    explicit "put my captured art back over the top" action."""
     src_dir = Path(src_dir)
     try:
         files = [f for f in src_dir.iterdir() if f.is_file()] if src_dir.is_dir() else []
@@ -109,6 +117,9 @@ def restore(steam_root: Path, appid: int, src_dir: Path) -> int:
     for grid in _grid_dirs(steam_root):
         grid.mkdir(parents=True, exist_ok=True)
         for f in files:
-            shutil.copy2(f, grid / f.name)
+            target = grid / f.name
+            if only_missing and target.exists():
+                continue          # don't clobber art you've changed since
+            shutil.copy2(f, target)
             written += 1
     return written
