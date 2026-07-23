@@ -1940,6 +1940,47 @@ def main():
               "_restore_prefix_if_missing"
               in _i.getsource(gfm_mod.App.cmd_deploy_game))
 
+        # --- storage-agnostic game roots (SD + internal SSD) -----------
+        from core import sdscan as _sds, store as _sto
+        stmp = tmp / "roots"
+        rsd = stmp / "SD"; (rsd / "Games" / "OldGame").mkdir(parents=True)
+        rssd = stmp / "home" / "Games"; (rssd / "BigGame").mkdir(parents=True)
+        # things that must never be scanned as deployed games
+        (stmp / "home" / "Steam" / "compatibilitytools.d" / "GE-X").mkdir(parents=True)
+        (stmp / "home" / "Steam" / "steamapps" / "common" / "SteamGame").mkdir(parents=True)
+        _osd, _ocfg = _sto.sd_card_roots, _sto.load_config
+        _sto.sd_card_roots = lambda: [rsd]
+        _sto.load_config = lambda: {"games_dirs": [str(rssd)]}
+        try:
+            roots = _sds.find_games_dirs()
+            seen = {s.name for d in roots for s in d.iterdir() if s.is_dir()}
+            check("game scan finds both SD and configured SSD roots",
+                  (rsd / "Games") in roots and rssd in roots)
+            check("game scan sees games on both drives",
+                  seen == {"OldGame", "BigGame"})
+            check("game scan never picks up Proton runners or Steam's library",
+                  "GE-X" not in seen and "SteamGame" not in seen)
+            check("explicit sd_roots skips configured extras (deterministic)",
+                  _sds.find_games_dirs([rsd]) == [rsd / "Games"])
+        finally:
+            _sto.sd_card_roots, _sto.load_config = _osd, _ocfg
+        check("a configured root that doesn't exist is ignored",
+              _sto.extra_games_dirs({"games_dirs": ["/nope/nowhere"]}) == [])
+        check("duplicate configured roots are de-duped",
+              len(_sto.extra_games_dirs(
+                  {"games_dirs": [str(rssd), str(rssd)]})) == 1)
+        check("CLI exposes 'games-locations'",
+              "games-locations" in gfm_mod.COMMANDS)
+        check("App.cmd_games_locations exists",
+              hasattr(gfm_mod.App, "cmd_games_locations"))
+        msrc = _i.getsource(gfm_mod.App.menu_settings)
+        check("Game Storage Locations is on the Settings menu",
+              "Game Storage Locations" in msrc
+              and "cmd_games_locations" in msrc)
+        dsrc = _i.getsource(gfm_mod.App._deploy_dest_root)
+        check("deploy destination picker shows free space per location",
+              "free_space" in dsrc and "free" in dsrc)
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

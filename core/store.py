@@ -118,6 +118,28 @@ def recipe_data_dir(local_payloads: Path, recipe_id: str, *sub: str,
     return new
 
 
+# Extra (non-removable) game storage roots — e.g. the internal SSD. The game
+# scan and deploy look ONLY at removable "<SD>/Games" plus these explicitly
+# configured folders — never Steam's own library or compatibilitytools.d — so
+# Proton runners and Steam-installed games can't be mistaken for deployed games.
+DEFAULT_INTERNAL_GAMES = Path.home() / "Games"
+
+
+def extra_games_dirs(cfg: dict | None = None) -> list[Path]:
+    """Configured non-removable game roots that currently exist. Absolute paths
+    only — nothing is guessed, so the scan can't wander onto the wrong drive."""
+    cfg = cfg if cfg is not None else load_config()
+    out: list[Path] = []
+    for raw in cfg.get("games_dirs", []):
+        try:
+            p = Path(raw)
+            if p.is_dir() and p not in out:
+                out.append(p)
+        except OSError:
+            continue
+    return out
+
+
 def artwork_dir(local_payloads: Path, appid) -> Path:
     """Where a NON-recipe managed game's captured artwork lives, keyed by its
     (stable) appid: <local_payloads>/_state/artwork/<appid>/. Recipe games keep

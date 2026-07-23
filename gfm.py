@@ -424,11 +424,16 @@ class App:
     SETUP_STEP_TYPES = ("install_runner", "proton_version", "steam_shortcut")
 
     def _deploy_dest_root(self):
-        """Which SD Games/ folder to deploy into (prompt only if ambiguous)."""
+        """Which Games/ folder to deploy into — the SD card, the internal SSD,
+        or any other configured location. Prompts only when it's ambiguous, and
+        shows free space per option so a 95GB game doesn't land on the wrong
+        drive."""
         games_dirs = sdscan.find_games_dirs()
         if not games_dirs:
-            raw = self.ui.input("No SD Games/ folder found — enter one "
-                                "(blank to cancel)")
+            self.ui.msg("No Games/ folder found. Add one in ⚙️ Settings → "
+                        "📂 Game Storage Locations (e.g. the internal SSD).",
+                        "warn")
+            raw = self.ui.input("…or enter one now (blank to cancel)")
             if not raw or not Path(raw).is_dir():
                 if raw:
                     self.ui.msg(f"Not a directory: {raw}", "error")
@@ -436,9 +441,81 @@ class App:
             return Path(raw)
         if len(games_dirs) == 1:
             return games_dirs[0]
-        picked = self.ui.choose("Deploy to which card?",
-                                [str(g) for g in games_dirs])
-        return Path(picked[0]) if picked else None
+        by_label = {}
+        for g in games_dirs:
+            removable = "SD" if "/run/media/" in str(g) else "internal"
+            by_label[f"{g}   ({self._gb(deploy.free_space(g))} free · "
+                     f"{removable})"] = g
+        picked = self.ui.choose("Deploy to which location?", list(by_label))
+        return by_label[picked[0]] if picked and picked[0] in by_label else None
+
+    def cmd_games_locations(self, args=None):
+        """Manage where deployed games are stored. Removable SD cards are found
+        automatically; add the internal SSD (or any folder) here.
+
+        Only these roots are ever scanned for games — which is exactly what
+        keeps Proton runners and Steam's own library out of the game list."""
+        while True:
+            self.ui.header("📂 GAME STORAGE LOCATIONS")
+            auto = [g for sd in store.sd_card_roots()
+                    if (g := sd / "Games").is_dir()]
+            extra = store.extra_games_dirs(self.cfg)
+            for g in auto:
+                self.ui.msg(f"  💾 {g}  ({self._gb(deploy.free_space(g))} free)"
+                            "  — removable, found automatically", "dim")
+            for g in extra:
+                self.ui.msg(f"  🖴  {g}  ({self._gb(deploy.free_space(g))} free)"
+                            "  — added", "dim")
+            if not auto and not extra:
+                self.ui.msg("  (none yet — add one below)", "warn")
+            self.ui.msg("", "dim")
+            opts = ["➕ Add a location (e.g. the internal SSD)"]
+            if extra:
+                opts.append("➖ Remove an added location")
+            opts.append("⬅️  Back")
+            picked = self.ui.choose("Game storage:", opts)
+            choice = picked[0] if picked else "⬅️  Back"
+            if choice.startswith("➕"):
+                raw = self.ui.input("Folder to store games in",
+                                    str(store.DEFAULT_INTERNAL_GAMES))
+                if not raw:
+                    continue
+                p = Path(raw.strip())
+                if not p.exists():
+                    if not self.ui.confirm(f"{p} doesn't exist — create it?"):
+                        continue
+                    try:
+                        p.mkdir(parents=True, exist_ok=True)
+                    except OSError as e:
+                        self.ui.msg(f"Couldn't create it: {e}", "error")
+                        continue
+                if not p.is_dir():
+                    self.ui.msg(f"Not a directory: {p}", "error")
+                    continue
+                dirs = list(self.cfg.get("games_dirs", []))
+                if str(p) in dirs:
+                    self.ui.msg("Already added.", "dim")
+                else:
+                    dirs.append(str(p))
+                    self.cfg["games_dirs"] = dirs
+                    store.save_config(self.cfg)
+                    self.ui.msg(f"Added {p} — ⬇️ Deploy will offer it, and "
+                                "🔍 Scan will find games there.", "success")
+            elif choice.startswith("➖"):
+                labels = [str(g) for g in extra]
+                pick = self.ui.choose(
+                    "Remove which? (the games themselves are NOT deleted)",
+                    labels + ["⬅️  Cancel"])
+                if not pick or pick[0].startswith("⬅"):
+                    continue
+                self.cfg["games_dirs"] = [
+                    d for d in self.cfg.get("games_dirs", []) if d != pick[0]]
+                store.save_config(self.cfg)
+                self.ui.msg(f"Removed {pick[0]} from the list — games left "
+                            "on disk untouched.", "success")
+            else:
+                return
+            self.ui.input("Press Enter to continue")
 
     def cmd_deploy_game(self):
         """Copy one or more staged games (NAS _games/<name>/) onto the SD, then
@@ -1969,6 +2046,7 @@ class App:
             self.ui.msg("", "dim")
             choice = self.ui.choose("Setup & maintenance:", [
                 "🔌 Connect NAS Payloads (SMB automount)",
+                "📂 Game Storage Locations (SD / internal SSD)",
                 "🧰 Stage GE-Proton Runner to NAS",
                 "🧹 Reclaim SD Space (free removed games now)",
                 "🗓  Weekly Reclaim Timer (set up / remove)",
@@ -1979,6 +2057,9 @@ class App:
             choice = choice[0] if choice else "⬅️  Back"
             if choice.startswith("🔌"):
                 self.cmd_setup_nas()
+            elif choice.startswith("📂"):
+                self.cmd_games_locations()
+                continue          # it has its own loop + pauses
             elif choice.startswith("🧰"):
                 self.cmd_stage_runner()
             elif choice.startswith("🧹"):
@@ -3038,6 +3119,7 @@ COMMANDS = {
     "restore-settings": lambda app, a: app.cmd_restore_settings(),
     # setup / diagnostics
     "setup-nas": lambda app, a: app.cmd_setup_nas(),
+    "games-locations": lambda app, a: app.cmd_games_locations(a),
     "stage-runner": lambda app, a: app.cmd_stage_runner(),
     "reclaim": lambda app, a: app.cmd_reclaim(),
     "setup-reclaim-timer": lambda app, a: app.cmd_setup_reclaim_timer(),

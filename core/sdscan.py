@@ -116,10 +116,23 @@ def find_readmes(folder: Path, max_depth: int = 2, limit: int = 6,
 
 
 def find_games_dirs(sd_roots: list[Path] | None = None) -> list[Path]:
-    """Every '<SD>/Games' folder present. Empty list = no games dir found."""
+    """Every games root: '<SD>/Games' on removable media, PLUS any configured
+    non-removable roots (the internal SSD). Empty list = none found.
+
+    These are the ONLY places scanned for deployed games. Steam's own library
+    (steamapps/common) and compatibilitytools.d are deliberately never included,
+    so Steam-installed games and Proton runners can't be picked up as if the
+    tool had deployed them. Passing sd_roots explicitly (tests) skips the
+    configured extras so the result stays deterministic."""
+    explicit = sd_roots is not None
     if sd_roots is None:
         sd_roots = store.sd_card_roots()
-    return [g for sd in sd_roots if (g := sd / "Games").is_dir()]
+    dirs = [g for sd in sd_roots if (g := sd / "Games").is_dir()]
+    if not explicit:
+        for extra in store.extra_games_dirs():
+            if extra not in dirs:
+                dirs.append(extra)
+    return dirs
 
 
 def _recipe_name_hits(recipe: Recipe) -> set[str]:
