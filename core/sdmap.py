@@ -155,7 +155,14 @@ def write(matched: list, unmatched: list, games_dir: Path,
         "scanned_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "sd_root": str(dest.parents[2]) if len(dest.parents) >= 3 else "",
     })
-    payload["games_dir"] = str(games_dir)
+    payload["games_dir"] = str(games_dir)      # primary root (back-compat)
+    # Every root the games came from — a library can span the SD and the
+    # internal SSD, and each game's own absolute path is what detection uses.
+    try:
+        from . import sdscan as _sds
+        payload["games_dirs"] = [str(d) for d in _sds.find_games_dirs()]
+    except Exception:
+        pass
     payload["games"] = games
     payload["unmatched"] = [{"path": str(f), "exes": sdscan.find_exes(f),
                              "readmes": sdscan.find_readmes(f)}

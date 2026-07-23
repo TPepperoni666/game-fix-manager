@@ -1944,11 +1944,18 @@ class App:
             self.ui.msg("No SD card mounted — can't refresh the map.", "warn")
             return False
         wrote = False
-        for games_dir in sdscan.find_games_dirs():
-            res = sdscan.scan(games_dir, self.recipes)
-            existing = sdmap.load_first()
-            sdmap.write(res["matched"], res["unmatched"], games_dir, dest,
-                        existing, steam_root=self.steam_root)
+        # Scan EVERY games root (SD + SSD) and write ONCE. Writing per-root
+        # would leave only the last root's `unmatched` in the map — each write
+        # replaces that list wholesale, so a split library lost entries.
+        games_dirs = sdscan.find_games_dirs()
+        if games_dirs:
+            matched, unmatched = [], []
+            for games_dir in games_dirs:
+                res = sdscan.scan(games_dir, self.recipes)
+                matched.extend(res["matched"])
+                unmatched.extend(res["unmatched"])
+            sdmap.write(matched, unmatched, games_dirs[0], dest,
+                        sdmap.load_first(), steam_root=self.steam_root)
             wrote = True
         if self.steam_root is not None:
             games = steamscan.scan(self.steam_root)
@@ -2756,34 +2763,39 @@ class App:
                     "this after a reimage.", "dim")
 
     def cmd_scan_sd(self):
-        """Scan the SD card's Games/ folder and pair each subfolder to a
-        recipe. On confirmation, writes the mappings into the machine
-        config's game_paths — so future Applies never prompt for a path."""
-        self.ui.header("📁 SCAN SD FOR GAMES")
+        """Scan EVERY games location — SD card(s) and the internal SSD — in one
+        pass, pairing each folder to a recipe. On confirmation, writes the
+        mappings into the machine config's game_paths — so future Applies never
+        prompt for a path.
+
+        Scanning all roots together (rather than making you pick one) is what
+        lets a library split across drives stay in a single map."""
+        self.ui.header("📁 SCAN FOR GAMES (SD + SSD)")
         games_dirs = sdscan.find_games_dirs()
         if not games_dirs:
-            self.ui.msg("No 'Games' folder found on any mounted SD card.",
-                        "warn")
-            raw = self.ui.input("Enter a folder to scan (blank to cancel)")
+            self.ui.msg("No 'Games' folder found on any storage location. Add "
+                        "one in ⚙️ Settings → 📂 Game Storage Locations.", "warn")
+            raw = self.ui.input("…or enter a folder to scan (blank to cancel)")
             if not raw:
                 return
             games_dir = Path(raw)
             if not games_dir.is_dir():
                 self.ui.msg(f"Not a directory: {games_dir}", "error")
                 return
-        elif len(games_dirs) == 1:
-            games_dir = games_dirs[0]
-            self.ui.msg(f"Scanning {games_dir}", "dim")
-        else:
-            picked = self.ui.choose(
-                "Multiple SD cards have Games/ folders — pick one:",
-                [str(g) for g in games_dirs])
-            if not picked:
-                return
-            games_dir = Path(picked[0])
+            games_dirs = [games_dir]
 
-        result = sdscan.scan(games_dir, self.recipes)
-        matched, unmatched = result["matched"], result["unmatched"]
+        # Scan every root and merge. games_dir (recorded in the map as the
+        # primary) is the first one — each game's own absolute path is what
+        # detection actually uses, so a split library resolves fine.
+        matched, unmatched = [], []
+        for gd in games_dirs:
+            self.ui.msg(f"Scanning {gd}", "dim")
+            res = sdscan.scan(gd, self.recipes)
+            matched.extend(res["matched"])
+            unmatched.extend(res["unmatched"])
+        games_dir = games_dirs[0]
+        if len(games_dirs) > 1:
+            self.ui.msg(f"({len(games_dirs)} locations scanned)", "dim")
 
         if not matched and not unmatched:
             self.ui.msg("The Games folder is empty.", "warn")

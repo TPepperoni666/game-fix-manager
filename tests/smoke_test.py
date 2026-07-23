@@ -2012,6 +2012,38 @@ def main():
         check("Move a Game is on the main menu and dispatched",
               "Move a Game" in mm2 and "cmd_move_game" in mm2)
 
+        # --- one scan covers every storage location --------------------
+        ssrc = _i.getsource(gfm_mod.App.cmd_scan_sd)
+        check("scan covers ALL roots in one pass (no pick-one prompt)",
+              "for gd in games_dirs" in ssrc
+              and "Multiple SD cards" not in ssrc)
+        rsrc2 = _i.getsource(gfm_mod.App._refresh_map)
+        check("background refresh merges all roots and writes once",
+              "matched.extend" in rsrc2 and "unmatched.extend" in rsrc2)
+        # Writing per-root used to drop every root's unmatched but the last.
+        mtmp = tmp / "multiroot"
+        msd = mtmp / "SD"; (msd / "Games" / "OnSD").mkdir(parents=True)
+        mssd = mtmp / "home" / "Games"; (mssd / "OnSSD").mkdir(parents=True)
+        _o1, _o2 = _sto.sd_card_roots, _sto.load_config
+        _sto.sd_card_roots = lambda: [msd]
+        _sto.load_config = lambda: {"games_dirs": [str(mssd)]}
+        try:
+            mm_, um_ = [], []
+            for gd in _sds.find_games_dirs():
+                r = _sds.scan(gd, [])
+                mm_.extend(r["matched"]); um_.extend(r["unmatched"])
+            mdest = mtmp / "a" / "b" / "c" / "sd_map.json"
+            sdmap_mod2 = __import__("core.sdmap", fromlist=["x"])
+            sdmap_mod2.write(mm_, um_, _sds.find_games_dirs()[0], mdest, {})
+            md = __import__("json").loads(mdest.read_text())
+            check("one scan finds games on BOTH drives",
+                  sorted(Path(x["path"]).name for x in md["unmatched"])
+                  == ["OnSD", "OnSSD"])
+            check("map records every scanned root",
+                  len(md.get("games_dirs", [])) == 2)
+        finally:
+            _sto.sd_card_roots, _sto.load_config = _o1, _o2
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
