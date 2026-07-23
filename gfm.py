@@ -449,6 +449,134 @@ class App:
         picked = self.ui.choose("Deploy to which location?", list(by_label))
         return by_label[picked[0]] if picked and picked[0] in by_label else None
 
+    def cmd_move_game(self, args=None):
+        """Move a deployed game between storage locations (SD <-> internal SSD).
+
+        Safe by ordering: COPY -> VERIFY -> only then delete the source. An
+        interrupted move leaves the original untouched, so the worst case is a
+        partial copy at the target that the next move/deploy resumes.
+
+        Nothing else needs migrating: a game's identity is crc32(folder NAME),
+        not its path, so the appid — and therefore its prefix, saves, captured
+        art and backups — are unaffected. Only the files and the shortcut's
+        path change."""
+        self.ui.header("↔️  MOVE A GAME BETWEEN DRIVES")
+        roots = sdscan.find_games_dirs()
+        if len(roots) < 2:
+            self.ui.msg("Only one storage location is configured, so there's "
+                        "nowhere to move to. Add one in ⚙️ Settings → 📂 Game "
+                        "Storage Locations.", "warn")
+            return
+        # Every deployed game folder, and which root it currently lives on.
+        found = []
+        for root in roots:
+            try:
+                for d in sorted(root.iterdir()):
+                    if d.is_dir() and not d.name.startswith("."):
+                        found.append((d.name, root, d))
+            except OSError:
+                continue
+        if not found:
+            self.ui.msg("No games found in any storage location.", "warn")
+            return
+        by_label = {f"{nm}   (on {root})": (nm, root, path)
+                    for nm, root, path in found}
+        picked = self.ui.choose("Move which game?", list(by_label))
+        if not picked or picked[0] not in by_label:
+            return
+        name, src_root, src_dir = by_label[picked[0]]
+
+        targets = {f"{r}   ({self._gb(deploy.free_space(r))} free)": r
+                   for r in roots if r != src_root}
+        tpick = self.ui.choose(f"Move '{name}' to where?", list(targets))
+        if not tpick or tpick[0] not in targets:
+            return
+        dst_root = targets[tpick[0]]
+        dst_dir = dst_root / name
+        if dst_dir.exists():
+            self.ui.msg(f"{dst_dir} already exists — refusing to overwrite. "
+                        "Delete or rename it first.", "error")
+            return
+
+        game = deploy.StagedGame(name, src_dir)
+        deploy.measure(game)
+        free = deploy.free_space(dst_root)
+        self.ui.msg(f"  {name}: {self._gb(game.size)} "
+                    f"({game.files} files)", "info")
+        self.ui.msg(f"  {src_root}  ->  {dst_root}   "
+                    f"({self._gb(free)} free there)", "dim")
+        if free and game.size and game.size > free:
+            self.ui.msg("Not enough room at the destination.", "error")
+            return
+        if not self.ui.confirm(f"Move {name}? The copy is verified before "
+                               "anything is deleted.", danger=True):
+            return
+
+        todo, need, skipped = deploy.plan(game, dst_root)
+        if todo and not self._copy_one_game(game, dst_root, need, skipped):
+            self.ui.msg("Copy failed — the original is untouched. Nothing "
+                        "deleted.", "warn")
+            return
+        # VERIFY before deleting: a re-plan must find nothing left to copy.
+        left, _need2, _sk = deploy.plan(game, dst_root)
+        if left:
+            self.ui.msg(f"Verification failed — {len(left)} file(s) still "
+                        "differ at the destination. Source kept; re-run to "
+                        "resume.", "error")
+            return
+        try:
+            shutil.rmtree(src_dir)
+        except OSError as e:
+            self.ui.msg(f"Copied fine, but couldn't remove the old copy "
+                        f"({e}). Delete {src_dir} by hand.", "warn")
+        self.ui.msg(f"✅ Moved {name} to {dst_dir}", "success")
+        self._repoint_after_move(name, src_dir, dst_dir)
+        self.flush_vdf_writes()
+        self.ui.msg("Prefix, saves and artwork were untouched — the appid "
+                    "didn't change.", "dim")
+
+    def _repoint_after_move(self, name: str, old_dir: Path, new_dir: Path):
+        """Point everything that remembers a path at the game's new home: the
+        Steam shortcut, the deployed record, the reimage shortcut-state, and a
+        matched recipe's remembered path. The map self-heals on the next scan
+        (it validates the folder still exists before trusting it)."""
+        appid, names, _art = self._deployed_appid(new_dir)
+        # Work out the exe RELATIVE to the game folder, from whatever we know.
+        rel = None
+        prev = self._saved_shortcut(appid) or {}
+        if prev.get("exe_rel"):
+            rel = prev["exe_rel"]
+        if rel is None and self.steam_root is not None:
+            try:
+                info = shortcutsvdf.describe(self.steam_root, names)
+                if info and info.get("exe"):
+                    rel = str(Path(info["exe"]).relative_to(old_dir).as_posix())
+            except (ValueError, Exception):
+                rel = None
+        if rel and (new_dir / rel).is_file():
+            runner = prev.get("runner") or "GE-Proton10-34"
+            launch = prev.get("launch_options", "")
+            self.pending_vdf_writes.append({
+                "kind": "add_shortcut", "game": name, "appname": name,
+                "aliases": [], "exe": str(new_dir / rel),
+                "start_dir": str(new_dir), "launch_options": launch,
+                "appid": appid})
+            self._save_shortcut_state(appid, name, str(new_dir / rel),
+                                      str(new_dir), launch, runner,
+                                      folder=name, exe_rel=rel)
+            self.ui.msg(f"  ↻ shortcut repointed -> {rel}", "dim")
+        else:
+            self.ui.msg("  ! couldn't work out the launch exe — re-deploy or "
+                        "fix the shortcut by hand.", "warn")
+        # Deployed record (what reclaim reads) + a recipe's remembered path.
+        dep = self.cfg.setdefault("deployed", {}).get(name)
+        if dep is not None:
+            dep["sd_dir"] = str(new_dir)
+        recipe, _sig = sdscan._match_folder(new_dir, self.recipes)
+        if recipe is not None:
+            self.cfg.setdefault("game_paths", {})[recipe.id] = str(new_dir)
+        store.save_config(self.cfg)
+
     def cmd_games_locations(self, args=None):
         """Manage where deployed games are stored. Removable SD cards are found
         automatically; add the internal SSD (or any folder) here.
@@ -3051,7 +3179,8 @@ class App:
                 "🔧 Apply Fixes",
                 "📋 Status",
                 "↩️  Revert a Game",
-                "⬇️  Deploy Games from NAS (copy to SD + auto-shortcut)",
+                "⬇️  Deploy Games from NAS (copy to SD/SSD + auto-shortcut)",
+                "↔️  Move a Game (between SD and SSD)",
                 "🔍 Scan (SD + Steam + prefixes + capture saves/art)",
                 "♻️  Save Restore (prefix backups + game saves)",
                 "⚙️  Settings (NAS, runners, mirror, update, install)",
@@ -3069,6 +3198,9 @@ class App:
                 self.cmd_revert([])
             elif choice.startswith("⬇"):
                 self.cmd_deploy_game()
+                self.ui.input("Press Enter to continue")
+            elif choice.startswith("↔"):
+                self.cmd_move_game()
                 self.ui.input("Press Enter to continue")
             elif choice.startswith("🔍"):
                 self.cmd_scan_all()
@@ -3120,6 +3252,7 @@ COMMANDS = {
     # setup / diagnostics
     "setup-nas": lambda app, a: app.cmd_setup_nas(),
     "games-locations": lambda app, a: app.cmd_games_locations(a),
+    "move-game": lambda app, a: app.cmd_move_game(a),
     "stage-runner": lambda app, a: app.cmd_stage_runner(),
     "reclaim": lambda app, a: app.cmd_reclaim(),
     "setup-reclaim-timer": lambda app, a: app.cmd_setup_reclaim_timer(),

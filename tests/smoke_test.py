@@ -1981,6 +1981,37 @@ def main():
         check("deploy destination picker shows free space per location",
               "free_space" in dsrc and "free" in dsrc)
 
+        # --- move a game between drives --------------------------------
+        check("CLI exposes 'move-game'", "move-game" in gfm_mod.COMMANDS)
+        check("App.cmd_move_game exists", hasattr(gfm_mod.App, "cmd_move_game"))
+        mv = _i.getsource(gfm_mod.App.cmd_move_game)
+        # THE safety property: copy, then verify, and only then delete.
+        check("move order is copy -> verify -> delete",
+              mv.index("_copy_one_game")
+              < mv.index("deploy.plan(game, dst_root)",
+                         mv.index("_copy_one_game"))
+              < mv.index("rmtree"))
+        check("move keeps the source if the copy fails",
+              "the original is untouched" in mv)
+        check("move keeps the source if verification fails",
+              "Verification failed" in mv and "Source kept" in mv)
+        check("move refuses to overwrite an existing target folder",
+              "refusing to overwrite" in mv)
+        check("move checks free space at the destination",
+              "Not enough room" in mv)
+        check("move asks for a danger confirmation", "danger=True" in mv)
+        check("move needs two locations to be useful",
+              "nowhere to move to" in mv)
+        rp = _i.getsource(gfm_mod.App._repoint_after_move)
+        check("move repoints shortcut, deployed record and shortcut-state",
+              "add_shortcut" in rp and "sd_dir" in rp
+              and "_save_shortcut_state" in rp)
+        check("move updates a matched recipe's remembered path",
+              "game_paths" in rp)
+        mm2 = _i.getsource(gfm_mod.App.menu)
+        check("Move a Game is on the main menu and dispatched",
+              "Move a Game" in mm2 and "cmd_move_game" in mm2)
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
