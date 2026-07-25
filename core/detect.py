@@ -8,6 +8,7 @@ Returns None when not found — caller prompts the user and remembers the answer
 """
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -21,10 +22,41 @@ def find_steam_root(override: str | None = None) -> Path | None:
     if override:
         p = Path(override).expanduser()
         return p if p.is_dir() else None
+    if os.name == "nt":
+        return _find_steam_root_windows()
     home = Path.home()
     for candidate in (home / ".local/share/Steam", home / ".steam/steam"):
         if candidate.is_dir():
             return candidate
+    return None
+
+
+def _find_steam_root_windows() -> Path | None:
+    """Windows Steam: the registry SteamPath first (authoritative), then the
+    usual install dirs. userdata/config/steamapps sit here just like on Linux,
+    so everything above this resolves the same."""
+    try:
+        import winreg
+        for hive, key in ((winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam"),
+                          (winreg.HKEY_LOCAL_MACHINE,
+                           r"SOFTWARE\WOW6432Node\Valve\Steam")):
+            try:
+                with winreg.OpenKey(hive, key) as k:
+                    val = winreg.QueryValueEx(
+                        k, "SteamPath" if hive == winreg.HKEY_CURRENT_USER
+                        else "InstallPath")[0]
+                    p = Path(val)
+                    if p.is_dir():
+                        return p
+            except OSError:
+                continue
+    except ImportError:
+        pass
+    for c in (Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
+              / "Steam",
+              Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Steam"):
+        if c.is_dir():
+            return c
     return None
 
 

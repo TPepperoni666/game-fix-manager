@@ -51,8 +51,53 @@ def _scroll_top(cursor: int, top: int, total: int, height: int) -> int:
     return max(0, min(top, max(0, total - height)))
 
 
+def _enable_windows_ansi() -> bool:
+    """Turn on ANSI escape processing for the Windows console so the cursor
+    moves and colors render instead of printing literal escape codes. Win10+
+    supports it; it just isn't on by default in cmd.exe. No-op elsewhere."""
+    if os.name != "nt":
+        return True
+    try:
+        import ctypes
+        k = ctypes.windll.kernel32
+        h = k.GetStdHandle(-11)            # STD_OUTPUT_HANDLE
+        mode = ctypes.c_uint32()
+        if not k.GetConsoleMode(h, ctypes.byref(mode)):
+            return False
+        k.SetConsoleMode(h, mode.value | 0x0004)  # VIRTUAL_TERMINAL_PROCESSING
+        return True
+    except Exception:
+        return False
+
+
+def _read_key_windows() -> str:
+    """One keypress on Windows via msvcrt. Arrow keys arrive as a 0x00/0xE0
+    prefix then a scan code — this is what lets the SAME D-pad picker work on
+    an HTPC (Steam Input maps the pad to arrows) as on the Deck."""
+    import msvcrt
+    ch = msvcrt.getch()
+    if ch in (b"\x00", b"\xe0"):           # special-key prefix
+        code = msvcrt.getch()
+        return {b"H": "up", b"P": "down",
+                b"K": "left", b"M": "right"}.get(code, "other")
+    if ch in (b"\r", b"\n"):
+        return "enter"
+    if ch == b"\x1b":
+        return "esc"
+    if ch == b"\x03":
+        return "ctrl-c"
+    if ch == b" ":
+        return "space"
+    try:
+        return ch.decode("utf-8", errors="ignore")
+    except Exception:
+        return "other"
+
+
 def _read_key() -> str:
     """One keypress from stdin, decoded to a symbolic name."""
+    if os.name == "nt":
+        return _read_key_windows()
     fd = sys.stdin.fileno()
     import termios
     import tty
@@ -98,8 +143,13 @@ def multiselect_arrows(header: str, options: list[str]) -> list[str]:
       Enter (A on Deck)     — confirm selected items
       Esc (B on Deck)       — cancel, return []
     """
+    try:
+        import msvcrt  # noqa: F401  (Windows key reader)
+    except ImportError:
+        msvcrt = None
     if os.name == "nt":
-        raise NotImplementedError("raw TTY unsupported on Windows")
+        if msvcrt is None or not _enable_windows_ansi():
+            raise NotImplementedError("no interactive Windows console")
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         raise NotImplementedError("stdin/stdout is not a TTY")
     if not options:
