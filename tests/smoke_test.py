@@ -2078,6 +2078,25 @@ def main():
               and "_warn_duplicate_games"
               in _i.getsource(gfm_mod.App._refresh_map))
 
+        # --- audit round 3: deploy/move edge cases ---------------------
+        # A recipe with fixes but no steam_shortcut step must still get a
+        # shortcut on deploy (the eclipse-avowed case that left Avowed with no
+        # way into Steam).
+        ssc = _i.getsource(gfm_mod.App._setup_shortcut)
+        check("deploy makes a generic shortcut when the recipe has no shortcut "
+              "step", "_make_generic_shortcut" in ssc
+              and 'any(s["type"] == "steam_shortcut"' in ssc)
+        # Deploy sees a game already installed on ANOTHER drive.
+        dsrc3 = _i.getsource(gfm_mod.App.cmd_deploy_game)
+        check("deploy detects a game already installed on another root",
+              "other_roots" in dsrc3 and "already installed on" in dsrc3)
+        check("deploy confirms before making a duplicate copy",
+              "SECOND copy" in dsrc3 and "Make duplicate copies anyway" in dsrc3)
+        # Move falls back to a best-guess exe rather than a dead shortcut.
+        rp3 = _i.getsource(gfm_mod.App._repoint_after_move)
+        check("move best-guesses the exe when it isn't recorded",
+              "find_exes(new_dir)" in rp3)
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

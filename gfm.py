@@ -553,6 +553,14 @@ class App:
                     rel = str(Path(info["exe"]).relative_to(old_dir).as_posix())
             except Exception:      # ValueError (not relative) or vdf trouble
                 rel = None
+        if rel is None or not (new_dir / rel).is_file():
+            # Last resort: best-guess the exe from what's on disk (same ranking
+            # deploy uses). Keeps a Move from leaving a dead shortcut when the
+            # saved exe is unknown (older adopts) or didn't sit under the folder.
+            exes = sdscan.find_exes(new_dir)
+            if exes:
+                rel = exes[0]["rel"]
+                self.ui.msg(f"  · exe not recorded — best-guessing {rel}.", "dim")
         if rel and (new_dir / rel).is_file():
             runner = prev.get("runner") or "GE-Proton10-34"
             launch = prev.get("launch_options", "")
@@ -697,13 +705,24 @@ class App:
         self.ui.msg("", "dim")
 
         # Multi-select. Sizes are all known now; the ✓ marks what's on the card.
+        # Where each game is ALREADY installed (any storage root), so a game
+        # sitting on the SSD isn't offered as if it needs pulling to the SD —
+        # and deploying it anyway (a duplicate) is clearly flagged.
+        other_roots = [r for r in sdscan.find_games_dirs() if r != dest_root]
         by_label, on_card = {}, 0
         for g in games:
             here = deploy.is_deployed(g, dest_root)
             on_card += here
-            mark = "✅" if here else "⬇️ "
+            elsewhere = None if here else next(
+                (r for r in other_roots if (r / g.name).is_dir()), None)
+            mark = "✅" if here else ("♻️ " if elsewhere else "⬇️ ")
             size = self._gb(g.size) if g.size is not None else "size ?"
-            state = " · on the card" if here else ""
+            if here:
+                state = " · here already"
+            elif elsewhere:
+                state = f" · already installed on {elsewhere} (would duplicate)"
+            else:
+                state = ""
             by_label[f"{mark} {g.name}  ({size}){state}"] = g
         picked = self.ui.choose(
             f"Deploy which games?  ({len(games)} staged, {on_card} on the "
@@ -712,6 +731,17 @@ class App:
         chosen = [by_label[p] for p in picked if p in by_label]
         if not chosen:
             return
+
+        # If any pick already lives on another drive, deploying makes a second
+        # copy — confirm that's intended (↔️ Move relocates without duplicating).
+        dupes = [g.name for g in chosen if not deploy.is_deployed(g, dest_root)
+                 and any((r / g.name).is_dir() for r in other_roots)]
+        if dupes:
+            self.ui.msg(f"⚠  Already installed elsewhere: {', '.join(dupes)}. "
+                        "Deploying makes a SECOND copy on this drive.", "warn")
+            if not self.ui.confirm("Make duplicate copies anyway? (use ↔️ Move "
+                                   "to relocate instead)"):
+                return
 
         # Measure the picked ones and size the batch against free space.
         self.ui.msg(f"Measuring {len(chosen)} game(s)…", "dim")
@@ -844,13 +874,19 @@ class App:
             # shortcut. This is the Pragmata/DS2 case.
             return self._make_generic_shortcut(folder_name, dest)
         setup = [s for s in recipe.steps if s["type"] in self.SETUP_STEP_TYPES]
-        if not setup:
-            self.ui.msg(f"  · {recipe.name}: recipe has no shortcut step — "
-                        "nothing to set up.", "dim")
-            return False
         # Remember where it lives so Apply Fixes never has to prompt for a path.
         self.cfg.setdefault("game_paths", {})[recipe.id] = str(dest)
         store.save_config(self.cfg)
+        if not any(s["type"] == "steam_shortcut" for s in setup):
+            # The recipe has fixes but NO shortcut step (an incomplete recipe,
+            # or a fix-only one like the eclipse perf mods). The game still has
+            # to get INTO Steam, so fall back to a generic shortcut — with the
+            # exe prompt — instead of silently doing nothing. The recipe's other
+            # fixes apply later via 🔧 Apply Fixes.
+            self.ui.msg(f"  · {recipe.name}: no shortcut step — adding a generic "
+                        "shortcut so it's playable (its fixes apply via 🔧 Apply "
+                        "Fixes).", "dim")
+            return self._make_generic_shortcut(folder_name, dest)
         import dataclasses
         only_setup = dataclasses.replace(recipe, steps=setup)
         return self.run_engine(only_setup, dest, engine.apply_recipe)
