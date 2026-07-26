@@ -25,3 +25,8 @@ store/games/driver-san-francisco/payload/dxvk/
 # Eclipse perf mods — modified copyrighted game exes, local-payloads only,
 # never committed. Recipes are manifest-only; files live off git.
 store/games/eclipse-*/payload/
+
+# PyInstaller build artifacts
+dist/
+build/
+*.spec

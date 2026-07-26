@@ -15,9 +15,16 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 from pathlib import Path
 
-APP_DIR = Path(__file__).resolve().parent.parent
+# In a frozen one-file build (PyInstaller) the bundled recipes are extracted to
+# sys._MEIPASS, not next to a .py — so resolve the store there. A normal
+# checkout keeps it two dirs up from this file.
+if getattr(sys, "frozen", False):
+    APP_DIR = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+else:
+    APP_DIR = Path(__file__).resolve().parent.parent
 CONFIG_DIR = Path(os.environ.get("GFM_CONFIG_DIR", str(Path.home() / ".config" / "gfm")))
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
