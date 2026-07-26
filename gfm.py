@@ -1002,11 +1002,15 @@ class App:
             runner, launch = "GE-Proton10-34", ""
 
         exe = str(dest / rel)
-        # Gap-filler: a generic game has no install_runner step, so make sure
-        # its runner is actually present — side-load the staged NAS copy if
-        # missing (before the flush's Steam bounce, so Steam notices it). Valve
-        # builtins (proton_*) are always available and can't be staged, so skip
-        # them. Non-fatal: the shortcut is still set to the runner either way.
+        # Windows games run NATIVELY — no Proton. Forcing a compat tool would
+        # tell Steam to run a .exe through a Linux runner and break it, so on
+        # Windows we set no runner at all.
+        if os.name == "nt":
+            runner = ""
+        # Gap-filler (Deck): a generic game has no install_runner step, so make
+        # sure its runner is present — side-load the staged NAS copy if missing
+        # (before the flush's Steam bounce). Valve builtins (proton_*) are always
+        # available and can't be staged, so skip them. Non-fatal.
         if runner and not runner.startswith("proton_"):
             try:
                 from core.steps.install_runner import ensure_installed
@@ -1023,9 +1027,10 @@ class App:
             "kind": "add_shortcut", "game": folder_name,
             "appname": folder_name, "aliases": [], "exe": exe,
             "start_dir": str(dest), "launch_options": launch, "appid": appid})
-        self.pending_vdf_writes.append({
-            "kind": "compat", "game": folder_name, "appid": appid,
-            "tool": runner, "priority": "250"})
+        if runner:      # native Windows shortcuts get no compat tool
+            self.pending_vdf_writes.append({
+                "kind": "compat", "game": folder_name, "appid": appid,
+                "tool": runner, "priority": "250"})
         self._save_shortcut_state(appid, folder_name, exe, str(dest), launch,
                                   runner, folder=folder_name, exe_rel=rel)
         self.ui.msg(f"  + {folder_name}: shortcut queued -> {rel} "
@@ -2292,6 +2297,69 @@ class App:
                 return
             self.ui.input("Press Enter to continue")
 
+    def _setup_nas_windows(self):
+        """Map the NAS share to a drive letter and make it reconnect on every
+        logon — the Windows analogue of the Deck's systemd automount. Uses a
+        per-user Startup script (no admin), which also waits for the network so
+        a slow boot doesn't leave the drive stuck 'Unavailable'."""
+        import subprocess
+        self.ui.header("🔌 CONNECT NAS PAYLOADS")
+        self.ui.msg("Maps the NAS share to a drive letter and reconnects it at "
+                    "every logon (waits for the network first).", "dim")
+        self.ui.msg("", "dim")
+        host = self.ui.input("NAS host / IP", "192.168.1.33")
+        share = self.ui.input("SMB share name", "Game Fixes")
+        letter = (self.ui.input("Drive letter", "X") or "X").strip().rstrip(":")[:1].upper()
+        if not host or not share or not letter:
+            self.ui.msg("Cancelled.", "warn")
+            return
+        unc = rf"\\{host}\{share}"
+        drive = f"{letter}:"
+
+        # 1) Map it now (non-persistent — the Startup script owns it, so Windows
+        #    never 'remembers' it into the Unavailable state).
+        subprocess.run(["net", "use", drive, "/delete", "/y"],
+                       capture_output=True)
+        r = subprocess.run(["net", "use", drive, unc, "/persistent:no"],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            self.ui.msg(f"Couldn't map {drive} -> {unc}: "
+                        f"{(r.stderr or r.stdout).strip()}", "error")
+            self.ui.msg("Check the share name and that the NAS is reachable "
+                        "(needs credentials? map it once in Explorer first).",
+                        "warn")
+            return
+
+        # 2) Startup script that waits for the NAS then remaps — survives reboot.
+        scripts = Path.home() / "Scripts"
+        scripts.mkdir(parents=True, exist_ok=True)
+        ps1 = scripts / "gfm-remap-nas.ps1"
+        ps1.write_text(
+            "$ErrorActionPreference='SilentlyContinue'\n"
+            f"for($i=0;$i -lt 12;$i++){{if(Test-Connection -ComputerName "
+            f"'{host}' -Count 1 -Quiet){{break}};Start-Sleep -Seconds 5}}\n"
+            f"& net use {drive} /delete /y 2>$null | Out-Null\n"
+            f"& net use {drive} '{unc}' /persistent:no 2>$null | Out-Null\n",
+            encoding="utf-8")
+        startup = Path(os.environ["APPDATA"]) / ("Microsoft/Windows/Start Menu/"
+                                                 "Programs/Startup")
+        startup.mkdir(parents=True, exist_ok=True)
+        vbs = startup / "GFM Remap NAS.vbs"        # .vbs runs the ps1 hidden
+        vbs.write_text(
+            'CreateObject("WScript.Shell").Run '
+            f'"powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy '
+            f'Bypass -File ""{ps1}""", 0, False\n', encoding="utf-8")
+
+        # 3) Point GFM at it.
+        self.cfg["local_payloads_dir"] = drive + "\\"
+        self.local_payloads = Path(drive + "\\")
+        store.save_config(self.cfg)
+        self.ui.msg("", "dim")
+        self.ui.msg(f"✅ {drive} -> {unc} mapped, and it'll reconnect on every "
+                    "logon.", "success")
+        self.ui.msg(f"   (reconnect script: {ps1})", "dim")
+        self.ui.msg(f"GFM now reads staged games from {drive}\\_games.", "dim")
+
     def cmd_stage_runner(self):
         """Copy a compatibilitytools.d runner (e.g. GE-Proton) to the NAS
         _runners/ so install_runner can side-load it after a reimage."""
@@ -2681,13 +2749,14 @@ class App:
                         "success")
 
     def cmd_setup_nas(self):
-        """Install a systemd automount for the NAS payload share and point
-        GFM at it — all from inside the tool. Deck/Linux only."""
+        """Connect the NAS payload share and point GFM at it. On the Deck that's
+        a systemd automount; on Windows a persistent mapped drive that reconnects
+        at logon (via a Startup script, so a slow-boot network can't leave it
+        stuck 'Unavailable')."""
         import subprocess
         import tempfile
         if os.name == "nt":
-            self.ui.msg("NAS mount setup is Deck/Linux only.", "warn")
-            return
+            return self._setup_nas_windows()
         self.ui.header("🔌 CONNECT NAS PAYLOADS")
         self.ui.msg("Sets up an on-demand SMB automount that survives reboots "
                     "and won't hang boot when the NAS is offline.", "dim")

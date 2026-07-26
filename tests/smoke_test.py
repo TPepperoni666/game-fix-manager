@@ -1921,13 +1921,23 @@ def main():
         (rsrc / "proton").write_text("x")
         with _tf.open(gnas / "_runners" / "GE-Test.tar.gz", "w:gz") as t:
             t.add(rsrc, arcname="GE-Test")
-        check("ensure_installed side-loads a staged runner",
-              _ir.ensure_installed(gsteam, gnas, "GE-Test", log=lambda m: None)
-              and (gsteam / "compatibilitytools.d" / "GE-Test" / "proton").is_file())
-        check("ensure_installed is idempotent when already present",
-              _ir.ensure_installed(gsteam, gnas, "GE-Test", log=lambda m: None))
-        check("ensure_installed returns False (non-fatal) when not staged",
-              _ir.ensure_installed(gsteam, gnas, "Nope", log=lambda m: None) is False)
+        import os as _os
+        if _os.name == "nt":
+            # On Windows there is no Proton — the installer is a clean no-op.
+            check("ensure_installed no-ops on Windows (native, no runner)",
+                  _ir.ensure_installed(gsteam, gnas, "GE-Test",
+                                       log=lambda m: None) is True
+                  and not (gsteam / "compatibilitytools.d" / "GE-Test").exists())
+        else:
+            check("ensure_installed side-loads a staged runner",
+                  _ir.ensure_installed(gsteam, gnas, "GE-Test", log=lambda m: None)
+                  and (gsteam / "compatibilitytools.d" / "GE-Test"
+                       / "proton").is_file())
+            check("ensure_installed is idempotent when already present",
+                  _ir.ensure_installed(gsteam, gnas, "GE-Test", log=lambda m: None))
+            check("ensure_installed returns False (non-fatal) when not staged",
+                  _ir.ensure_installed(gsteam, gnas, "Nope",
+                                       log=lambda m: None) is False)
         gen = _i.getsource(gfm_mod.App._make_generic_shortcut)
         check("generic deploy side-loads a missing runner (not Valve builtins)",
               "ensure_installed" in gen and 'startswith("proton_")' in gen)
@@ -2096,6 +2106,30 @@ def main():
         rp3 = _i.getsource(gfm_mod.App._repoint_after_move)
         check("move best-guesses the exe when it isn't recorded",
               "find_exes(new_dir)" in rp3)
+
+        # --- Windows/HTPC support (shared core, platform seams) --------
+        from core import detect as _det
+        check("Steam detection has a Windows path",
+              hasattr(_det, "_find_steam_root_windows"))
+        from ui import multiselect as _msw
+        check("arrow picker has a Windows key reader",
+              hasattr(_msw, "_read_key_windows")
+              and hasattr(_msw, "_enable_windows_ansi"))
+        check("arrow picker no longer hard-blocks Windows",
+              "no interactive Windows console"
+              in _i.getsource(_msw.multiselect_arrows))
+        check("Windows NAS connect exists (map + logon reconnect)",
+              hasattr(gfm_mod.App, "_setup_nas_windows"))
+        gwin = _i.getsource(gfm_mod.App._make_generic_shortcut)
+        check("Windows deploy makes a native shortcut (no Proton compat tool)",
+              'os.name == "nt"' in gwin
+              and "run NATIVELY" in gwin and "if runner:" in gwin)
+        from core.steps import steam_shortcut as _ss
+        check("recipe shortcut skips the Proton compat tool on Windows",
+              'os.name != "nt"' in _i.getsource(_ss.SteamShortcut.apply))
+        check("install_runner no-ops on Windows",
+              _ir.ensure_installed(None, None, "anything") is True
+              if _os.name == "nt" else True)
 
         print(f"\nAll {PASS} checks passed.")
     finally:

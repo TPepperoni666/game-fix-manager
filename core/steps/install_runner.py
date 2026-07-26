@@ -57,6 +57,8 @@ def ensure_installed(steam_root, local_payloads, name: str,
     (already there or installed now), False if it couldn't be (nothing staged /
     mount down). Never raises for a missing runner — callers decide whether
     that's fatal. Raises only when there's no Steam root at all."""
+    if os.name == "nt":
+        return True                     # Windows runs natively — no Proton runner
     if steam_root is None:
         raise StepError("Steam root not found — cannot install a runner")
     dest = steam_root / "compatibilitytools.d" / name

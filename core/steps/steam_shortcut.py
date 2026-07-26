@@ -23,6 +23,7 @@ close, exactly like launch_options / proton_version.
 from __future__ import annotations
 
 import json
+import os
 
 from .. import shortcutsvdf
 from ..engine import APPLIED, NOT_APPLIED, Ctx, StepError, register_step
@@ -81,7 +82,9 @@ class SteamShortcut:
             "exe": exe, "start_dir": start,
             "launch_options": self.launch_options, "appid": appid,
         })
-        if self.proton and appid is not None:
+        # Windows runs the game natively — forcing a Linux Proton runner would
+        # break it, so the compat mapping is Deck/Linux-only.
+        if self.proton and appid is not None and os.name != "nt":
             ctx.deferred_vdf_writes.append({
                 "kind": "compat", "game": ctx.recipe.name,
                 "appid": appid, "tool": self.proton, "priority": "250",
