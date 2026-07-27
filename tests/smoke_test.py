@@ -2227,15 +2227,23 @@ def main():
         check("NAS setup clears a stale mount before re-mounting",
               "umount" in nsrc)
         check("NAS setup survives a mount point it can't stat",
-              "isn't readable" in nsrc and "except OSError as e" in nsrc)
+              "except PermissionError" in nsrc and "except OSError as e" in nsrc)
         check("NAS setup still fails loudly if the path can't be created",
               "Can't create the mount point" in nsrc)
         # Path.exists() has the SAME trap as is_dir() — it re-raises EACCES on
         # a dead mount. Guarding is_dir but not exists just moved the crash one
         # line down, which is exactly what happened.
-        check("NAS setup uses exists_safe, never bare Path.exists()",
-              "exists_safe(mount_point)" in nsrc
-              and "Path(mount_point).exists()" not in nsrc)
+        check("NAS setup never uses a bare Path.exists() on the mount point",
+              "Path(mount_point).exists()" not in nsrc)
+        # A stale mount fails stat() with EACCES, so it reads as "not there" —
+        # gating the cleanup on existence skipped the very case needing it.
+        check("NAS setup tries umount whenever the point isn't a readable dir",
+              "if not store.is_dir_safe(mount_point):" in nsrc
+              and "and store.exists_safe(mount_point)" not in nsrc)
+        check("NAS setup uses sudo -n so it can't hang on a password prompt",
+              '"sudo", "-n", "umount"' in nsrc)
+        check("NAS setup continues past an unreadable mount point",
+              "wedged mount" in nsrc)
         _real_stat = _os.stat
 
         def _deadstat(path, *a, **k):

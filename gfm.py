@@ -2813,10 +2813,15 @@ class App:
         # STALE, even stat()ing it fails. Clear it first (lazy unmount detaches
         # a hung mount without waiting on the dead server), because re-running
         # this setup over a broken mount is exactly when you need it most.
-        if not store.is_dir_safe(mount_point) and store.exists_safe(mount_point):
-            self.ui.msg(f"Clearing a stale mount at {mount_point}…", "warn")
-            for cmd in (["sudo", "umount", "-l", mount_point],
-                        ["sudo", "umount", "-f", mount_point]):
+        # If the mount point isn't a READABLE directory, something may be
+        # wedged on it. Don't test existence to decide — a stale mount fails
+        # stat() with EACCES, so it reads as "not there" and we'd skip the very
+        # cleanup it needs. Just try to unmount; if nothing is mounted, umount
+        # fails harmlessly. -n so sudo never sits waiting for a password.
+        if not store.is_dir_safe(mount_point):
+            self.ui.msg(f"Clearing anything stale at {mount_point}…", "warn")
+            for cmd in (["sudo", "-n", "umount", "-l", mount_point],
+                        ["sudo", "-n", "umount", "-f", mount_point]):
                 try:
                     subprocess.run(cmd, capture_output=True, timeout=15)
                 except (OSError, subprocess.SubprocessError):
@@ -2824,19 +2829,22 @@ class App:
                 if store.is_dir_safe(mount_point):
                     break
         try:
-            Path(mount_point).mkdir(parents=True, exist_ok=True)
+            os.makedirs(mount_point, exist_ok=True)
         except FileExistsError:
             pass                    # already there — that's all we needed
+        except PermissionError:
+            # Two cases, both survivable: a dead mount sits here and can't be
+            # stat'd, or the parent isn't writable. Mounting over it is what
+            # resolves the first, and the mount step reports the second far
+            # better than we can guess here — so carry on either way.
+            self.ui.msg(f"Can't read {mount_point} (likely a wedged mount) — "
+                        "continuing; the mount should replace it.", "warn")
+            self.ui.msg(f"If this keeps failing, clear it by hand:  "
+                        f"sudo umount -l {mount_point}", "dim")
         except OSError as e:
-            # mkdir(exist_ok=True) stat()s an existing path to confirm it's a
-            # directory, and that stat raises EACCES on a dead CIFS mount. The
-            # path existing at all is enough; we're about to mount onto it.
-            if not store.exists_safe(mount_point):
-                self.ui.msg(f"Can't create the mount point {mount_point}: {e}",
-                            "error")
-                return
-            self.ui.msg(f"(mount point exists but isn't readable — {e}; "
-                        "continuing, the mount should fix it)", "dim")
+            self.ui.msg(f"Can't create the mount point {mount_point}: {e}",
+                        "error")
+            return
         uid, gid = os.getuid(), os.getgid()
 
         def esc(suffix):
