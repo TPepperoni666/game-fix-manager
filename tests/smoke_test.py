@@ -2220,6 +2220,16 @@ def main():
         msrc3 = _i.getsource(gfm_mod.main)
         check("a crash constructing App is logged, not silent",
               "STARTUP FAILED" in msrc3)
+        # 🔌 Connect NAS must survive a stale mount already on the mount point:
+        # mkdir(exist_ok=True) stat()s an existing path, and that stat raises
+        # EACCES on a dead CIFS mount — which crashed the whole setup.
+        nsrc = _i.getsource(gfm_mod.App.cmd_setup_nas)
+        check("NAS setup clears a stale mount before re-mounting",
+              "umount" in nsrc)
+        check("NAS setup survives a mount point it can't stat",
+              "isn't readable" in nsrc and "except OSError as e" in nsrc)
+        check("NAS setup still fails loudly if the path can't be created",
+              "Can't create the mount point" in nsrc)
 
         print(f"\nAll {PASS} checks passed.")
     finally:

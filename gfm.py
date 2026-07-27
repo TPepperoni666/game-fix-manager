@@ -2809,7 +2809,34 @@ class App:
         else:
             cred_opt = "guest"
 
-        Path(mount_point).mkdir(parents=True, exist_ok=True)
+        # A previous mount may still be sitting on this path — and if it's
+        # STALE, even stat()ing it fails. Clear it first (lazy unmount detaches
+        # a hung mount without waiting on the dead server), because re-running
+        # this setup over a broken mount is exactly when you need it most.
+        if store.is_dir_safe(mount_point) is False and Path(mount_point).exists():
+            self.ui.msg(f"Clearing a stale mount at {mount_point}…", "warn")
+            for cmd in (["sudo", "umount", "-l", mount_point],
+                        ["sudo", "umount", "-f", mount_point]):
+                try:
+                    subprocess.run(cmd, capture_output=True, timeout=15)
+                except (OSError, subprocess.SubprocessError):
+                    pass
+                if store.is_dir_safe(mount_point):
+                    break
+        try:
+            Path(mount_point).mkdir(parents=True, exist_ok=True)
+        except FileExistsError:
+            pass                    # already there — that's all we needed
+        except OSError as e:
+            # mkdir(exist_ok=True) stat()s an existing path to confirm it's a
+            # directory, and that stat raises EACCES on a dead CIFS mount. The
+            # path existing at all is enough; we're about to mount onto it.
+            if not Path(mount_point).exists():
+                self.ui.msg(f"Can't create the mount point {mount_point}: {e}",
+                            "error")
+                return
+            self.ui.msg(f"(mount point exists but isn't readable — {e}; "
+                        "continuing, the mount should fix it)", "dim")
         uid, gid = os.getuid(), os.getgid()
 
         def esc(suffix):
