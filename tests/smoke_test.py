@@ -2146,6 +2146,30 @@ def main():
                   "Press Enter to continue"
                   in _i.getsource(getattr(gfm_mod.App, name)))
 
+        # --- Steam close/restart must not be Linux-only ----------------
+        # `steam -shutdown` / `killall` don't exist on Windows: this crashed
+        # mid-deploy with WinError 2 and threw away 4 queued shortcuts after
+        # 50 minutes of copying.
+        from core import steamvdf as _sv3
+        cs3 = _i.getsource(_sv3.close_steam)
+        check("close_steam resolves the Steam launcher instead of bare 'steam'",
+              "_steam_exe()" in cs3 and '"steam", "-shutdown"' not in cs3)
+        check("close_steam uses taskkill on Windows, killall elsewhere",
+              "taskkill" in cs3 and "killall" in cs3)
+        ss3 = _i.getsource(_sv3.start_steam)
+        check("start_steam resolves the launcher and survives failure",
+              "_steam_exe()" in ss3 and "except OSError" in ss3)
+        se3 = _i.getsource(_sv3._steam_exe)
+        check("_steam_exe never raises (returns None on any failure)",
+              "except Exception" in se3 and "return None" in se3)
+        if _os.name == "nt":
+            check("_steam_exe finds the real steam.exe on Windows",
+                  (lambda e: bool(e) and Path(e).is_file())(_sv3._steam_exe()))
+        # A failure closing Steam must not discard the queued writes.
+        fv = _i.getsource(gfm_mod.App.flush_vdf_writes)
+        check("flush writes shortcuts even if closing Steam fails",
+              "couldn't close Steam" in fv and "writing anyway" in fv)
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

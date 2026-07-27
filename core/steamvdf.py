@@ -285,18 +285,55 @@ def steam_running() -> bool:
     return subprocess.run(["pgrep", "-x", "steam"], capture_output=True).returncode == 0
 
 
+def _steam_exe() -> str | None:
+    """Path to the Steam launcher. On Linux it's on PATH as `steam`; on Windows
+    there's no PATH entry, so resolve the install and use steam.exe — calling a
+    bare `steam` there raised WinError 2 and took the whole run down mid-deploy."""
+    try:
+        if os.name != "nt":
+            return shutil.which("steam") or "steam"
+        from . import detect
+        root = detect.find_steam_root()
+        if root is not None:
+            exe = root / "steam.exe"
+            if exe.is_file():
+                return str(exe)
+        return shutil.which("steam.exe")
+    except Exception:
+        return None      # never let locating Steam take a run down
+
+
 def close_steam(log) -> None:
     log("  🔴 Closing Steam (controller will drop out — this is normal)...")
-    subprocess.run(["steam", "-shutdown"], capture_output=True)
+    exe = _steam_exe()
+    if exe:
+        # -shutdown asks Steam to exit cleanly so it FLUSHES its config; killing
+        # it outright can lose the very shortcuts we're about to write.
+        subprocess.run([exe, "-shutdown"], capture_output=True)
     for _ in range(20):
         if not steam_running():
             return
         time.sleep(1)
-    subprocess.run(["killall", "-TERM", "steam"], capture_output=True)
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/IM", "steam.exe", "/F"],
+                       capture_output=True)
+    else:
+        subprocess.run(["killall", "-TERM", "steam"], capture_output=True)
     time.sleep(3)
 
 
 def start_steam(log) -> None:
     log("  🟢 Restarting Steam...")
-    subprocess.Popen(["steam"], stdout=subprocess.DEVNULL,
-                     stderr=subprocess.DEVNULL, start_new_session=True)
+    exe = _steam_exe()
+    if not exe:
+        log("  ! couldn't find Steam to restart — start it yourself.")
+        return
+    try:
+        if os.name == "nt":
+            subprocess.Popen([exe], stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        else:
+            subprocess.Popen([exe], stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, start_new_session=True)
+    except OSError as e:
+        log(f"  ! couldn't restart Steam ({e}) — start it yourself.")

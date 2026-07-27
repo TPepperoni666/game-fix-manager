@@ -158,7 +158,17 @@ class App:
                     "(controller drops out until it's back). Do it now?"):
                 self.ui.msg("Skipped — re-run apply later to write them.", "warn")
                 return
-            steamvdf.close_steam(lambda m: self.ui.msg(m, "warn"))
+            try:
+                steamvdf.close_steam(lambda m: self.ui.msg(m, "warn"))
+            except Exception as e:
+                # Never let closing Steam lose the queued writes — a crash here
+                # once threw away 4 shortcuts after 50 minutes of copying.
+                # Steam being open only risks it overwriting shortcuts.vdf on
+                # exit, so warn and press on rather than abandoning the work.
+                self.ui.msg(f"  ! couldn't close Steam ({e}) — writing anyway. "
+                            "If a shortcut doesn't appear, close Steam and "
+                            "re-run.", "warn")
+                was_running = False      # don't try to restart what we didn't stop
         total = 0
         for w in writes:
             kind = w.get("kind")
