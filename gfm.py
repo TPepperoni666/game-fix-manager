@@ -2926,6 +2926,27 @@ class App:
                     continue
                 for line in out.splitlines()[-15:]:
                     self.ui.msg(f"  {line}", "dim")
+                # Translate the common CIFS codes — they're the whole answer,
+                # but only if you know what they mean.
+                if "mount error(13)" in out or "error(13)" in out:
+                    self.ui.msg("  ⇒ error(13) = the NAS REJECTED the login. "
+                                "mount.cifs works; it's the credentials.",
+                                "error")
+                    self.ui.msg(f"     You used: "
+                                f"{'guest (no username)' if not user else user}. "
+                                "Re-run this and try the other one — whichever "
+                                "your working PC uses.", "warn")
+                    self.ui.msg("     If the share allows guest, leave the "
+                                "username BLANK. If it needs a real account, "
+                                "give that user access to the share on the NAS.",
+                                "dim")
+                elif "error(2)" in out:
+                    self.ui.msg("  ⇒ error(2) = the SHARE NAME wasn't found on "
+                                "the server. Check the exact name/spelling.",
+                                "error")
+                elif "error(112)" in out or "host is down" in out.lower():
+                    self.ui.msg("  ⇒ the NAS didn't answer — check it's on and "
+                                "reachable.", "error")
                 break
         elif not entries:
             self.ui.msg("Mounted, but the share looks EMPTY. Have you staged "
