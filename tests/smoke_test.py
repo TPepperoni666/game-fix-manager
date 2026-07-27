@@ -2190,6 +2190,37 @@ def main():
         check("confirm highlights No first (stray Enter can't confirm)",
               '["No", "Yes"]' in cfsrc)
 
+        # --- a dead NAS mount must not kill startup --------------------
+        # pathlib's is_dir() only swallows a few errnos; a STALE/HUNG network
+        # mount raises (ESTALE/EHOSTDOWN/EIO). Every startup path here touches
+        # a NAS or removable mount, and App.__init__ ran before any handler —
+        # so the app died with nothing but "====" in the log.
+        import pathlib as _pl
+        _real_isdir = _pl.Path.is_dir
+
+        def _hung(self):
+            if "hungmount" in str(self):
+                raise OSError(116, "Stale file handle")
+            return _real_isdir(self)
+        _pl.Path.is_dir = _hung
+        try:
+            check("is_dir_safe returns False on a stale mount (never raises)",
+                  _sto.is_dir_safe("/mnt/hungmount") is False)
+            check("resolve_local_payloads survives a dead NAS mount",
+                  _sto.resolve_local_payloads(
+                      None, {"local_payloads_dir": "/mnt/hungmount"}) is None)
+            check("resolve_store survives a dead store mount",
+                  _sto.resolve_store(
+                      None, {"store_root": "/mnt/hungmount"}) is not None)
+            check("sd_card_roots survives a dead mount",
+                  isinstance(_sto.sd_card_roots(), list))
+        finally:
+            _pl.Path.is_dir = _real_isdir
+        # And a startup crash must now be logged, not silent.
+        msrc3 = _i.getsource(gfm_mod.main)
+        check("a crash constructing App is logged, not silent",
+              "STARTUP FAILED" in msrc3)
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

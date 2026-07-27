@@ -3433,7 +3433,24 @@ def main():
                         help="reclaim: no prompts, for the weekly timer")
     args = parser.parse_args()
 
-    app = App(args)
+    try:
+        app = App(args)
+    except Exception:
+        # A crash while CONSTRUCTING App used to be invisible: it happens before
+        # the try/except below, so the traceback went to stderr only — and in
+        # Game Mode / a Steam shortcut there's no stderr to read, leaving just a
+        # bare "====" in the log. Write it where it can actually be found.
+        tb = traceback.format_exc()
+        try:
+            from core import sdmap as _sm
+            with open(_sm.log_path(), "a", encoding="utf-8",
+                      errors="replace") as f:
+                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} "
+                        f"STARTUP FAILED:\n{tb}\n")
+        except Exception:
+            pass
+        print("Game Fix Manager failed to start:\n" + tb, file=sys.stderr)
+        sys.exit(1)
     # Persist an explicitly-passed local-payloads dir so it sticks
     if getattr(args, "local_payloads", None) and app.local_payloads:
         app.cfg["local_payloads_dir"] = str(app.local_payloads)

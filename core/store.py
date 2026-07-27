@@ -43,15 +43,32 @@ def save_config(cfg: dict) -> None:
     CONFIG_FILE.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
 
 
+def is_dir_safe(p) -> bool:
+    """Path.is_dir() that can't take the app down.
+
+    pathlib only swallows a few errno values (ENOENT, ENOTDIR, ELOOP…). A
+    STALE or HUNG network mount raises instead — ESTALE, EHOSTDOWN, EIO — and
+    every one of these paths is a NAS/SMB mount or removable media. An
+    unhealthy mount must degrade to "not there", never crash startup."""
+    try:
+        return Path(p).is_dir()
+    except (OSError, ValueError):
+        return False
+
+
 def sd_card_roots() -> list[Path]:
     """Mounted removable media roots (candidates for a mirror destination)."""
     roots = []
     for media in (Path("/run/media") / os.environ.get("USER", "deck"),
                   Path("/run/media/deck")):
-        if not media.is_dir():
+        if not is_dir_safe(media):
             continue
-        for card in media.iterdir():
-            if card.is_dir() and card not in roots:
+        try:
+            cards = list(media.iterdir())
+        except OSError:
+            continue
+        for card in cards:
+            if is_dir_safe(card) and card not in roots:
                 roots.append(card)
     return roots
 
@@ -163,21 +180,25 @@ def resolve_local_payloads(cli_arg: str | None, cfg: dict) -> Path | None:
     Returns None if nothing is configured/present — overrides just don't fire."""
     for cand in (cli_arg, os.environ.get("GFM_LOCAL_PAYLOADS"),
                  cfg.get("local_payloads_dir")):
-        if cand and Path(cand).is_dir():
+        # is_dir_safe: this is a NAS mount — a stale/hung one raises OSError
+        # from is_dir() and used to kill startup before anything logged it.
+        if cand and is_dir_safe(cand):
             return Path(cand)
     for sd in sd_card_roots():
         cand = sd / "steamos_restore" / "game_fixes" / "local_payloads"
-        if cand.is_dir():
+        if is_dir_safe(cand):
             return cand
     return None
 
 
 def resolve_store(cli_arg: str | None, cfg: dict) -> Path | None:
     for candidate in (cli_arg, os.environ.get("GFM_STORE"), cfg.get("store_root")):
-        if candidate and Path(candidate).is_dir():
+        # is_dir_safe: a remembered store_root can live on the SD mirror, so an
+        # ejected card or dead mount must not raise out of startup.
+        if candidate and is_dir_safe(candidate):
             return Path(candidate)
     repo_store = APP_DIR / "store"
-    if (repo_store / "games").is_dir():
+    if is_dir_safe(repo_store / "games"):
         return repo_store
     cards = _sd_card_stores()
     return cards[0] if cards else None
