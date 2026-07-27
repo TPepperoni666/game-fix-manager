@@ -2234,6 +2234,8 @@ class App:
             choice = self.ui.choose("Setup & maintenance:", [
                 "🔌 Connect NAS Payloads (SMB automount)",
                 "🩺 Test NAS Mount (find options that work)",
+                "🗄  Connect NAS over NFS (SMB alternative)",
+                "🔑 Enable Remote Access (SSH)",
                 "📂 Game Storage Locations (SD / internal SSD)",
                 "🧰 Stage GE-Proton Runner to NAS",
                 "🧹 Reclaim SD Space (free removed games now)",
@@ -2247,6 +2249,10 @@ class App:
                 self.cmd_setup_nas()
             elif choice.startswith("🩺"):
                 self.cmd_test_nas_mount()
+            elif choice.startswith("🗄"):
+                self.cmd_connect_nfs()
+            elif choice.startswith("🔑"):
+                self.cmd_enable_remote()
             elif choice.startswith("📂"):
                 self.cmd_games_locations()
                 continue          # it has its own loop + pauses
@@ -2310,11 +2316,132 @@ class App:
                 return
             self.ui.input("Press Enter to continue")
 
+    def cmd_enable_remote(self, args=None):
+        """Turn on SSH and authorise a public key, so another machine (or
+        someone helping you) can drive this device without a keyboard on it.
+
+        Beats doing it by hand: SteamOS ships sshd disabled, the deck user
+        usually has no password, and the key file's permissions have to be
+        exact or sshd silently ignores it."""
+        self.ui.header("🔑 ENABLE REMOTE ACCESS (SSH)")
+        if os.name == "nt":
+            self.ui.msg("On Windows use the built-in OpenSSH server instead.",
+                        "warn")
+            return
+        ips = []
+        try:
+            out = subprocess.run(["ip", "-4", "-o", "addr"], capture_output=True,
+                                 text=True, timeout=10).stdout
+            ips = [w.split("/")[0] for ln in out.splitlines()
+                   for w in ln.split() if w.count(".") == 3
+                   and not w.startswith("127.")]
+        except (OSError, subprocess.SubprocessError):
+            pass
+        if ips:
+            self.ui.msg(f"This device's address: {', '.join(sorted(set(ips)))}",
+                        "info")
+        self.ui.msg("Paste the PUBLIC key of the machine that should connect "
+                    "(the ssh-ed25519/ssh-rsa one-liner). Blank to skip and "
+                    "just start the SSH service.", "dim")
+        key = self.ui.input("Public key")
+        if key and not key.strip().startswith(("ssh-", "ecdsa-")):
+            self.ui.msg("That doesn't look like a public key — skipping it.",
+                        "warn")
+            key = ""
+        try:
+            subprocess.run(["sudo", "systemctl", "enable", "--now", "sshd"],
+                           check=True, capture_output=True)
+            self.ui.msg("SSH service enabled and started.", "success")
+        except (OSError, subprocess.SubprocessError) as e:
+            self.ui.msg(f"Couldn't start sshd: {e}", "error")
+            self.ui.msg("If sudo asked for a password you don't have set, run "
+                        "`passwd` in a terminal first.", "warn")
+            return
+        if key:
+            ak = Path.home() / ".ssh" / "authorized_keys"
+            try:
+                ak.parent.mkdir(parents=True, exist_ok=True)
+                existing = ak.read_text(encoding="utf-8") if ak.is_file() else ""
+                if key.strip() not in existing:
+                    with open(ak, "a", encoding="utf-8") as f:
+                        f.write(key.strip() + "\n")
+                # sshd IGNORES the file (silently) if these are too permissive.
+                os.chmod(ak.parent, 0o700)
+                os.chmod(ak, 0o600)
+                self.ui.msg("Key authorised. That machine can now connect "
+                            "without a password.", "success")
+            except OSError as e:
+                self.ui.msg(f"Couldn't write authorized_keys: {e}", "error")
+        self.ui.msg("", "dim")
+        if ips:
+            self.ui.msg(f"Connect with:  ssh {os.environ.get('USER', 'deck')}"
+                        f"@{sorted(set(ips))[0]}", "info")
+
+    def cmd_connect_nfs(self, args=None):
+        """Mount the NAS over NFS instead of SMB.
+
+        NFS sidesteps the whole class of problem SMB has on Linux — no guest
+        auth, no dialect negotiation, no credentials file. TrueNAS serves both,
+        and for a Linux client NFS is usually the path of least resistance."""
+        self.ui.header("🗄  CONNECT NAS OVER NFS")
+        if os.name == "nt":
+            self.ui.msg("NFS setup here is Linux-only.", "warn")
+            return
+        self.ui.msg("NFS avoids SMB's guest-auth quirks on Linux. You need an "
+                    "NFS share for this dataset on TrueNAS first (Shares → "
+                    "Unix (NFS) Shares), with this device allowed.", "dim")
+        self.ui.msg("", "dim")
+        host = self.ui.input("NAS host / IP", "192.168.1.33")
+        export = self.ui.input("NFS export path (from TrueNAS)",
+                               "/mnt/HDDs/GameFixes")
+        mount_point = self.ui.input("Mount point",
+                                    str(Path.home() / "mnt" / "game-fixes"))
+        if not host or not export or not mount_point:
+            self.ui.msg("Cancelled.", "warn")
+            return
+        if not shutil.which("mount.nfs") and not Path("/sbin/mount.nfs").exists():
+            self.ui.msg("mount.nfs is missing — install nfs-utils first "
+                        "(SteamOS: sudo steamos-readonly disable && "
+                        "sudo pacman -S nfs-utils).", "warn")
+        # Prove it mounts before installing anything permanent.
+        probe = Path("/tmp/gfm-nfs-test")
+        try:
+            probe.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
+        self.ui.msg("Testing the NFS mount…", "dim")
+        subprocess.run(["sudo", "-n", "umount", "-l", str(probe)],
+                       capture_output=True)
+        try:
+            r = subprocess.run(
+                ["sudo", "-n", "mount", "-t", "nfs", f"{host}:{export}",
+                 str(probe)], capture_output=True, text=True, timeout=25)
+        except (OSError, subprocess.SubprocessError) as e:
+            self.ui.msg(f"Couldn't run mount: {e}", "error")
+            return
+        if r.returncode != 0:
+            err = (r.stderr or r.stdout or "").strip()
+            self.ui.msg(f"NFS mount failed: {err}", "error")
+            self.ui.msg("Check the export path is exactly what TrueNAS lists, "
+                        "and that this device's IP is permitted on the share.",
+                        "warn")
+            return
+        try:
+            n = len(list(probe.iterdir()))
+        except OSError:
+            n = -1
+        self.ui.msg(f"✅ NFS mounted ({n} item(s) visible).", "success")
+        subprocess.run(["sudo", "-n", "umount", "-l", str(probe)],
+                       capture_output=True)
+        if self.ui.confirm("Install this as the permanent automount?"):
+            self._install_nas_automount(host, export, mount_point, "",
+                                        fstype="nfs")
+
     def _install_nas_automount(self, host: str, share: str, mount_point: str,
-                               opts: str) -> bool:
+                               opts: str, fstype: str = "cifs") -> bool:
         """Write + enable the systemd mount/automount units for the NAS share
         using an EXPLICIT option string (whatever the tester proved works).
-        Returns True if it installed."""
+        fstype switches between cifs and nfs. Returns True if it installed."""
         import tempfile
         uid, gid = os.getuid(), os.getgid()
 
@@ -2339,13 +2466,21 @@ class App:
                     ["systemd-escape", "-p", f"--suffix={suffix}", mount_point],
                     capture_output=True, text=True, check=True).stdout.strip()
             mount_unit, auto_unit = esc("mount"), esc("automount")
+            if fstype == "nfs":
+                # NFS takes host:/export and needs none of the cifs auth/charset
+                # options — the server maps identity, not the client.
+                what = f"{host}:{share}"
+                options = "_netdev,nofail" + (f",{opts}" if opts else "")
+            else:
+                what = f"//{host}/{share}"
+                options = (f"{opts},uid={uid},gid={gid},rw,iocharset=utf8,"
+                           "_netdev,nofail")
             sudo_write(f"/etc/systemd/system/{mount_unit}",
-                       "[Unit]\nDescription=Game Fixes SMB share (GFM local "
-                       "payloads)\nAfter=network-online.target\n"
+                       f"[Unit]\nDescription=Game Fixes NAS share ({fstype}, "
+                       "GFM local payloads)\nAfter=network-online.target\n"
                        "Wants=network-online.target\n\n[Mount]\n"
-                       f"What=//{host}/{share}\nWhere={mount_point}\nType=cifs\n"
-                       f"Options={opts},uid={uid},gid={gid},rw,"
-                       "iocharset=utf8,_netdev,nofail\nTimeoutSec=20\n")
+                       f"What={what}\nWhere={mount_point}\nType={fstype}\n"
+                       f"Options={options}\nTimeoutSec=20\n")
             sudo_write(f"/etc/systemd/system/{auto_unit}",
                        "[Unit]\nDescription=Automount for Game Fixes SMB "
                        "share\n\n[Automount]\n"
@@ -2456,9 +2591,36 @@ class App:
 
         self.ui.msg("", "dim")
         if winner is None:
+            # mount's "error(13)" is generic; the KERNEL logs the specific
+            # reason (bad password, STATUS_LOGON_FAILURE, dialect refused…).
+            # Put it in gfm.log, which Syncthings to the workstation — so the
+            # real answer travels without another round trip.
+            self.ui.msg("── kernel log (the specific reason) " + "─" * 6, "warn")
+            for cmd in (["dmesg", "-T"], ["sudo", "-n", "dmesg", "-T"],
+                        ["journalctl", "-k", "-n", "200", "--no-pager"]):
+                try:
+                    r = subprocess.run(cmd, capture_output=True, text=True,
+                                       timeout=15)
+                except (OSError, subprocess.SubprocessError):
+                    continue
+                out = r.stdout or ""
+                hits = [ln for ln in out.splitlines()
+                        if any(k in ln.lower()
+                               for k in ("cifs", "smb", "ntlm"))][-20:]
+                if hits:
+                    for ln in hits:
+                        self.ui.msg(f"  {ln}", "dim")
+                    break
+            else:
+                self.ui.msg("  (couldn't read the kernel log — dmesg may need "
+                            "sudo; run `sudo true` then retry)", "dim")
+            self.ui.msg("", "dim")
             self.ui.msg("Nothing worked. Every option set was refused, so the "
                         "problem is on the NAS side, not the mount options.",
                         "error")
+            self.ui.msg("TIP: TrueNAS also serves NFS, which avoids SMB's "
+                        "guest-auth quirks entirely on Linux. 🔌 Connect NAS "
+                        "can use NFS instead.", "info")
             self.ui.msg("On TrueNAS check: the share is ENABLED, its path is "
                         "right, guest access is really on (or the user has "
                         "share + dataset permission), and SMB was restarted.",
@@ -3655,6 +3817,8 @@ COMMANDS = {
     # setup / diagnostics
     "setup-nas": lambda app, a: app.cmd_setup_nas(),
     "test-nas": lambda app, a: app.cmd_test_nas_mount(a),
+    "connect-nfs": lambda app, a: app.cmd_connect_nfs(a),
+    "enable-remote": lambda app, a: app.cmd_enable_remote(a),
     "games-locations": lambda app, a: app.cmd_games_locations(a),
     "move-game": lambda app, a: app.cmd_move_game(a),
     "stage-runner": lambda app, a: app.cmd_stage_runner(),

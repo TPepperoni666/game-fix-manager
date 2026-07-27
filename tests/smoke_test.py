@@ -2267,6 +2267,39 @@ def main():
         stsrc = _i.getsource(gfm_mod.App.menu_settings)
         check("Test NAS Mount is on the Settings menu and dispatched",
               "Test NAS Mount" in stsrc and "cmd_test_nas_mount" in stsrc)
+        # When every SMB option fails, capture the KERNEL's reason — mount's
+        # error(13) is generic, and the log syncs to the workstation.
+        check("tester dumps the kernel log when nothing works",
+              "dmesg" in tsrc and "kernel log" in tsrc)
+        check("tester points at NFS as the SMB-free alternative",
+              "NFS" in tsrc)
+        # NFS + remote access, both in-tool.
+        for c, m in (("connect-nfs", "cmd_connect_nfs"),
+                     ("enable-remote", "cmd_enable_remote")):
+            check(f"CLI exposes '{c}'", c in gfm_mod.COMMANDS)
+            check(f"App.{m} exists", hasattr(gfm_mod.App, m))
+        nfsrc = _i.getsource(gfm_mod.App.cmd_connect_nfs)
+        check("NFS connect TESTS the mount before installing anything",
+              "Testing the NFS mount" in nfsrc
+              and nfsrc.index("Testing the NFS mount")
+              < nfsrc.index("_install_nas_automount"))
+        check("NFS connect warns if mount.nfs is missing",
+              "mount.nfs is missing" in nfsrc)
+        insrc = _i.getsource(gfm_mod.App._install_nas_automount)
+        check("automount installer supports both cifs and nfs",
+              'fstype: str = "cifs"' in insrc and 'if fstype == "nfs"' in insrc)
+        check("nfs units use host:/export, not //host/share",
+              'f"{host}:{share}"' in insrc)
+        rsrc4 = _i.getsource(gfm_mod.App.cmd_enable_remote)
+        check("remote access sets the strict perms sshd requires",
+              "0o700" in rsrc4 and "0o600" in rsrc4)
+        check("remote access validates the pasted key looks like one",
+              'startswith(("ssh-"' in rsrc4)
+        check("remote access shows the address to connect to",
+              "Connect with:" in rsrc4)
+        check("NFS + remote access are on the Settings menu",
+              "Connect NAS over NFS" in stsrc and "Enable Remote Access" in stsrc
+              and "cmd_connect_nfs" in stsrc and "cmd_enable_remote" in stsrc)
         _real_stat = _os.stat
 
         def _deadstat(path, *a, **k):
