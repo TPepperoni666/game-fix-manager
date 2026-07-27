@@ -2230,6 +2230,26 @@ def main():
               "isn't readable" in nsrc and "except OSError as e" in nsrc)
         check("NAS setup still fails loudly if the path can't be created",
               "Can't create the mount point" in nsrc)
+        # Path.exists() has the SAME trap as is_dir() — it re-raises EACCES on
+        # a dead mount. Guarding is_dir but not exists just moved the crash one
+        # line down, which is exactly what happened.
+        check("NAS setup uses exists_safe, never bare Path.exists()",
+              "exists_safe(mount_point)" in nsrc
+              and "Path(mount_point).exists()" not in nsrc)
+        _real_stat = _os.stat
+
+        def _deadstat(path, *a, **k):
+            if "deadmount" in str(path):
+                raise PermissionError(13, "Permission denied")
+            return _real_stat(path, *a, **k)
+        _os.stat = _deadstat
+        try:
+            check("exists_safe survives EACCES on a dead mount",
+                  _sto.exists_safe("/x/deadmount") is False)
+            check("is_dir_safe survives EACCES on a dead mount",
+                  _sto.is_dir_safe("/x/deadmount") is False)
+        finally:
+            _os.stat = _real_stat
 
         print(f"\nAll {PASS} checks passed.")
     finally:

@@ -47,11 +47,23 @@ def is_dir_safe(p) -> bool:
     """Path.is_dir() that can't take the app down.
 
     pathlib only swallows a few errno values (ENOENT, ENOTDIR, ELOOP…). A
-    STALE or HUNG network mount raises instead — ESTALE, EHOSTDOWN, EIO — and
-    every one of these paths is a NAS/SMB mount or removable media. An
-    unhealthy mount must degrade to "not there", never crash startup."""
+    STALE or HUNG network mount raises instead — ESTALE, EHOSTDOWN, EIO,
+    EACCES — and every one of these paths is a NAS/SMB mount or removable
+    media. An unhealthy mount must degrade to "not there", never crash."""
     try:
         return Path(p).is_dir()
+    except (OSError, ValueError):
+        return False
+
+
+def exists_safe(p) -> bool:
+    """Path.exists() that can't take the app down — same trap as is_dir_safe.
+
+    NOTE os.path.exists() already swallows every OSError, unlike
+    pathlib.Path.exists() which re-raises anything outside its small ignore
+    list. Use this for anything that might be a dead mount."""
+    try:
+        return os.path.exists(p)
     except (OSError, ValueError):
         return False
 

@@ -2813,7 +2813,7 @@ class App:
         # STALE, even stat()ing it fails. Clear it first (lazy unmount detaches
         # a hung mount without waiting on the dead server), because re-running
         # this setup over a broken mount is exactly when you need it most.
-        if store.is_dir_safe(mount_point) is False and Path(mount_point).exists():
+        if not store.is_dir_safe(mount_point) and store.exists_safe(mount_point):
             self.ui.msg(f"Clearing a stale mount at {mount_point}…", "warn")
             for cmd in (["sudo", "umount", "-l", mount_point],
                         ["sudo", "umount", "-f", mount_point]):
@@ -2831,7 +2831,7 @@ class App:
             # mkdir(exist_ok=True) stat()s an existing path to confirm it's a
             # directory, and that stat raises EACCES on a dead CIFS mount. The
             # path existing at all is enough; we're about to mount onto it.
-            if not Path(mount_point).exists():
+            if not store.exists_safe(mount_point):
                 self.ui.msg(f"Can't create the mount point {mount_point}: {e}",
                             "error")
                 return
