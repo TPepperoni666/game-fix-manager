@@ -2170,6 +2170,26 @@ def main():
         check("flush writes shortcuts even if closing Steam fails",
               "couldn't close Steam" in fv and "writing anyway" in fv)
 
+        # --- everything is controller-drivable (arrows/Enter/Esc only) --
+        # Single-select used to fall back to typing a number, so the main,
+        # Settings and Advanced menus needed a keyboard — unusable with a pad.
+        msrc2 = _i.getsource(_ms.multiselect_arrows)
+        check("picker has a single-select mode", "multi: bool = True" in msrc2)
+        check("single-select: Enter picks the highlighted row",
+              "return [options[cursor]]" in msrc2)
+        check("single-select draws no checkboxes and ignores toggle keys",
+              "no checkboxes" in msrc2 and "nothing to toggle in a menu" in msrc2)
+        csrc = _i.getsource(_tp.PlainUI.choose)
+        check("plain UI uses the arrow picker for BOTH select modes",
+              "multi=multi" in csrc)
+        check("numbered input remains only as the non-TTY fallback",
+              "NotImplementedError" in csrc)
+        cfsrc = _i.getsource(_tp.PlainUI.confirm)
+        check("confirms are arrow-drivable too (no typing y/n)",
+              "multiselect_arrows" in cfsrc)
+        check("confirm highlights No first (stray Enter can't confirm)",
+              '["No", "Yes"]' in cfsrc)
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

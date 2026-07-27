@@ -55,12 +55,16 @@ class PlainUI(UI):
         _print(f"{_STYLES.get(style, '')}{text}")
 
     def choose(self, header: str, options: list[str], multi: bool = False) -> list[str]:
-        if multi:
-            try:
-                from .multiselect import multiselect_arrows
-                return multiselect_arrows(header, options)
-            except NotImplementedError:
-                pass  # fall through to numbered input on Windows / non-TTY
+        # Arrow picker for BOTH modes. Single-select used to fall through to
+        # numbered input, which meant the main/Settings/Advanced menus needed a
+        # keyboard — useless on a couch with a controller, since Steam Input
+        # maps a pad to arrows/Enter/Esc but can't type digits without the
+        # on-screen keyboard. The numbered path stays as the non-TTY fallback.
+        try:
+            from .multiselect import multiselect_arrows
+            return multiselect_arrows(header, options, multi=multi)
+        except NotImplementedError:
+            pass  # not a TTY (piped/SSH capture) — use numbered input
         _print(f"\n{header}")
         for i, opt in enumerate(options, 1):
             _print(f"  {i}) {opt}")   # _print, not print: options carry emoji
@@ -79,6 +83,16 @@ class PlainUI(UI):
 
     def confirm(self, question: str, danger: bool = False) -> bool:
         tag = "[DANGER] " if danger else ""
+        # Arrow-pick Yes/No so a controller can answer — typing y/N needs a
+        # keyboard. "No" is listed FIRST so the highlight starts there and a
+        # stray Enter can't confirm a destructive action.
+        try:
+            from .multiselect import multiselect_arrows
+            picked = multiselect_arrows(f"{tag}{question}",
+                                        ["No", "Yes"], multi=False)
+            return bool(picked) and picked[0] == "Yes"
+        except NotImplementedError:
+            pass  # not a TTY — fall back to typed input
         _print(f"{tag}{question}")   # questions can carry emoji; prompt can't
         return input("[y/N]: ").strip().lower() in ("y", "yes")
 

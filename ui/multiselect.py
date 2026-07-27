@@ -131,16 +131,23 @@ def _read_key() -> str:
     return first.decode("utf-8", errors="ignore")
 
 
-def multiselect_arrows(header: str, options: list[str]) -> list[str]:
-    """Interactive multi-select with arrow-key toggling and a scrolling
-    viewport, so long lists (Deploy, Apply, Back Up Prefixes) and long labels
-    stay readable on the Deck instead of overflowing.
+def multiselect_arrows(header: str, options: list[str],
+                       multi: bool = True) -> list[str]:
+    """Interactive arrow-key picker with a scrolling viewport, so long lists
+    (Deploy, Apply, Back Up Prefixes) and long labels stay readable instead of
+    overflowing.
+
+    multi=True  — tick several items, Enter confirms the ticked set.
+    multi=False — plain menu: Enter picks whatever's highlighted. This is what
+                  makes the MENUS controller-drivable; the numbered fallback
+                  needs a keyboard (or an on-screen one), which is useless on a
+                  couch with a pad.
 
     Controls:
       Up / Down (D-pad)     — move highlight (window scrolls to follow)
-      Left / Right or SPACE — toggle current item
-      a                     — toggle ALL on/off
-      Enter (A on Deck)     — confirm selected items
+      Left / Right or SPACE — toggle current item        (multi only)
+      a                     — toggle ALL on/off          (multi only)
+      Enter (A on Deck)     — confirm
       Esc (B on Deck)       — cancel, return []
     """
     try:
@@ -181,6 +188,12 @@ def multiselect_arrows(header: str, options: list[str]) -> list[str]:
         end = min(top + height, len(options))
         for i in range(top, end):
             opt = _truncate(options[i], label_w)
+            if not multi:                        # plain menu — no checkboxes
+                if i == cursor:
+                    buf.append(f" {_CURSOR}▶ {opt}{_RESET}\n")
+                else:
+                    buf.append(f"   {opt}\n")
+                continue
             mark = f"{_CHECK}✔{_RESET}" if selected[i] else " "
             if i == cursor:
                 buf.append(f" {_CURSOR}▶ [{mark}{_CURSOR}] {opt}{_RESET}\n")
@@ -194,8 +207,9 @@ def multiselect_arrows(header: str, options: list[str]) -> list[str]:
                 more.append(f"▼ {len(options) - end} below")
             buf.append(f"   {_DIM}({end - top} of {len(options)}"
                        + ("  " + "  ".join(more) if more else "") + f"){_RESET}\n")
-        buf.append(f"\n{_DIM}↑↓ move  •  ←→ toggle  •  a all  •  Enter "
-                   f"confirm  •  Esc cancel{_RESET}\n")
+        hint = ("↑↓ move  •  ←→ toggle  •  a all  •  Enter confirm  •  Esc cancel"
+                if multi else "↑↓ move  •  Enter select  •  Esc back")
+        buf.append(f"\n{_DIM}{hint}{_RESET}\n")
         text = "".join(buf)
         drawn = text.count("\n")
         sys.stdout.write(text)
@@ -210,11 +224,17 @@ def multiselect_arrows(header: str, options: list[str]) -> list[str]:
             elif key == "down":
                 cursor = (cursor + 1) % len(options)
             elif key in ("left", "right", "space"):
+                if not multi:
+                    continue                     # nothing to toggle in a menu
                 selected[cursor] = not selected[cursor]
             elif key in ("a", "A"):              # toggle all on/off
+                if not multi:
+                    continue
                 new = not all(selected)
                 selected = [new] * len(options)
             elif key == "enter":
+                if not multi:
+                    return [options[cursor]]     # pick what's highlighted
                 return [opt for opt, sel in zip(options, selected) if sel]
             elif key in ("esc", "ctrl-c"):
                 return []
