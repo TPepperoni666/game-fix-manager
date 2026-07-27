@@ -2131,6 +2131,21 @@ def main():
               _ir.ensure_installed(None, None, "anything") is True
               if _os.name == "nt" else True)
 
+        # --- screens clear between menus -------------------------------
+        from ui import tui_plain as _tp
+        check("plain UI clears the screen on each header",
+              "_clear_screen" in _i.getsource(_tp.PlainUI.header))
+        cs = _i.getsource(_tp._clear_screen)
+        check("clear is skipped when output isn't a tty (piped/SSH/tests)",
+              "isatty" in cs)
+        check("clear tries ANSI first then falls back to cls/clear",
+              "\\033[2J" in cs and "cls" in cs)
+        # Results must be acknowledged before a menu wipes them.
+        for name in ("menu", "menu_settings", "menu_advanced"):
+            check(f"{name} pauses before redrawing (results stay readable)",
+                  "Press Enter to continue"
+                  in _i.getsource(getattr(gfm_mod.App, name)))
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

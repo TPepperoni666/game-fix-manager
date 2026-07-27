@@ -2,6 +2,8 @@
 including Windows dev boxes — gum frontend is preferred on the Deck."""
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 
 from .base import UI
@@ -18,9 +20,36 @@ def _print(text: str) -> None:
         print(text.encode(enc, errors="replace").decode(enc))
 
 
+def _clear_screen() -> None:
+    """Wipe the console so each new screen starts clean.
+
+    Without this the plain frontend just appends, so by the third menu you're
+    reading a wall of stale output (the gum frontend already clears). Tries the
+    ANSI clear+home first — instant, no subprocess, and works in Windows
+    Terminal, modern conhost and any Unix tty — then falls back to cls/clear for
+    consoles without VT processing. Never fatal: a redirected/non-tty stdout
+    just skips it."""
+    try:
+        if not sys.stdout.isatty():
+            return                      # piped to a file/SSH capture — don't
+    except Exception:
+        return
+    try:
+        sys.stdout.write("\033[2J\033[H")
+        sys.stdout.flush()
+    except Exception:
+        pass
+    try:                                # belt and braces for old conhost
+        subprocess.run("cls" if os.name == "nt" else "clear", shell=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+
 class PlainUI(UI):
     def header(self, title: str) -> None:
-        _print(f"\n=== {title} ===")
+        _clear_screen()
+        _print(f"=== {title} ===")
 
     def msg(self, text: str, style: str = "info") -> None:
         _print(f"{_STYLES.get(style, '')}{text}")
