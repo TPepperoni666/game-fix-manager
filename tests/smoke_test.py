@@ -2258,6 +2258,14 @@ def main():
         tsrc = _i.getsource(gfm_mod.App.cmd_test_nas_mount)
         check("tester unmounts between attempts (no stacked mounts)",
               "_umount()" in tsrc)
+        # Mounting + listing the ROOT is not proof: a null session can do that
+        # and still be denied inside every subfolder. That false positive sent
+        # the whole diagnosis in circles.
+        check("tester requires a SUBFOLDER to be readable, not just the root",
+              "every subfolder is denied" in tsrc and "not a real win" in tsrc)
+        check("named-user attempts come before the bare guest flag",
+              "username=" in gfm_mod.App._CIFS_ATTEMPTS[0][1]
+              and gfm_mod.App._CIFS_ATTEMPTS[0][1].startswith("username="))
         check("tester uses sudo -n and says so if a password is needed",
               '"sudo", "-n", "mount"' in tsrc and "sudo needs a password" in tsrc)
         check("tester offers to apply the winning options",

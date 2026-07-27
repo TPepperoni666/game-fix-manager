@@ -2548,14 +2548,25 @@ class App:
     # versions: some need the bare `guest` flag, some want sec=none, some an
     # explicit empty-password username, and the negotiated dialect matters too.
     # Rather than argue about which SHOULD work, try them and see.
+    # Ordered by what actually works in practice, not by what looks tidiest.
+    # A NAMED user with an empty password comes first: Samba maps that to the
+    # guest account and grants its permissions, whereas the bare `guest` option
+    # sends a true NULL session which gets a far more restricted identity — it
+    # mounts and lists the root, then denies every subfolder. (smbclient -N
+    # sends your username, which is why it works where the mount doesn't.)
     _CIFS_ATTEMPTS = [
-        ("guest, SMB 3.0", "guest,vers=3.0"),
-        ("guest, SMB 3.1.1", "guest,vers=3.1.1"),
-        ("guest, kernel default dialect", "guest"),
-        ("guest, SMB 2.1", "guest,vers=2.1"),
+        ("username=guest, empty password, SMB 3.0",
+         "username=guest,password=,vers=3.0"),
+        ("username=guest, empty password, SMB 3.1.1",
+         "username=guest,password=,vers=3.1.1"),
+        ("username=nobody, empty password, SMB 3.0",
+         "username=nobody,password=,vers=3.0"),
+        ("username=guest, empty password, kernel default",
+         "username=guest,password="),
+        ("guest flag, SMB 3.0", "guest,vers=3.0"),
+        ("guest flag, SMB 3.1.1", "guest,vers=3.1.1"),
+        ("guest flag, SMB 2.1", "guest,vers=2.1"),
         ("sec=none (true anonymous), SMB 3.0", "sec=none,vers=3.0"),
-        ("sec=none, kernel default", "sec=none"),
-        ("username=guest with empty password", "username=guest,password=,vers=3.0"),
     ]
 
     def cmd_test_nas_mount(self, args=None):
@@ -2615,11 +2626,31 @@ class App:
                 self.ui.msg(f"  ✗ {label}: {e}", "dim")
                 continue
             if r.returncode == 0 and store.is_dir_safe(probe):
+                # Mounting and listing the ROOT is not proof. A null session
+                # (sec=none / bare `guest`) can list the top level and still be
+                # denied inside every subfolder — which is exactly the false
+                # positive that sent us in circles. Require reading a SUBFOLDER.
                 try:
-                    n = len(list(probe.iterdir()))
+                    top = [d for d in probe.iterdir() if d.is_dir()]
                 except OSError:
-                    n = -1
-                self.ui.msg(f"  ✅ {label}  →  MOUNTED ({n} item(s))", "success")
+                    top = []
+                readable = None
+                for d in top[:3]:
+                    try:
+                        list(d.iterdir())
+                        readable = d.name
+                        break
+                    except OSError:
+                        continue
+                if top and readable is None:
+                    self.ui.msg(f"  ⚠ {label}: mounted and listed the root, but "
+                                "every subfolder is denied — not a real win.",
+                                "warn")
+                    _umount()
+                    continue
+                where = f", read '{readable}' OK" if readable else ""
+                self.ui.msg(f"  ✅ {label}  →  MOUNTED ({len(top)} folder(s)"
+                            f"{where})", "success")
                 winner = (label, opts)
                 _umount()
                 break
