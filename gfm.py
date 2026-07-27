@@ -2233,6 +2233,7 @@ class App:
             self.ui.msg("", "dim")
             choice = self.ui.choose("Setup & maintenance:", [
                 "🔌 Connect NAS Payloads (SMB automount)",
+                "🩺 Test NAS Mount (find options that work)",
                 "📂 Game Storage Locations (SD / internal SSD)",
                 "🧰 Stage GE-Proton Runner to NAS",
                 "🧹 Reclaim SD Space (free removed games now)",
@@ -2244,6 +2245,8 @@ class App:
             choice = choice[0] if choice else "⬅️  Back"
             if choice.startswith("🔌"):
                 self.cmd_setup_nas()
+            elif choice.startswith("🩺"):
+                self.cmd_test_nas_mount()
             elif choice.startswith("📂"):
                 self.cmd_games_locations()
                 continue          # it has its own loop + pauses
@@ -2306,6 +2309,168 @@ class App:
             else:
                 return
             self.ui.input("Press Enter to continue")
+
+    def _install_nas_automount(self, host: str, share: str, mount_point: str,
+                               opts: str) -> bool:
+        """Write + enable the systemd mount/automount units for the NAS share
+        using an EXPLICIT option string (whatever the tester proved works).
+        Returns True if it installed."""
+        import tempfile
+        uid, gid = os.getuid(), os.getgid()
+
+        def sudo_write(path: str, content: str, mode: str | None = None):
+            tmp = Path(tempfile.gettempdir()) / ("gfm-" + Path(path).name)
+            tmp.write_text(content, encoding="utf-8")
+            subprocess.run(["sudo", "cp", str(tmp), path], check=True)
+            if mode:
+                subprocess.run(["sudo", "chmod", mode, path], check=True)
+            tmp.unlink(missing_ok=True)
+
+        try:
+            os.makedirs(mount_point, exist_ok=True)
+        except (PermissionError, FileExistsError):
+            pass
+        except OSError as e:
+            self.ui.msg(f"Can't create {mount_point}: {e}", "error")
+            return False
+        try:
+            def esc(suffix):
+                return subprocess.run(
+                    ["systemd-escape", "-p", f"--suffix={suffix}", mount_point],
+                    capture_output=True, text=True, check=True).stdout.strip()
+            mount_unit, auto_unit = esc("mount"), esc("automount")
+            sudo_write(f"/etc/systemd/system/{mount_unit}",
+                       "[Unit]\nDescription=Game Fixes SMB share (GFM local "
+                       "payloads)\nAfter=network-online.target\n"
+                       "Wants=network-online.target\n\n[Mount]\n"
+                       f"What=//{host}/{share}\nWhere={mount_point}\nType=cifs\n"
+                       f"Options={opts},uid={uid},gid={gid},rw,"
+                       "iocharset=utf8,_netdev,nofail\nTimeoutSec=20\n")
+            sudo_write(f"/etc/systemd/system/{auto_unit}",
+                       "[Unit]\nDescription=Automount for Game Fixes SMB "
+                       "share\n\n[Automount]\n"
+                       f"Where={mount_point}\n\n"
+                       "[Install]\nWantedBy=multi-user.target\n")
+            subprocess.run(["sudo", "systemctl", "daemon-reload"], check=True)
+            subprocess.run(["sudo", "systemctl", "restart", mount_unit],
+                           capture_output=True)
+            subprocess.run(["sudo", "systemctl", "enable", "--now", auto_unit],
+                           check=True)
+        except (OSError, subprocess.SubprocessError) as e:
+            self.ui.msg(f"Couldn't install the automount: {e}", "error")
+            return False
+        self.cfg["local_payloads_dir"] = mount_point
+        self.local_payloads = Path(mount_point)
+        store.save_config(self.cfg)
+        self.ui.msg(f"✅ Automount installed with the working options. GFM now "
+                    f"reads staged games from {mount_point}/_games.", "success")
+        return True
+
+    # Option sets to try, best-guess first. Guest SMB is fiddly across kernel
+    # versions: some need the bare `guest` flag, some want sec=none, some an
+    # explicit empty-password username, and the negotiated dialect matters too.
+    # Rather than argue about which SHOULD work, try them and see.
+    _CIFS_ATTEMPTS = [
+        ("guest, SMB 3.0", "guest,vers=3.0"),
+        ("guest, SMB 3.1.1", "guest,vers=3.1.1"),
+        ("guest, kernel default dialect", "guest"),
+        ("guest, SMB 2.1", "guest,vers=2.1"),
+        ("sec=none (true anonymous), SMB 3.0", "sec=none,vers=3.0"),
+        ("sec=none, kernel default", "sec=none"),
+        ("username=guest with empty password", "username=guest,password=,vers=3.0"),
+    ]
+
+    def cmd_test_nas_mount(self, args=None):
+        """Try a matrix of CIFS mount options against the share and report
+        which actually work — then offer to apply the winner.
+
+        Exists because 'mount error(13)' says the server refused the login but
+        not WHY, and guest SMB in particular varies by kernel/Samba version.
+        Guessing one option at a time is slow; testing them all takes seconds."""
+        self.ui.header("🩺 TEST NAS MOUNT")
+        if os.name == "nt":
+            self.ui.msg("This tests Linux CIFS mounts — on Windows use "
+                        "🔌 Connect NAS.", "warn")
+            return
+        host = self.ui.input("NAS host / IP", "192.168.1.33")
+        share = self.ui.input("SMB share name", "Game Fixes")
+        if not host or not share:
+            return
+        user = self.ui.input("SMB username (blank = test guest only)")
+        password = self.ui.input("SMB password", password=True) if user else ""
+
+        attempts = list(self._CIFS_ATTEMPTS)
+        if user:
+            for label, ver in (("SMB 3.0", "vers=3.0"),
+                               ("SMB 3.1.1", "vers=3.1.1"),
+                               ("kernel default", "")):
+                opt = f"username={user},password={password}"
+                attempts.insert(0, (f"user '{user}', {label}",
+                                    opt + ("," + ver if ver else "")))
+
+        probe = Path("/tmp/gfm-nas-test")
+        try:
+            probe.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            self.ui.msg(f"Can't create the test mount point: {e}", "error")
+            return
+        unc = f"//{host}/{share}"
+        uid, gid = os.getuid(), os.getgid()
+        self.ui.msg(f"Testing {unc} — {len(attempts)} option set(s). Needs "
+                    "sudo.", "dim")
+        self.ui.msg("", "dim")
+
+        def _umount():
+            subprocess.run(["sudo", "-n", "umount", "-l", str(probe)],
+                           capture_output=True)
+
+        winner = None
+        for label, opts in attempts:
+            full = f"{opts},uid={uid},gid={gid},rw,iocharset=utf8"
+            _umount()
+            try:
+                r = subprocess.run(
+                    ["sudo", "-n", "mount", "-t", "cifs", unc, str(probe),
+                     "-o", full], capture_output=True, text=True, timeout=25)
+            except (OSError, subprocess.SubprocessError) as e:
+                self.ui.msg(f"  ✗ {label}: {e}", "dim")
+                continue
+            if r.returncode == 0 and store.is_dir_safe(probe):
+                try:
+                    n = len(list(probe.iterdir()))
+                except OSError:
+                    n = -1
+                self.ui.msg(f"  ✅ {label}  →  MOUNTED ({n} item(s))", "success")
+                winner = (label, opts)
+                _umount()
+                break
+            err = (r.stderr or r.stdout or "").strip().splitlines()
+            msg = err[0] if err else f"exit {r.returncode}"
+            if "sudo" in msg and "password" in msg.lower():
+                self.ui.msg("  ! sudo needs a password — run `sudo true` in a "
+                            "terminal first, then re-run this test.", "error")
+                _umount()
+                return
+            self.ui.msg(f"  ✗ {label}: {msg}", "dim")
+        _umount()
+
+        self.ui.msg("", "dim")
+        if winner is None:
+            self.ui.msg("Nothing worked. Every option set was refused, so the "
+                        "problem is on the NAS side, not the mount options.",
+                        "error")
+            self.ui.msg("On TrueNAS check: the share is ENABLED, its path is "
+                        "right, guest access is really on (or the user has "
+                        "share + dataset permission), and SMB was restarted.",
+                        "warn")
+            return
+        label, opts = winner
+        self.ui.msg(f"WINNER: {label}", "success")
+        self.ui.msg(f"  options: {opts}", "dim")
+        if self.ui.confirm("Set up the permanent automount with these options?"):
+            self._install_nas_automount(host, share,
+                                        str(Path.home() / "mnt" / "game-fixes"),
+                                        opts)
 
     def _setup_nas_windows(self):
         """Map the NAS share to a drive letter and make it reconnect on every
@@ -3489,6 +3654,7 @@ COMMANDS = {
     "restore-settings": lambda app, a: app.cmd_restore_settings(),
     # setup / diagnostics
     "setup-nas": lambda app, a: app.cmd_setup_nas(),
+    "test-nas": lambda app, a: app.cmd_test_nas_mount(a),
     "games-locations": lambda app, a: app.cmd_games_locations(a),
     "move-game": lambda app, a: app.cmd_move_game(a),
     "stage-runner": lambda app, a: app.cmd_stage_runner(),

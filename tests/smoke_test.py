@@ -2244,6 +2244,29 @@ def main():
               '"sudo", "-n", "umount"' in nsrc)
         check("NAS setup continues past an unreadable mount point",
               "wedged mount" in nsrc)
+        # A pressable mount tester: guest CIFS varies by kernel/Samba, so try
+        # the option sets rather than guessing one at a time.
+        check("CLI exposes 'test-nas'", "test-nas" in gfm_mod.COMMANDS)
+        for m in ("cmd_test_nas_mount", "_install_nas_automount"):
+            check(f"App.{m} exists", hasattr(gfm_mod.App, m))
+        check("mount tester tries several option sets",
+              len(gfm_mod.App._CIFS_ATTEMPTS) >= 5)
+        atts = " ".join(o for _l, o in gfm_mod.App._CIFS_ATTEMPTS)
+        check("tester covers guest, sec=none and multiple SMB dialects",
+              "guest" in atts and "sec=none" in atts
+              and "vers=3.0" in atts and "vers=2.1" in atts)
+        tsrc = _i.getsource(gfm_mod.App.cmd_test_nas_mount)
+        check("tester unmounts between attempts (no stacked mounts)",
+              "_umount()" in tsrc)
+        check("tester uses sudo -n and says so if a password is needed",
+              '"sudo", "-n", "mount"' in tsrc and "sudo needs a password" in tsrc)
+        check("tester offers to apply the winning options",
+              "_install_nas_automount" in tsrc)
+        check("tester blames the NAS when nothing works",
+              "problem is on the NAS side" in tsrc)
+        stsrc = _i.getsource(gfm_mod.App.menu_settings)
+        check("Test NAS Mount is on the Settings menu and dispatched",
+              "Test NAS Mount" in stsrc and "cmd_test_nas_mount" in stsrc)
         _real_stat = _os.stat
 
         def _deadstat(path, *a, **k):
