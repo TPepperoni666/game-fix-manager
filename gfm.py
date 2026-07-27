@@ -2316,6 +2316,32 @@ class App:
                 return
             self.ui.input("Press Enter to continue")
 
+    def _ensure_sudo(self) -> bool:
+        """Get a sudo credential cached, prompting VISIBLY if needed.
+
+        Everything after this uses `sudo -n` so it can't hang on a prompt whose
+        output we've captured — but that means if the credential isn't cached
+        the user never gets asked at all, which just looked like "it failed".
+        `sudo -v` here runs WITHOUT capturing, so the password prompt is
+        actually visible and typeable."""
+        if os.name == "nt":
+            return True
+        if subprocess.run(["sudo", "-n", "true"],
+                          capture_output=True).returncode == 0:
+            return True                      # already cached
+        self.ui.msg("This needs administrator rights — enter your Deck "
+                    "password if prompted (nothing is stored).", "warn")
+        try:
+            # NOT captured: the prompt has to reach the terminal.
+            ok = subprocess.run(["sudo", "-v"]).returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            ok = False
+        if not ok:
+            self.ui.msg("Couldn't get administrator rights. If you've never "
+                        "set a password on this device, run `passwd` in a "
+                        "terminal once, then try again.", "error")
+        return ok
+
     def cmd_enable_remote(self, args=None):
         """Turn on SSH and authorise a public key, so another machine (or
         someone helping you) can drive this device without a keyboard on it.
@@ -2332,9 +2358,16 @@ class App:
         try:
             out = subprocess.run(["ip", "-4", "-o", "addr"], capture_output=True,
                                  text=True, timeout=10).stdout
-            ips = [w.split("/")[0] for ln in out.splitlines()
-                   for w in ln.split() if w.count(".") == 3
-                   and not w.startswith("127.")]
+            # `ip -o addr` lines carry the address AND the broadcast, so
+            # take only the field after "inet" — otherwise the broadcast
+            # (x.x.x.255) gets reported as this device's address.
+            ips = []
+            for ln in out.splitlines():
+                parts = ln.split()
+                if "inet" in parts:
+                    a = parts[parts.index("inet") + 1].split("/")[0]
+                    if not a.startswith("127.") and not a.endswith(".255"):
+                        ips.append(a)
         except (OSError, subprocess.SubprocessError):
             pass
         if ips:
@@ -2409,6 +2442,8 @@ class App:
             probe.mkdir(parents=True, exist_ok=True)
         except OSError:
             pass
+        if not self._ensure_sudo():
+            return
         self.ui.msg("Testing the NFS mount…", "dim")
         subprocess.run(["sudo", "-n", "umount", "-l", str(probe)],
                        capture_output=True)
@@ -2551,8 +2586,9 @@ class App:
             return
         unc = f"//{host}/{share}"
         uid, gid = os.getuid(), os.getgid()
-        self.ui.msg(f"Testing {unc} — {len(attempts)} option set(s). Needs "
-                    "sudo.", "dim")
+        if not self._ensure_sudo():
+            return
+        self.ui.msg(f"Testing {unc} — {len(attempts)} option set(s).", "dim")
         self.ui.msg("", "dim")
 
         def _umount():

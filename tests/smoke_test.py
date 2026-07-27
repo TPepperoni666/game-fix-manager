@@ -2297,6 +2297,21 @@ def main():
               'startswith(("ssh-"' in rsrc4)
         check("remote access shows the address to connect to",
               "Connect with:" in rsrc4)
+        check("IP detection skips the broadcast address",
+              '.255' in rsrc4 and '"inet" in parts' in rsrc4)
+        # sudo -n never prompts, so without this the user is never ASKED for a
+        # password — it just silently reports failure.
+        check("App._ensure_sudo exists", hasattr(gfm_mod.App, "_ensure_sudo"))
+        esrc = _i.getsource(gfm_mod.App._ensure_sudo)
+        check("_ensure_sudo prompts VISIBLY (output not captured)",
+              'subprocess.run(["sudo", "-v"])' in esrc)
+        check("_ensure_sudo skips the prompt when already cached",
+              '"sudo", "-n", "true"' in esrc)
+        check("_ensure_sudo explains the no-password-set case",
+              "passwd" in esrc)
+        for m in ("cmd_connect_nfs", "cmd_test_nas_mount"):
+            check(f"{m} gets sudo before it needs it",
+                  "_ensure_sudo" in _i.getsource(getattr(gfm_mod.App, m)))
         check("NFS + remote access are on the Settings menu",
               "Connect NAS over NFS" in stsrc and "Enable Remote Access" in stsrc
               and "cmd_connect_nfs" in stsrc and "cmd_enable_remote" in stsrc)
