@@ -2522,7 +2522,15 @@ class App:
                        f"Where={mount_point}\n\n"
                        "[Install]\nWantedBy=multi-user.target\n")
             subprocess.run(["sudo", "systemctl", "daemon-reload"], check=True)
-            subprocess.run(["sudo", "systemctl", "restart", mount_unit],
+            # The OLD mount has to go before the new options can apply. A bare
+            # `systemctl restart` doesn't swap it while the automount is holding
+            # it open — the unit file changes but the live mount keeps its
+            # original options, which looks exactly like the fix didn't work.
+            subprocess.run(["sudo", "systemctl", "stop", auto_unit],
+                           capture_output=True)
+            subprocess.run(["sudo", "systemctl", "stop", mount_unit],
+                           capture_output=True)
+            subprocess.run(["sudo", "umount", "-l", mount_point],
                            capture_output=True)
             subprocess.run(["sudo", "systemctl", "enable", "--now", auto_unit],
                            check=True)
