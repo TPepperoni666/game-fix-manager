@@ -2902,6 +2902,31 @@ class App:
             self.ui.msg("Mount not reachable yet. Check the NAS is on, the "
                         "share/creds are right, and that cifs-utils is "
                         "installed. See the log for details.", "error")
+            # "No such device" (ENODEV) means the automount fired but the CIFS
+            # mount FAILED — systemd knows exactly why, so surface it instead
+            # of leaving you to guess between creds, share name and a missing
+            # mount.cifs helper.
+            self.ui.msg("── why the mount failed " + "─" * 18, "warn")
+            if not shutil.which("mount.cifs") and \
+                    not Path("/sbin/mount.cifs").exists():
+                self.ui.msg("  mount.cifs is MISSING — CIFS mounts cannot work "
+                            "without it. On SteamOS: sudo steamos-readonly "
+                            "disable && sudo pacman -S cifs-utils", "error")
+            for cmd in (["systemctl", "status", "--no-pager", "-n", "15",
+                         mount_unit],
+                        ["journalctl", "-u", mount_unit, "-n", "15",
+                         "--no-pager"]):
+                try:
+                    r = subprocess.run(cmd, capture_output=True, text=True,
+                                       timeout=15)
+                except (OSError, subprocess.SubprocessError):
+                    continue
+                out = (r.stdout or r.stderr or "").strip()
+                if not out:
+                    continue
+                for line in out.splitlines()[-15:]:
+                    self.ui.msg(f"  {line}", "dim")
+                break
         elif not entries:
             self.ui.msg("Mounted, but the share looks EMPTY. Have you staged "
                         "the payloads onto it yet? (tools/stage-eclipse.py "
