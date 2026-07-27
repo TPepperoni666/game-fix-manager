@@ -754,6 +754,9 @@ class App:
                 return
 
         # Measure the picked ones and size the batch against free space.
+        # Fresh screen per phase: the picker, the measuring output and the
+        # per-game copy progress otherwise stack into one unreadable page.
+        self.ui.header(f"⬇️  COPYING {len(chosen)} GAME(S)")
         self.ui.msg(f"Measuring {len(chosen)} game(s)…", "dim")
         plans = []
         need_total = 0
@@ -804,8 +807,7 @@ class App:
 
         # AUTO-SETUP: create each game's Steam shortcut (+ runner/Proton) so it
         # lands playable. Fixes stay for 🔧 Apply. One Steam bounce for the lot.
-        self.ui.msg("", "dim")
-        self.ui.msg("── Setting up Steam shortcuts " + "─" * 12, "info")
+        self.ui.header("🎮 SETTING UP STEAM SHORTCUTS")
         made = 0
         for g, dest in deployed_ok:
             if self._setup_shortcut(g.name, dest):
@@ -1001,8 +1003,11 @@ class App:
                 return False
             labels = [f"{e['rel']}  ({e['size'] // (1 << 20)} MB)" for e in exes]
             skip = "⬅️  Skip — don't add a shortcut"
-            self.ui.msg(f"  {folder_name}: no recipe — pick the exe to launch "
-                        "(best guess first):", "info")
+            # Own screen per game: deploying several at once otherwise stacks
+            # each picker under the last one's output.
+            self.ui.header(f"🎮 PICK THE LAUNCH EXE — {folder_name}")
+            self.ui.msg("No recipe for this game, so choose what Steam should "
+                        "launch (best guess first).", "dim")
             picked = self.ui.choose(f"Shortcut exe for {folder_name}?",
                                     labels + [skip])
             if not picked or picked[0] == skip:

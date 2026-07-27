@@ -1807,6 +1807,14 @@ def main():
               "artwork_dir" in _i.getsource(gfm_mod.App.cmd_restore_shortcuts))
         check("deploy re-applies artwork after the shortcut is made",
               "_restore_art_for" in _i.getsource(gfm_mod.App.cmd_deploy_game))
+        # Deploy runs several phases; without a clear between them the picker,
+        # measuring output and copy progress stack into one unreadable page.
+        dep_ph = _i.getsource(gfm_mod.App.cmd_deploy_game)
+        check("deploy clears the screen between its phases",
+              dep_ph.count("self.ui.header(") >= 3)
+        check("each no-recipe game gets its own exe-picker screen",
+              "PICK THE LAUNCH EXE"
+              in _i.getsource(gfm_mod.App._make_generic_shortcut))
         check("capture also grabs the icon",
               "capture_icon" in _i.getsource(gfm_mod.App._capture_one))
         check("TMNT recipe carries the full proper name",
