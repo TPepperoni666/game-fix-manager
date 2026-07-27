@@ -7,6 +7,7 @@ Every step type registers a class with three methods:
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -54,11 +55,23 @@ class Ctx:
         {game_dir}  — the game install directory
         {prefix}    — the game's Proton prefix (…/compatdata/<id>/pfx)
         {prefix_localappdata} — drive_c LocalAppData for steamuser
+        {localappdata} — LocalAppData WHEREVER THE GAME ACTUALLY RUNS: the
+                      prefix's copy under Proton, the real %LOCALAPPDATA% on
+                      Windows. Lets one recipe target a game's user config on
+                      both platforms instead of needing two.
         ~           — the user's home dir
         Prefix templates need the game to have run once; a StepError is
         raised (usually caught by an optional step) if no prefix exists yet.
         """
         out = template
+        if "{localappdata}" in out:
+            if os.name == "nt":
+                real = os.environ.get("LOCALAPPDATA") or str(
+                    Path.home() / "AppData" / "Local")
+                out = out.replace("{localappdata}", real)
+            else:
+                # Under Proton the game only ever sees the prefix's AppData.
+                out = out.replace("{localappdata}", "{prefix_localappdata}")
         if "{prefix" in out:
             from . import detect
             pfx = detect.find_prefix(self.recipe, self.steam_root)
