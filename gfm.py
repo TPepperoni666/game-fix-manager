@@ -369,15 +369,22 @@ class App:
         the tool tracks via shortcut-state (adopted + generic deploys). Keyed by
         the shortcut's appid, stored under _state/artwork/<appid>/. This is what
         makes 'set it up once, it's preserved' true for games without a
-        hand-written recipe. Returns how many captured something."""
+        hand-written recipe. Returns how many captured something.
+
+        Reports each game BY NAME, the same as recipe games do. It used to emit
+        only a total ("captured art for 16 non-recipe games"), so a game like
+        Halo Campaign Evolved was being saved but never appeared in the list —
+        which reads exactly like it was being skipped."""
         if self.steam_root is None or self.local_payloads is None:
             return 0
         got = 0
         recipe_appids = {self._art_appid(r) for r in self.recipes}
-        for entry in shortcutstate.load(self.local_payloads):
+        for entry in sorted(shortcutstate.load(self.local_payloads),
+                            key=lambda e: str(e.get("name", "")).lower()):
             appid = entry.get("appid")
             if appid is None or appid in recipe_appids:
                 continue      # recipe games are already captured above
+            name = entry.get("name") or f"appid {appid}"
             dest = store.artwork_dir(self.local_payloads, appid)
             n = steamart.capture(self.steam_root, appid, dest)
             try:
@@ -388,7 +395,10 @@ class App:
             if info and steamart.capture_icon(appid, info.get("icon", ""), dest):
                 n += 1
             if n:
+                self.ui.msg(f"  🎨 {name}: {n} art file(s)", "success")
                 got += 1
+            else:
+                self.ui.msg(f"  · {name}: no custom art set in Steam yet", "dim")
         return got
 
     def _snapshot_localconfig(self) -> int:
@@ -462,10 +472,12 @@ class App:
                 self.ui.msg(f"  ! {recipe.name}: capture failed — {e}", "warn")
         # Art for EVERY managed game, not just recipes — adopted and
         # generic-deploy games matter just as much. Keyed by their appid.
+        # Non-recipe (adopted / deployed) games — each one names itself above,
+        # so this is just the tally.
         managed = self._capture_managed_art()
         if managed:
-            self.ui.msg(f"Captured art for {managed} non-recipe game(s) too "
-                        "(adopted / deployed).", "success")
+            self.ui.msg(f"  ({managed} of those are adopted/deployed games "
+                        "without a recipe)", "dim")
         self.ui.msg(f"Captured art/saves for {hits} game(s).",
                     "success" if hits else "dim")
         # Say what produced NOTHING, and why. Silence here reads as failure:

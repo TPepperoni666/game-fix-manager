@@ -1796,6 +1796,14 @@ def main():
               hasattr(gfm_mod.App, "_capture_managed_art"))
         check("scan captures art for adopted/generic games",
               "_capture_managed_art" in _i.getsource(gfm_mod.App._capture_all))
+        # Non-recipe games used to be reported only as a total, so a game whose
+        # art WAS being saved never appeared by name — indistinguishable from
+        # being skipped.
+        cma = _i.getsource(gfm_mod.App._capture_managed_art)
+        check("non-recipe art capture names each game",
+              "art file(s)" in cma and "{name}" in cma)
+        check("non-recipe capture says when a game has no art to save",
+              "no custom art set" in cma)
         from core import store as _stx
         check("non-recipe art has an appid-keyed home",
               _stx.artwork_dir(tmp, 12345)
