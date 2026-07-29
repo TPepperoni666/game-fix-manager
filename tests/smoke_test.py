@@ -1815,6 +1815,30 @@ def main():
         check("each no-recipe game gets its own exe-picker screen",
               "PICK THE LAUNCH EXE"
               in _i.getsource(gfm_mod.App._make_generic_shortcut))
+
+        # --- artwork sync across devices --------------------------------
+        check("CLI exposes 'sync-artwork'", "sync-artwork" in gfm_mod.COMMANDS)
+        check("App.cmd_sync_artwork exists",
+              hasattr(gfm_mod.App, "cmd_sync_artwork"))
+        sy = _i.getsource(gfm_mod.App.cmd_sync_artwork)
+        check("sync covers recipe AND non-recipe art stores",
+              "recipe_data_dir" in sy and '"_state" / "artwork"' in sy)
+        check("sync fills gaps by default, overwrites only with --force",
+              "only_missing=not force" in sy)
+        check("sync repoints shortcut icons too", "set_icon" in sy)
+        check("Sync Artwork is on the Settings menu",
+              "Sync Artwork" in _i.getsource(gfm_mod.App.menu_settings))
+
+        # --- games bought on Steam switch off the shortcut path ---------
+        for rid, appid in (("pure", 322600), ("split-second", 297860)):
+            r = recs.get(rid)
+            check(f"{rid} carries its real Steam appid",
+                  r is not None and r.steam_appid == appid)
+            types = [s["type"] for s in (r.steps if r else [])]
+            check(f"{rid} makes no non-Steam shortcut (Steam owns the entry)",
+                  "steam_shortcut" not in types)
+            check(f"{rid} forces its runner via proton_version instead",
+                  "proton_version" in types)
         check("capture also grabs the icon",
               "capture_icon" in _i.getsource(gfm_mod.App._capture_one))
         check("TMNT recipe carries the full proper name",

@@ -1,0 +1,34 @@
+{
+  "id": "split-second",
+  "name": "Split/Second",
+  "steam_appid": 297860,
+  "aliases": [
+    "Split Second",
+    "Split/Second: Velocity",
+    "Split Second Velocity",
+    "SplitSecond"
+  ],
+  "detect": {
+    "install_dir_names": ["Split Second", "SplitSecond", "Split-Second"]
+  },
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "copy_files",
+      "optional": true,
+      "from": "payload/60fps",
+      "to": "{game_dir}",
+      "backup_originals": true
+    },
+    {
+      "type": "proton_version",
+      "tool": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "Split/Second (2010, Black Rock Studio — Steam appid 297860, OWNED) — Apply forces GE-Proton 10.34 and, if you've supplied it, overlays the 60 FPS patch.\n\nWHY 60 FPS MATTERS HERE: the stock PC release is capped at 30 FPS and its PHYSICS AND POWER PLAYS ARE TIED TO THE FRAME RATE — so this isn't just smoothness, the game behaves differently. The community 60 FPS patch (ducon2016, on PCGamingWiki community files) removes the limiter and corrects the physics. It works by generating a patched .exe, which is why it can't be fetched automatically.\n\nTo enable it: run the patcher on Windows against your Steam copy, then drop the resulting patched exe into the NAS local payload at\n   Game Fixes/_recipes/split-second/payload/60fps/\nand re-apply. The original is backed up as .gfm-orig. Off-git deliberately, like other sourced payloads. Until you add it the game still runs — just at 30 FPS.\n\nDXVK: nothing to do. PCGW recommends DXVK for this game's frame pacing and load times, and Proton already uses DXVK, so you get that for free on the Deck.\n\nMULTIPLAYER: the official servers were shut down; single player and split-screen are unaffected.\n\nOWNED STEAM COPY: detection resolves via the appmanifest, so it's found wherever Steam installed it (SSD or SD) with no path prompting, and no non-Steam shortcut is created.",
+  "notes": "Built 2026-07-27 after Tony bought it on Steam (appid 297860 — verified from the live store page, and it's still sold, unlike PURE which was delisted in 2016).\n\nDetection is by steam_appid, so install_dir_names is only a fallback and NO marker_files are declared: the exe name isn't confirmed on disk yet and a guessed marker is exactly what broke Halo MCC (lowercase mcc/ vs MCC/). Add a marker once the folder is actually present.\n\nFIXES: the real one is the 30 FPS cap — physics and power plays are frame-rate-coupled, so the community 60 FPS patch (ducon2016, PCGW community files #1232; also distributed as 'patch 1.04') is the fix that matters. It PRODUCES a patched exe rather than shipping one, so it's a BYO copy_files payload at payload/60fps/ like 1NSANE's widescreen mod. DXVK is recommended by PCGW and comes free under Proton. Official multiplayer is dead.\n\nSteam-owned, so: no steam_shortcut step, proton_version instead (CompatToolMapping keyed to 297860), and install_runner stays because GE builds aren't Steam-managed. UNTESTED on hardware."
+}

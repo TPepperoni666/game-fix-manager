@@ -280,6 +280,90 @@ class App:
                             "warn")
         return self._capture_saves(recipe, interactive=interactive) or got
 
+    def cmd_sync_artwork(self, args=None):
+        """Push every piece of captured artwork onto THIS device's Steam.
+
+        Capture already collects art to the NAS, and deploy re-applies a game's
+        art when it copies it — but there was no way to say "make this device
+        look like the others". Set art once on the Deck, run this on the HTPC,
+        and the whole library matches.
+
+        Gap-fill by default: art already in the grid is left alone, so this
+        can't revert something you've since changed on this device."""
+        self.ui.header("🖼  SYNC ARTWORK TO THIS DEVICE")
+        if self.steam_root is None or self.local_payloads is None:
+            self.ui.msg("Need Steam + the NAS to sync artwork.", "warn")
+            return 0
+        force = bool(getattr(args, "force", False))
+        if force:
+            self.ui.msg("--force: captured art will OVERWRITE what's here.",
+                        "warn")
+        else:
+            self.ui.msg("Filling in missing art only (nothing already set here "
+                        "is touched). Use --force to overwrite.", "dim")
+
+        # Recipe games keep art under _recipes/<id>/artwork, everything else
+        # (adopted + generic deploys) under _state/artwork/<appid>.
+        jobs: list[tuple[str, int, Path]] = []
+        for r in self.recipes:
+            appid = self._art_appid(r)
+            src = store.recipe_data_dir(self.local_payloads, r.id, "artwork")
+            if appid is not None and store.is_dir_safe(src):
+                jobs.append((r.name, appid, src))
+        art_root = self.local_payloads / "_state" / "artwork"
+        try:
+            extra = [d for d in art_root.iterdir() if d.is_dir()] \
+                if store.is_dir_safe(art_root) else []
+        except OSError:
+            extra = []
+        known = {a for _n, a, _s in jobs}
+        for d in extra:
+            try:
+                appid = int(d.name)
+            except ValueError:
+                continue
+            if appid not in known:
+                jobs.append((f"appid {appid}", appid, d))
+
+        if not jobs:
+            self.ui.msg("No captured artwork on the NAS yet. Set art in Steam "
+                        "on any device, run 🔍 Scan there, then sync here.",
+                        "warn")
+            return 0
+        done = skipped = 0
+        for name, appid, src in sorted(jobs):
+            try:
+                n = steamart.restore(self.steam_root, appid, src,
+                                     only_missing=not force)
+            except OSError as e:
+                self.ui.msg(f"  ! {name}: {e}", "warn")
+                continue
+            if n:
+                # Point the shortcut's icon at the restored file (non-Steam
+                # games only — Steam-owned entries get their icon from Steam).
+                icon = steamart.captured_icon(src, appid)
+                if icon is not None:
+                    for grid in steamart._grid_dirs(self.steam_root):
+                        landed = grid / icon.name
+                        if landed.is_file():
+                            try:
+                                shortcutsvdf.set_icon(self.steam_root, [name],
+                                                      str(landed))
+                            except Exception:
+                                pass
+                            break
+                self.ui.msg(f"  🖼  {name}: {n} file(s)", "success")
+                done += 1
+            else:
+                skipped += 1
+        self.ui.msg("", "dim")
+        self.ui.msg(f"Synced artwork for {done} game(s)"
+                    + (f"; {skipped} already had it" if skipped else "") + ".",
+                    "success" if done else "dim")
+        if done:
+            self.ui.msg("Restart Steam to see the new art.", "dim")
+        return done
+
     def _capture_managed_art(self) -> int:
         """Capture grid art + icon for every managed NON-recipe game — the ones
         the tool tracks via shortcut-state (adopted + generic deploys). Keyed by
@@ -2242,6 +2326,7 @@ class App:
                 "🗄  Connect NAS over NFS (SMB alternative)",
                 "🔑 Enable Remote Access (SSH)",
                 "📂 Game Storage Locations (SD / internal SSD)",
+                "🖼  Sync Artwork to This Device",
                 "🧰 Stage GE-Proton Runner to NAS",
                 "🧹 Reclaim SD Space (free removed games now)",
                 "🗓  Weekly Reclaim Timer (set up / remove)",
@@ -2258,6 +2343,8 @@ class App:
                 self.cmd_connect_nfs()
             elif choice.startswith("🔑"):
                 self.cmd_enable_remote()
+            elif choice.startswith("🖼"):
+                self.cmd_sync_artwork(self.args)
             elif choice.startswith("📂"):
                 self.cmd_games_locations()
                 continue          # it has its own loop + pauses
@@ -3883,6 +3970,7 @@ COMMANDS = {
     "adopt": lambda app, a: app.cmd_adopt(a),
     "restore-shortcuts": lambda app, a: app.cmd_restore_shortcuts(a),
     "collect-logs": lambda app, a: app.cmd_collect_logs(a),
+    "sync-artwork": lambda app, a: app.cmd_sync_artwork(a),
     "save-restore": lambda app, a: app.cmd_save_restore(),
     # the individual steps those bundles wrap
     "scan-sd": lambda app, a: app.cmd_scan_sd(),
@@ -3920,6 +4008,8 @@ def main():
                         help="folder of local-only override payloads "
                              "(NAS mount, SD, …); also persisted to config")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--force", action="store_true",
+                        help="sync-artwork: overwrite art already set here")
     parser.add_argument("--auto", action="store_true",
                         help="reclaim: no prompts, for the weekly timer")
     args = parser.parse_args()
