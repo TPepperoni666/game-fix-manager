@@ -1681,6 +1681,89 @@ def main():
             missing_raised = True
         check("ini_edit raises on a missing target", missing_raised)
 
+        # --- ini_edit per-machine overrides (values_by_host) --------------
+        # Display settings are the one thing that can't be shared across a
+        # handheld, a TV box and a desktop. _hostname is stubbed because the
+        # whole feature is "behaves differently per machine".
+        import core.steps.ini_edit as _ie
+        _real_host = _ie._hostname
+        hdir = tmp / "inihost"; hdir.mkdir()
+        HOST_INI = ("[Engine.GameEngine]\nbSmoothFrameRate=True\n"
+                    "[SystemSettings]\nResX=3840\nResY=2160\n"
+                    "MaxMultisamples=8\nMaxAnisotropy=16\n")
+        hrec = _m2.Recipe(id="h", name="h", aliases=[], steam_appid=None,
+            detect={}, steps=[], notes="", post_apply_message="",
+            remote_payloads=[], requires_game=True, save_paths=[], dir=hdir)
+        hctx = _e2.Ctx(hrec, hdir, log=lambda _m: None)
+        HSTEP = {"type": "ini_edit", "target": "{game_dir}/e.ini",
+                 "values": {"SystemSettings": {"ResX": 3840, "ResY": 2160,
+                                               "MaxMultisamples": 8}},
+                 "values_by_host": {"legion-go-2": {
+                     "SystemSettings": {"ResX": 1920, "ResY": 1200,
+                                        "MaxMultisamples": 2}}}}
+
+        def _fresh_ini():
+            (hdir / "e.ini").write_text(HOST_INI, encoding="utf-8")
+            bak = hdir / "e.ini.gfm-bak"
+            if bak.is_file():
+                bak.unlink()
+
+        try:
+            _ie._hostname = lambda: "legion-go-2"
+            _fresh_ini()
+            s = _ie.IniEdit(dict(HSTEP))
+            check("values_by_host records the matched host",
+                  s.host_override == "legion-go-2")
+            s.apply(hctx)
+            hb = (hdir / "e.ini").read_text()
+            check("host override beats the shared value",
+                  "ResX=1920" in hb and "ResY=1200" in hb)
+            check("every overridden key is applied", "MaxMultisamples=2" in hb)
+            check("keys the override omits keep the shared value",
+                  "MaxAnisotropy=16" in hb)
+            check("sections the override omits are untouched",
+                  "bSmoothFrameRate=True" in hb)
+            # The regression this guards: merging only inside apply() would
+            # leave verify() reading the shared values, so an overridden host
+            # would report not_applied forever.
+            check("verify agrees with the host-merged values",
+                  s.verify(hctx) == "applied")
+
+            s2 = _ie.IniEdit({**HSTEP, "values_by_host": {
+                "Legion-GO-2.lan": {"SystemSettings": {"ResX": 1920}}}})
+            check("host matching ignores case and domain suffix",
+                  s2.host_override == "Legion-GO-2.lan")
+
+            # A key spelled differently in the override still lands on the
+            # existing line rather than adding a second one.
+            _fresh_ini()
+            s3 = _ie.IniEdit({**HSTEP, "values_by_host": {
+                "legion-go-2": {"systemsettings": {"maxmultisamples": 2}}}})
+            s3.apply(hctx)
+            hb3 = (hdir / "e.ini").read_text()
+            check("case-insensitive override edits in place, no duplicate",
+                  hb3.count("MaxMultisamples") == 1
+                  and "MaxMultisamples=2" in hb3)
+
+            _ie._hostname = lambda: "htpc"
+            _fresh_ini()
+            s4 = _ie.IniEdit(dict(HSTEP))
+            check("a host with no entry takes the shared values",
+                  s4.host_override is None)
+            s4.apply(hctx)
+            hb4 = (hdir / "e.ini").read_text()
+            check("unmatched host writes the shared value",
+                  "ResX=3840" in hb4 and "MaxMultisamples=8" in hb4)
+            check("unmatched host still verifies as applied",
+                  s4.verify(hctx) == "applied")
+            logged = []
+            s5 = _ie.IniEdit(dict(HSTEP))
+            s5.apply(_e2.Ctx(hrec, hdir, log=logged.append))
+            check("an unmatched host says so instead of failing silently",
+                  any("no per-machine" in m and "htpc" in m for m in logged))
+        finally:
+            _ie._hostname = _real_host
+
         # the 5 new recipes load and point at real exes
         recs = {r.id: r for r in _m2.load_all(ROOT_STORE)} \
             if (ROOT_STORE := (Path(gfm_mod.__file__).parent / "store")).is_dir() \
@@ -1950,6 +2033,44 @@ def main():
         check("picker uses the viewport helpers + select-all",
               "_scroll_top" in gsrc and "_truncate" in gsrc
               and '"a", "A"' in gsrc)
+
+        # --- narrow-terminal redraw: the "menu keeps adding lines when I
+        # move the selector" / "progress writes a new line" bug ---------
+        # Both in-place redraws assumed one line == one terminal row. A line
+        # wider than the terminal wraps, so the picker's cursor-up count came
+        # out short (menu walks down the screen) and progress()'s \r rewrote
+        # only the last wrapped row (leaving the rest behind).
+        from ui import textwidth as _tw
+        check("width ignores ANSI colour codes",
+              _tw.display_width("\x1b[38;5;99mabc\x1b[0m") == 3)
+        check("emoji occupy two columns, so len() undercounts",
+              _tw.display_width("🔧 Apply") == 8 and len("🔧 Apply") == 7)
+        check("truncate clips on display columns, not characters",
+              _tw.display_width(_tw.truncate("🔧🔧🔧🔧 Apply", 6)) <= 6)
+        check("rows_used counts a wrapped line as several rows",
+              _tw.rows_used("x" * 100 + "\n", 40) == 3
+              and _tw.rows_used("short\n", 40) == 1)
+        check("an exactly-full line still occupies one row",
+              _tw.rows_used("x" * 40 + "\n", 40) == 1)
+        check("a blank line still occupies a row",
+              _tw.rows_used("\n\n", 40) == 2)
+        # The invariant the cursor-up depends on: clip every line to the
+        # width it's drawn at and the block is exactly one row per line.
+        _narrow = 34
+        _blob = "".join(_tw.truncate(s, _narrow - 1) + "\n" for s in (
+            "↑↓ move  •  ←→ toggle  •  a all  •  Enter confirm  •  Esc cancel",
+            "SD card: 120.4 GB free of 931.5 GB   •   selected: 10.9 GB",
+            "⬇️ Deploy games from the NAS to this device"))
+        check("clipped lines occupy exactly one row each",
+              _tw.rows_used(_blob, _narrow) == 3)
+        check("picker moves the cursor up by ROWS, not newline count",
+              "rows_used(text, cols)" in gsrc)
+        check("picker clips header, options, position and hint",
+              gsrc.count("_truncate(") >= 4)
+        from ui.base import UI as _UIbase
+        _bsrc = _i.getsource(_UIbase.progress)
+        check("progress clips to the terminal width before writing",
+              "truncate" in _bsrc and "get_terminal_size" in _bsrc)
 
         # --- deploy gap-fillers: runner install + prefix restore -------
         from core.steps import install_runner as _ir

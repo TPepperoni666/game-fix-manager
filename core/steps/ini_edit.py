@@ -20,6 +20,24 @@ inserted into its section; a missing section is appended. Everything else in
 the file — comments, ordering, other keys — is preserved. A .gfm-bak copy is
 written before the first change.
 
+PER-MACHINE OVERRIDES. Display settings are the one thing that genuinely
+can't be shared: a handheld's panel, a 4K TV and a desktop monitor want
+different numbers out of the same recipe. An optional "values_by_host" merges
+over "values" when the short hostname matches:
+
+  { "type": "ini_edit",
+    "target": "...",
+    "values":         { "SystemSettings": { "ResX": 3840, "ResY": 2160 } },
+    "values_by_host": { "legion-go-2": {
+                          "SystemSettings": { "ResX": 1920, "ResY": 1200 } } } }
+
+Matching is case-insensitive on the short hostname (anything after the first
+dot is ignored), same shape as the per-host files core/shortcutstate.py keeps
+under _state/shortcuts/<hostname>.json. A host with no entry just gets
+"values". The merge happens once at construction, so apply/verify/revert all
+agree on what this machine is supposed to have — a host override that only
+applied would otherwise read back as NOT_APPLIED forever.
+
 Matching is case-insensitive on section and key names (INIs are inconsistent),
 but the ON-DISK spelling is kept when a key already exists. Values are written
 verbatim (1280, not "1280") since these configs are unquoted key=value.
@@ -31,10 +49,38 @@ as wine_registry with a missing prefix.
 from __future__ import annotations
 
 import shutil
+import socket
 from pathlib import Path
 
 from ..engine import (APPLIED, NOT_APPLIED, PARTIAL, Ctx, StepError,
                       register_step)
+
+
+def _hostname() -> str:
+    """This machine's short hostname, lower-cased. Split out so tests can
+    stub it — the whole point of values_by_host is behaviour that differs
+    per machine, which is otherwise untestable on one."""
+    try:
+        return socket.gethostname().split(".")[0].strip().lower()
+    except OSError:
+        return ""
+
+
+def _merge_values(base: dict, extra: dict) -> dict:
+    """extra wins, section- and key-wise, matching case-insensitively but
+    keeping base's on-disk spelling where it already has the key."""
+    out = {s: dict(kv) for s, kv in base.items()}
+    sections = {s.lower(): s for s in out}
+    for section, kv in extra.items():
+        target = sections.get(section.lower())
+        if target is None:
+            out[section] = dict(kv)
+            sections[section.lower()] = section
+            continue
+        keys = {k.lower(): k for k in out[target]}
+        for k, v in kv.items():
+            out[target][keys.get(k.lower(), k)] = v
+    return out
 
 
 def _is_section(line: str) -> str | None:
@@ -57,6 +103,17 @@ class IniEdit:
     def __init__(self, step: dict):
         self.target = step["target"]
         raw = step.get("values", {})
+        # Per-machine overrides merged in ONCE, here, so every method below
+        # sees the same picture (see the module docstring).
+        self.host_override: str | None = None
+        by_host = step.get("values_by_host") or {}
+        self._host = _hostname() if by_host else ""
+        self._host_choices = list(by_host)
+        for name, overrides in by_host.items():
+            if str(name).split(".")[0].strip().lower() == self._host and self._host:
+                raw = _merge_values(raw, overrides)
+                self.host_override = name
+                break
         # Normalise to {section: {key: value}}. Keys/sections lower-cased for
         # matching; original spelling recovered from `disp`.
         self.values: dict = {}
@@ -113,6 +170,14 @@ class IniEdit:
 
     def apply(self, ctx: Ctx) -> None:
         f = self._file(ctx)
+        if self.host_override:
+            ctx.log(f"      · per-machine values for '{self.host_override}'")
+        elif self._host_choices:
+            # Never fail silently: a typo'd hostname would otherwise look like
+            # a clean run while quietly writing the wrong machine's settings.
+            ctx.log(f"      · this host is '{self._host}' — no per-machine "
+                    f"entry (have: {', '.join(self._host_choices)}), using "
+                    f"the shared values")
         lines = f.read_text(encoding="utf-8",
                             errors="surrogateescape").splitlines()
 
