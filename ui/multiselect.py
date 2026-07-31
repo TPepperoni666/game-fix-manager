@@ -15,6 +15,8 @@ from __future__ import annotations
 import os
 import sys
 
+from .textwidth import display_width, rows_used, truncate as _truncate  # noqa: F401
+
 # Colors matched to gum's palette (99 = purple, 212 = pink-ish, 240 = dim).
 _HEADER = "\x1b[38;5;99m"
 _CURSOR = "\x1b[38;5;212m"
@@ -23,14 +25,6 @@ _DIM = "\x1b[38;5;240m"
 _RESET = "\x1b[0m"
 
 MAX_WINDOW = 15   # cap the viewport like gum's single-select does
-
-
-def _truncate(text: str, width: int) -> str:
-    """Clip a label to width columns with an ellipsis, so it never wraps to a
-    second terminal row (wrapping is what threw off the old redraw math)."""
-    if width <= 1:
-        return text[:max(0, width)]
-    return text if len(text) <= width else text[:width - 1] + "…"
 
 
 def _window_height(total: int, rows: int, header_lines: int) -> int:
@@ -179,11 +173,17 @@ def multiselect_arrows(header: str, options: list[str],
         scrolling = len(options) > height
         label_w = max(10, cols - 9)   # cursor + "[x]" + spaces + margin
 
+        # Every emitted line is clipped to this. A line wider than the
+        # terminal wraps, and a wrapped line makes the cursor-up count below
+        # too small — which is what walked the menu down the screen on every
+        # keypress. One column spare: some terminals wrap at exactly `cols`.
+        line_w = max(10, cols - 1)
+
         buf = []
         if drawn:
             buf.append(f"\x1b[{drawn}A\x1b[J")   # redraw in place
         for line in header.splitlines():
-            buf.append(f"{_HEADER}{line}{_RESET}\n")
+            buf.append(f"{_HEADER}{_truncate(line, line_w)}{_RESET}\n")
         buf.append("\n")
         end = min(top + height, len(options))
         for i in range(top, end):
@@ -205,13 +205,15 @@ def multiselect_arrows(header: str, options: list[str],
                 more.append(f"▲ {top} above")
             if end < len(options):
                 more.append(f"▼ {len(options) - end} below")
-            buf.append(f"   {_DIM}({end - top} of {len(options)}"
-                       + ("  " + "  ".join(more) if more else "") + f"){_RESET}\n")
+            pos = (f"   ({end - top} of {len(options)}"
+                   + ("  " + "  ".join(more) if more else "") + ")")
+            buf.append(f"{_DIM}{_truncate(pos, line_w)}{_RESET}\n")
         hint = ("↑↓ move  •  ←→ toggle  •  a all  •  Enter confirm  •  Esc cancel"
                 if multi else "↑↓ move  •  Enter select  •  Esc back")
-        buf.append(f"\n{_DIM}{hint}{_RESET}\n")
+        buf.append(f"\n{_DIM}{_truncate(hint, line_w)}{_RESET}\n")
         text = "".join(buf)
-        drawn = text.count("\n")
+        # Rows, not newlines: this is what the cursor-up above has to undo.
+        drawn = rows_used(text, cols)
         sys.stdout.write(text)
         sys.stdout.flush()
 

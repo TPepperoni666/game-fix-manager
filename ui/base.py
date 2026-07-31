@@ -2,6 +2,7 @@
 just implements this same interface."""
 from __future__ import annotations
 
+import os
 import sys
 from abc import ABC, abstractmethod
 
@@ -14,8 +15,23 @@ class UI(ABC):
         GUI can override with a real progress bar. Goes straight to stdout
         rather than through msg() because msg() appends a line — a multi-GB
         copy would scroll thousands of them.
+
+        The text is CLIPPED to the terminal width first. \\r returns to the
+        start of the current row and \\033[K clears to the end of it — so a
+        line wider than the terminal wraps, and every update then rewrites
+        only its final row while the rows above it stay on screen. That's
+        what turned a deploy into a wall of progress lines on a narrow
+        terminal; the status line is ~100 columns and a handheld console is
+        nowhere near that.
         """
         try:
+            from .textwidth import truncate
+            try:
+                cols = os.get_terminal_size().columns
+            except OSError:
+                cols = 0
+            if cols > 0:
+                text = truncate(text, cols - 1)
             sys.stdout.write("\r\033[K" + text)
             sys.stdout.flush()
         except UnicodeEncodeError:
