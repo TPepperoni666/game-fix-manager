@@ -3232,6 +3232,32 @@ class App:
             self.ui.msg("Update failed:", "error")
             for line in err.splitlines()[:8]:
                 self.ui.msg(f"  {line}", "dim")
+            # The common case, and one WE cause: adopting a hand-added
+            # shortcut appends to store/prefix_registry.json, which is a
+            # tracked file, so the next pull refuses to overwrite it. Left as
+            # raw git output that reads like a mystery, and it silently
+            # blocks every future update until someone notices.
+            dirty = [f for f in git("diff", "--name-only").stdout.split()
+                     if f]
+            if dirty and "would be overwritten" in err:
+                self.ui.msg("", "dim")
+                self.ui.msg("This is a local edit blocking the pull. Changed "
+                            "here:", "warn")
+                for f in dirty[:8]:
+                    self.ui.msg(f"  • {f}", "dim")
+                if "store/prefix_registry.json" in dirty:
+                    self.ui.msg("prefix_registry.json is written by the tool "
+                                "itself when it adopts a hand-added shortcut, "
+                                "so this will keep happening.", "dim")
+                    self.ui.msg("Keep your adopted pins — copy the file "
+                                "somewhere safe, then discard and re-pull:",
+                                "warn")
+                    self.ui.msg("  cp store/prefix_registry.json "
+                                "\"$(dirname \"$0\")\"/registry.local.json",
+                                "dim")
+                self.ui.msg("  git -C "
+                            f"{app_dir} checkout -- <file>   # discard, then "
+                            "update again", "dim")
             return
 
         new_head = git("rev-parse", "HEAD").stdout.strip()
