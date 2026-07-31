@@ -20,25 +20,26 @@
     { "appid": 3351894122, "name": "Starfield (non-Steam copy)",  "safe_name": "Starfield",                       "kind": "non_steam", "recipe_id": null,                   "in_latest_backup": false, "notes": "NOT in latest backup AND not present in sd_map (2026-07-07) — non-Steam Starfield copy is not on the SD currently. Dormant." },
     { "appid": 3481683521, "name": "Star Wars Battlefront II (Kyber)", "safe_name": "Star_Wars_Battlefront_II__Kyber", "kind": "non_steam", "recipe_id": null,             "in_latest_backup": false, "notes": "NOT in latest backup AND not in sd_map — only the Steam Battlefront variants (1237950, 2446550) are present, not this non-Steam Kyber copy. Dormant." },
     { "appid": 4059462977, "name": "Colin McRae Rally 2005",      "safe_name": "Colin_McRae_Rally_2005",          "kind": "non_steam", "recipe_id": null,                   "in_latest_backup": false, "notes": "Game IS on the SD (Games/Colin McRae Rally 2005, unmatched in sd_map) but was not in the latest backup run — needs a detect block + exe, and confirm the prefix exists in the full backup copy" },
-    { "appid": 1262600,    "name": "Need for Speed: Rivals",      "safe_name": "Need_for_Speed__Rivals",          "kind": "non_steam", "recipe_id": null,                   "in_latest_backup": false, "notes": "Present as a real Steam entry on the SD (appmanifest 1262600, steamapps/common) — compatdata already keyed by 1262600, so restore = drop prefix back, no shortcut needed. Not in latest backup run though." }
+    { "appid": 1262600,    "name": "Need for Speed: Rivals",      "safe_name": "Need_for_Speed__Rivals",          "kind": "non_steam", "recipe_id": null,                   "in_latest_backup": false, "notes": "Present as a real Steam entry on the SD (appmanifest 1262600, steamapps/common) — compatdata already keyed by 1262600, so restore = drop prefix back, no shortcut needed. Not in latest backup run though." },
+    { "appid": 2664203860, "name": "Gears of War 2 - Hollow",     "safe_name": "Gears_of_War_2___Hollow",         "kind": "non_steam", "recipe_id": "gow2-hollow",          "in_latest_backup": false, "notes": "PINNED 2026-07-31 TO AN APPID THAT ALREADY EXISTS. The folder was deployed and adopted (gfm.log 10:38:13) BEFORE the gow2-hollow recipe was written, so Steam already holds a shortcut at 2664203860 — the generic deploy id, crc32('gfm:deploy:Gears of War 2 - Hollow')|0x80000000. Without this pin steam_shortcut would derive crc32('gfm:gow2-hollow')|0x80000000 = 2324501345 and add a SECOND shortcut, orphaning the existing prefix and any art. Deploy prefers a matching recipe over a generic shortcut, so this only bites for folders adopted before their recipe existed." }
   ],
   "steam_pending": {
     "_note": "These Steam titles appeared in the latest backup log; their permanent Steam appids will be filled from the incoming 'prefix backups/' folder listing (folder name = appid). A few are already known from existing recipes.",
     "known": [
       { "name": "Driver: San Francisco",                "appid": 33440,  "recipe_id": "driver-san-francisco" },
       { "name": "Shift 2 Unleashed",                    "appid": 47920,  "recipe_id": "shift2-unleashed" },
-      { "name": "Transformers: Rise of the Dark Spark", "appid": 245760, "recipe_id": "rise-of-the-dark-spark" }
+      { "name": "Transformers: Rise of the Dark Spark", "appid": 245760, "recipe_id": "rise-of-the-dark-spark" },
+      { "name": "Assetto Corsa",                        "appid": 244210,  "recipe_id": null },
+      { "name": "Automobilista 2",                      "appid": 1066890, "recipe_id": null },
+      { "name": "Call of Duty 2",                       "appid": 2630,    "recipe_id": null },
+      { "name": "Circuit Superstars",                   "appid": 1097130, "recipe_id": null },
+      { "name": "Medal of Honor: Airborne",             "appid": 24840,   "recipe_id": null },
+      { "name": "MX vs. ATV Unleashed",                 "appid": 359220,  "recipe_id": null },
+      { "name": "TRANSFORMERS: Devastation",            "appid": 338930,  "recipe_id": null },
+      { "name": "Transformers: Fall of Cybertron",      "appid": 213120,  "recipe_id": null },
+      { "name": "WALL-E",                               "appid": 331750,  "recipe_id": null }
     ],
-    "appid_unknown": [
-      "Automobilista 2",
-      "Circuit Superstars",
-      "MX vs. ATV Unleashed",
-      "TRANSFORMERS: Devastation",
-      "Transformers: Fall of Cybertron",
-      "WALL-E",
-      "Assetto Corsa",
-      "Call of Duty 2",
-      "Medal of Honor: Airborne"
-    ]
+    "_appids_filled": "2026-07-31 — the nine former 'appid_unknown' entries were resolved from the prefix-backup inventory in gfm.log (10:38:16), where each backup folder is named for its Steam appid. They restore fine already (folder name + appid ARE the manifest); the appid here just lets a future recipe claim one without re-deriving it. recipe_id stays null until a recipe exists.",
+    "appid_unknown": []
   }
 }

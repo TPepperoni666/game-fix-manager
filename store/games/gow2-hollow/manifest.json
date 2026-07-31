@@ -1,0 +1,78 @@
+{
+  "id": "gow2-hollow",
+  "name": "Gears of War 2 - Hollow",
+  "aliases": [
+    "Gears of War 2 Hollow",
+    "GoW2Hollow",
+    "Gears of War 2",
+    "Hollow"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "Gears of War 2 - Hollow",
+      "Gears of War 2 Hollow",
+      "GoW2Hollow"
+    ],
+    "marker_files": ["Binaries/GoW2Hollow.exe"]
+  },
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "ini_edit",
+      "target": "{game_dir}/GearGame/Config/DefaultEngine.ini",
+      "values": {
+        "Engine.GameEngine": {
+          "bSmoothFrameRate": "True",
+          "MaxSmoothedFrameRate": 120
+        },
+        "TextureStreaming": {
+          "PoolSize": 512
+        },
+        "SystemSettings": {
+          "ResX": 1920,
+          "ResY": 1200,
+          "Fullscreen": "True",
+          "UseVsync": "False",
+          "MaxMultisamples": 2,
+          "MaxAnisotropy": 16,
+          "DetailMode": 2,
+          "DynamicShadows": "True",
+          "MinShadowResolution": 64,
+          "MaxShadowResolution": 1024,
+          "MotionBlur": "False",
+          "Bloom": "True",
+          "DepthOfField": "True",
+          "AmbientOcclusion": "True",
+          "LensFlares": "True",
+          "Distortion": "True"
+        }
+      }
+    },
+    {
+      "type": "ini_edit",
+      "target": "{game_dir}/GearGame/Config/DefaultCamera.ini",
+      "values": {
+        "GearGame.GameplayCam_Default": { "FOVAngle": 100 }
+      }
+    },
+    {
+      "type": "ini_edit",
+      "target": "{game_dir}/GearGame/Config/DefaultInput.ini",
+      "values": {
+        "Engine.PlayerInput": { "MouseSensitivity": 60 }
+      }
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "Binaries/GoW2Hollow.exe",
+      "start_dir": "{game_dir}/Binaries",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "Gears of War 2 - Hollow (community PC port, UE3) — Apply adds the Steam shortcut on GE-Proton 10.34 pointing at Binaries/GoW2Hollow.exe and writes your display/camera/input settings.\n\nWHY THE INI AND NOT THE LAUNCHER: the game has NO in-game options menu, and GoW2Hollow_Launcher.exe is a 64-bit PySide6 app that spawns the 32-bit game as a CHILD process — which breaks Steam's process tracking (Steam sees the game exit when the launcher does). The launcher is only a GUI over these same ini files, so the recipe writes them directly and the launcher is never needed on Linux. Unusually for UE3, Hollow REGENERATES GearEngine.ini / GearCamera.ini / GearInput.ini from the Default*.ini on every launch, so editing the Default* files is authoritative — there is no generated user config to chase.\n\nSETTINGS: 1920x1200, fullscreen, 2x MSAA, 16x anisotropic, PoolSize 512, everything else as Tony had it. These are HANDHELD values — the Windows side has the launcher for its own settings, so this recipe exists for the machines that don't.\n\n1920x1200 IS 16:10, WHICH IS THE POINT. Both the Legion Go 2 (1920x1200) and the Steam Deck (1280x800) are 16:10 panels, so this gives the correct aspect ratio on either — native on the Go 2, clean 1.5x supersampling on a Deck. The launcher only ever offers 16:9 and ultrawide presets, never 16:10, which is why this can't be set from its UI; the ini takes any integers and the port handles unusual aspect ratios fine (its own preset list runs to 5120x1440 / 32:9).\n\nMSAA IS THE COST DRIVER, not the resolution — if it struggles, take MaxMultisamples to 1 (1 = off in UE3; there is no 0) before touching anything else. MaxAnisotropy at 16 is nearly free, so it stays. PoolSize=512 (up from the shipped 140) is the anti-pop-in / anti-streaming-hitch lever; don't push it much past this on a handheld, where the texture pool competes with system RAM rather than sitting in dedicated VRAM.\n\nFRAME PACING: bSmoothFrameRate stays True with MaxSmoothedFrameRate=120 deliberately. UE3 clamps reported delta time into [1/Max, 1/Min] (Min=22 from BaseEngine.ini), so a 120 ceiling keeps the clamp boundary well clear of a 60 Hz frame time — setting Max=60 would put the boundary exactly on it. Cap to the display with SteamOS/gamescope instead. If a dip ever renders as SLOW MOTION rather than stutter, that's the Min=22 clamp: set bSmoothFrameRate=False.\n\nDXVK: nothing to do. The dgVoodoo2 D3D9->D3D11 fix circulating for Windows exists to escape the legacy D3D9 driver path; Proton already replaces d3d9 with DXVK (D3D9 -> Vulkan), so stacking dgVoodoo would just add a second translation layer.",
+  "notes": "Built 2026-07-31 from Tony's copy at F:\\Games\\Gears of War 2 - Hollow (10.87 GB, 2600 files), staged to NAS _games/. UE3 fan port of a game never released on PC; not a cracked commercial title.\n\nEXE: Binaries/GoW2Hollow.exe (36 MB, x86) — VERIFIED on disk, and note the case (capital B in Binaries, capital G in GearGame) after the Halo MCC lowercase-mcc/ mistake. GoW2Hollow_Launcher.exe and Uninstall.exe are the SAME 47.3 MB binary (identical MD5) — one PyInstaller/PySide6 exe branching on its own filename. start_dir is Binaries/ (exe dir, UE3 convention); if the game can't find its content, try {game_dir} instead — the launcher itself Popens the exe with the install root as cwd.\n\nSETTINGS PROVENANCE: based on Tony's own launcher-configured settings read off F: on 2026-07-31 (NOT the shipped defaults, which were 1280x720, MaxMultisamples=1, MaxAnisotropy=4, MaxSmoothedFrameRate=60), then adjusted for a handheld per his instructions: Fullscreen False->True, MaxAnisotropy 8->16, MaxMultisamples 8->2, 3840x2160->1920x1200, PoolSize 140->512. Ran at 1920x1080 first and played well; moved to 1200 for the correct 16:10 aspect on Tony's request (+11% pixels). Bools are written as the strings 'True'/'False' rather than JSON booleans because ini_edit's _fmt turns JSON true into '1' — UE3 accepts 1, but matching the file's own spelling keeps it readable and diffable.\n\nDELIBERATELY ONE SET OF VALUES. An earlier draft split these across a shared block plus a per-hostname override so one recipe could serve the desktop too; Tony correctly called that overbuilt — Windows has the launcher, so the recipe only needs to serve Linux. ini_edit still SUPPORTS values_by_host (built and tested at the same time) if a future recipe genuinely needs per-machine display values; this one doesn't use it.\n\nSettings the launcher also exposes but the recipe leaves alone: keybinds (DefaultInput.ini [Engine.PlayerInput] Bindings array), camera shake ([GearGame.GearCamMod_CameraBone]), and the dedicated-server options ([GearGameContent.GearGame*] — Horde/TDM/Annex/CTM/KTL/Wingman). The launcher's own prefs (player name, extra_args, launch-via-Steam) live in launcher_config.json, which doesn't exist until the launcher is run; extra_args is redundant here since Steam launch options do the same job.\n\nNon-Steam -> computed appid from the recipe id. UNTESTED on hardware."
+}
