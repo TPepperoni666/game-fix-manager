@@ -1,0 +1,26 @@
+{
+  "id": "jak-daxter-opengoal",
+  "name": "Jak and Daxter Trilogy (OpenGOAL)",
+  "aliases": [
+    "Jak and Daxter Trilogy",
+    "Jak And Daxter Trilogy Recompiled",
+    "OpenGOAL",
+    "Jak and Daxter"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "Jak and Daxter Trilogy",
+      "Jak And Daxter Trilogy Recompiled"
+    ],
+    "marker_files": ["OpenGOAL-Launcher_2.10.4_amd64.AppImage"]
+  },
+  "steps": [
+    {
+      "type": "steam_shortcut",
+      "exe": "OpenGOAL-Launcher_2.10.4_amd64.AppImage",
+      "start_dir": "{game_dir}"
+    }
+  ],
+  "post_apply_message": "Jak and Daxter Trilogy (OpenGOAL) — NATIVE LINUX, no Proton. Apply adds a Steam shortcut for the launcher AppImage with NO compat tool set, because this runs natively; forcing Proton on it would break it.\n\nTHE APPIMAGE PROBABLY NEEDS ITS EXECUTABLE BIT BACK. Files copied from the SMB share may land without +x depending on the mount's file_mode, and an AppImage that isn't executable simply won't start. Check and fix with:\n    ls -l 'OpenGOAL-Launcher_2.10.4_amd64.AppImage'\n    chmod +x 'OpenGOAL-Launcher_2.10.4_amd64.AppImage'\nThere is no recipe step for this yet — see the notes.\n\nTHE LAUNCHER WILL NEED A LINUX BUILD OF OPENGOAL. versions/official/v0.3.3/ contains gk.exe, goalc.exe and extractor.exe — WINDOWS binaries, which are no use here. On first run the launcher will want to download the Linux build for whichever version you pick. That needs the Deck online once.\n\nTHE ISOs ARE RIGHT THERE, WHICH IS THE POINT. All three sit at the top of the game folder, so when the launcher asks for a source you point it at the folder instead of hunting: Jak 1 (Precursor Legacy, EU), Jak II (USA v2.01) and Jak 3 (EU/AU). If the launcher decides to re-extract and recompile for Linux, it has everything it needs locally and never has to ask you for a disc image.\n\nPOINT THE LAUNCHER AT THE NEW PATH. OpenGOAL keeps its own config in ~/.config outside the game folder, so it does NOT travel with Deploy. After deploying you'll need to tell the launcher where the install folder now lives — once, on that machine.\n\nSPACE: this is ~34 GB deployed. If the launcher rebuilds for Linux, active/*/out (12.9 GB, compiled by the Windows toolchain) and active/*/iso_data (9.65 GB, re-extractable from the ISOs beside them) become regenerated rather than reused — at which point roughly 22 GB of what was copied is redundant and can be trimmed. Worth checking what it actually reuses before deciding.",
+  "notes": "Built 2026-07-31. OpenGOAL (opengoal.dev) is a DECOMPILATION + reimplementation with its own launcher, not a static recompilation like the Skate 3 / N64Recomp entries — so it behaves differently: the launcher owns version management and install layout, and the 'game' is data compiled from the ISO rather than a shipped executable.\n\nStaged to NAS _games/'Jak and Daxter Trilogy' at Tony's explicit request to include BOTH the launcher and the ISOs so the launcher never has to fish for a disc image. 34,078 files / 34.15 GB. Excluded only 'OpenGOAL Windows Launcher.msi' (wrong platform — he wants the native Linux AppImage).\n\nCONTENT BREAKDOWN: ISOs 9.9 GB (Jak1 EU 1.39, Jak2 USA 4.21, Jak3 EU/AU 4.29), active/*/iso_data 9.65 GB, active/*/out 12.89 GB, decompiler_out 1.28 GB, goal_src 0.27 GB, versions/ 0.17 GB (WINDOWS exes only), launcher AppImage 0.13 GB.\n\nNO PROTON DEPLIBERATELY: the steam_shortcut step omits 'proton' entirely, so no CompatToolMapping is written. steam_shortcut already skips the compat mapping on Windows hosts; here it's skipped because the target IS a native Linux binary.\n\nNO make_executable STEP EXISTS. The AppImage needs +x and there's no step type for it, so it's documented in post_apply_message instead of automated. This will recur — Super Smash Bros 64 (Battleship) is also an AppImage, and more native-Linux recomps are likely. A small 'make_executable' step (chmod +x on a list of paths under game_dir) is the clean fix; proposed to Tony, not built, since it's a new step type rather than a bug fix.\n\nEXE NAME CARRIES A VERSION (OpenGOAL-Launcher_2.10.4_amd64.AppImage), so a launcher update renames it and both marker_files and the shortcut exe go stale. Re-point them when the launcher is updated.\n\nsave_paths DELIBERATELY EMPTY: OpenGOAL's save location isn't confirmed — no saves/ folder exists in the staged copy yet, and its launcher config lives in ~/.config, so saves may well live outside the game folder too. Confirm on first run before declaring anything, rather than guessing (guessed paths are what broke Halo MCC).\n\nNo existing Steam shortcut for it, so the appid derives from the recipe id — no registry pin needed. UNTESTED on hardware."
+}
