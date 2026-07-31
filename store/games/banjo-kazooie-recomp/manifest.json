@@ -1,0 +1,42 @@
+{
+  "id": "banjo-kazooie-recomp",
+  "name": "Banjo-Kazooie: Recompiled",
+  "aliases": [
+    "Banjo-Kazooie Recompiled",
+    "Banjo Recompiled",
+    "BanjoRecompiled",
+    "Banjo-Kazooie"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "Banjo-Kazooie Recompiled",
+      "Banjo Recompiled",
+      "BanjoRecompiled"
+    ],
+    "marker_files": ["BanjoRecompiled.exe"]
+  },
+  "save_paths": [
+    "{game_dir}/saves",
+    "{game_dir}/mods"
+  ],
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "copy_files",
+      "from": "payload/portable",
+      "to": "{game_dir}"
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "BanjoRecompiled.exe",
+      "start_dir": "{game_dir}",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "Banjo-Kazooie: Recompiled (github.com/BanjoRecomp/BanjoRecomp — a static recompilation via N64: Recompiled, rendering through RT64) — Apply adds the Steam shortcut on GE-Proton 10.34 and turns on portable mode.\n\nPORTABLE MODE IS THE IMPORTANT BIT. The project's README: 'If you place a file named portable.txt in the same folder as the executable then this project will run in portable mode' — and in that mode 'save files, config files, and mods are placed in the same folder as the executable'. Without it the Windows build writes to %LOCALAPPDATA%\\BanjoRecompiled\\saves, which under Proton means INSIDE the prefix, where a prefix wipe destroys your saves and GFM's capture can't see them. With it, saves, settings AND mods all sit in the game folder, travel with Deploy and survive a reimage.\n\nTHE ROM SHIPS WITH IT. Banjo-Kazooie (USA).n64 sits beside the exe in the staged copy, so first-run setup can find it without you browsing for it. US 1.0 is the version the project requires.\n\nTRY VULKAN IF IT STUTTERS. RT64 supports Direct3D 12 and Vulkan 1.2. Under Proton the Windows build will pick D3D12, which means game -> VKD3D-Proton -> Vulkan; selecting Vulkan in the in-game graphics settings makes it game -> winevulkan and drops a translation layer. With portable mode on, that choice is saved in the game folder and travels with it.\n\nWHY THE WINDOWS BUILD AT ALL: the README actually suggests the Linux build for Steam Deck. This recipe follows Tony's call to run the Windows build under GE-Proton, which is what won for Skate 3. The Linux build is one unzip away (BanjoRecompiled-v1.0.0-Linux-X64.zip, 7.9 MB, in the source folder on D:) if you want to compare — it would need a separate shortcut with no compat tool.",
+  "notes": "Built 2026-07-31 from D:\\Recompilations\\Banjo Recompiled, staged to NAS _games/'Banjo-Kazooie Recompiled' as 45 files / 59.8 MB.\n\nLAYOUT WAS FLATTENED ON STAGING. The source has the exe one level down in Windows\\ with the ROM at the root; the staged copy puts BanjoRecompiled.exe, its DLLs (dxcompiler, dxil, SDL2), assets/ and the .n64 ROM all at the top level, so exe/start_dir are plain and the ROM sits next to the exe. Skipped: BanjoRecompiled-v1.0.0-Windows.zip (the release archive the Windows\\ folder was extracted from — pure redundancy) and BanjoRecompiled-v1.0.0-Linux-X64.zip (wrong platform for this recipe).\n\nBuilt on N64Recomp (static recompilation), RT64 (renderer), N64ModernRuntime (runtime + mod support) and RecompFrontend (menus/input) — same family as Zelda64Recomp, so the portable.txt convention and the D3D12/Vulkan choice recur across all of them. Worth remembering if more N64Recomp ports get staged.\n\nsave_paths covers saves/ and mods/, both of which portable mode places beside the exe. The config file also lands there but has no confirmed filename yet — check on first run and widen save_paths if settings should be captured too.\n\nNon-Steam, no existing Steam shortcut for it (checked _state/shortcuts/steamdeck.json), so NO registry pin is needed: the appid derives deterministically from the recipe id. UNTESTED on hardware."
+}
