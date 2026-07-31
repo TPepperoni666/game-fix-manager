@@ -2072,6 +2072,62 @@ def main():
         check("progress clips to the terminal width before writing",
               "truncate" in _bsrc and "get_terminal_size" in _bsrc)
 
+        # --- self-check: name the frontend and whether menus fit ----------
+        # The redraw fix WAS pushed and WAS correct, but GumUI only routes
+        # multi-select through the fixed picker, so single-select menus kept
+        # drifting and it looked like nothing had landed. These checks exist
+        # so the tool can say that out loud on the machine that has it.
+        from core import selfcheck as _sc
+        _gum_rows = _sc.frontend_rows("/home/deck/scripts/bin/gum")
+        _by = {r.label: r for r in _gum_rows}
+        check("selfcheck names the live frontend",
+              _by["UI frontend"].value == "GumUI")
+        check("selfcheck flags that gum draws the single-select menus",
+              "gum choose" in _by["menus (single-select)"].value
+              and _by["menus (single-select)"].verdict == _sc.WARN)
+        check("selfcheck knows multi-select uses the fixed picker",
+              "arrow picker" in _by["pickers (multi-select)"].value
+              and _by["pickers (multi-select)"].verdict == _sc.OK)
+        _plain = {r.label: r for r in _sc.frontend_rows(None)}
+        check("selfcheck reports PlainUI when gum is absent",
+              _plain["UI frontend"].value == "PlainUI"
+              and _plain["menus (single-select)"].verdict == _sc.OK)
+
+        # the fit checks — a tall gum chooser in a short terminal is the bug
+        _tall = {r.label: r for r in _sc.fit_rows(80, 12, "/bin/gum", 30, 40)}
+        check("selfcheck catches a gum chooser taller than the terminal",
+              _tall["gum chooser height"].verdict == _sc.BAD)
+        _roomy = {r.label: r for r in _sc.fit_rows(120, 40, "/bin/gum", 30, 40)}
+        check("selfcheck passes a chooser that fits",
+              _roomy["gum chooser height"].verdict == _sc.OK)
+        _narrow = {r.label: r for r in _sc.fit_rows(40, 30, None, 20, 10)}
+        check("selfcheck catches a hint line wider than the terminal",
+              _narrow["widest fixed hint line"].verdict == _sc.BAD)
+        check("selfcheck passes the hint line on a wide terminal",
+              _roomy["widest fixed hint line"].verdict == _sc.OK)
+
+        _tiny = {r.label: r for r in _sc.terminal_rows(40, 10, True, True, "")}
+        check("selfcheck rates a tiny terminal as bad",
+              _tiny["terminal size"].verdict == _sc.BAD)
+        _notty = {r.label: r for r in _sc.terminal_rows(100, 30, False, False,
+                                                        "xterm")}
+        check("selfcheck warns when stdin/stdout isn't a TTY",
+              _notty["stdin / stdout a TTY"].verdict == _sc.WARN)
+
+        _bld = {r.label: r for r in _sc.build_rows()}
+        check("selfcheck reports whether the redraw fix is present",
+              _bld["narrow-terminal redraw fix"].value == "yes")
+        _envr = {r.label: r for r in _sc.env_rows(None, "/store", None, False)}
+        check("selfcheck doesn't call an unconfigured NAS 'unreachable'",
+              _envr["local payloads (NAS)"].note == "")
+        check("selfcheck flags a missing Steam root",
+              _envr["Steam root"].verdict == _sc.BAD)
+        check("selfcheck reports the hostname values_by_host matches on",
+              _envr["host"].value == __import__("socket").gethostname())
+        check("selfcheck is wired to the CLI and the main menu",
+              "selfcheck" in gfm_mod.COMMANDS
+              and "🩺" in _i.getsource(gfm_mod.App.menu))
+
         # --- deploy gap-fillers: runner install + prefix restore -------
         from core.steps import install_runner as _ir
         import tarfile as _tf

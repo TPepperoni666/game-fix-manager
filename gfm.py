@@ -3804,6 +3804,65 @@ class App:
         self.ui.msg("  'Keyboard (WASD) and Mouse' template (or map D-pad to arrow", "dim")
         self.ui.msg("  keys, A to Enter, B to Esc).", "dim")
 
+    def cmd_selfcheck(self, args=None):
+        """Report what this machine is ACTUALLY running, and whether the
+        menus fit in its terminal.
+
+        Exists because a redraw fix that was genuinely pushed and genuinely
+        correct looked broken for three rounds: get_ui() prefers the gum
+        frontend whenever the gum binary exists, and GumUI only routes
+        MULTI-select through the fixed arrow picker — every single-select
+        menu goes to an external `gum choose`. Nothing in the tool surfaced
+        that, so "still doing the same thing" and "the fix didn't land" were
+        indistinguishable from the outside.
+
+        Like cmd_diagnose, everything goes through ui.msg so it lands in
+        gfm.log, which Syncthings to the workstation. The answer travels
+        without anyone reading numbers off a handheld screen."""
+        from core import selfcheck as sc
+        self.ui.header("🩺 SELF-CHECK")
+
+        cols, rows = sc.terminal_size()
+        gum = sc.find_gum()
+        # Measure against the REAL menu, not a sample: the longest recipe name
+        # is what Apply/Revert actually have to draw.
+        labels = [r.name for r in self.recipes] or ["(no recipes loaded)"]
+        longest = max(len(x) for x in labels)
+        payloads_up = bool(self.local_payloads
+                           and store.is_dir_safe(self.local_payloads))
+
+        sections = [
+            ("build", sc.build_rows()),
+            ("frontend", sc.frontend_rows(gum)),
+            ("terminal", sc.terminal_rows(
+                cols, rows, sys.stdin.isatty(), sys.stdout.isatty(),
+                os.environ.get("TERM", ""))),
+            ("does it fit", sc.fit_rows(cols, rows, gum, longest, len(labels))),
+            ("environment", sc.env_rows(self.steam_root, self.store_root,
+                                        self.local_payloads, payloads_up)),
+        ]
+        marks = {sc.OK: "✓", sc.WARN: "!", sc.BAD: "✗", sc.INFO: "·"}
+        # The mark carries the verdict, so pass OK rows as "dim" rather than
+        # "success" — the plain frontend prefixes "[OK] " to success lines and
+        # a whole column of "[OK] ✓" is noise on a report this dense.
+        styles = {sc.OK: "dim", sc.WARN: "warn", sc.BAD: "error",
+                  sc.INFO: "dim"}
+        problems = 0
+        for title, entries in sections:
+            self.ui.msg(f"── {title} " + "─" * max(1, 24 - len(title)), "info")
+            for e in entries:
+                if e.verdict in (sc.WARN, sc.BAD):
+                    problems += 1
+                self.ui.msg(f"  {marks.get(e.verdict, '·')} "
+                            f"{e.label:<26} {e.value}",
+                            styles.get(e.verdict, "dim"))
+                if e.note:
+                    self.ui.msg(f"      {e.note}", "dim")
+        self.ui.msg("", "dim")
+        self.ui.msg(f"{problems} thing(s) worth a look. This is in gfm.log "
+                    "too, which syncs — no need to transcribe it.",
+                    "warn" if problems else "success")
+
     def cmd_diagnose(self, args=None):
         """Dump a game's folder layout + live launch settings to gfm.log.
 
@@ -3930,6 +3989,7 @@ class App:
                 "⚙️  Settings (NAS, runners, mirror, update, install)",
                 "🛠  Advanced (individual steps)",
                 "🔬 Diagnostics (game layout + launch settings)",
+                "🩺 Self-Check (what's running here, do the menus fit)",
                 "❌ Exit"])
             choice = choice[0] if choice else "❌ Exit"
             if choice.startswith("🔧"):
@@ -3959,6 +4019,9 @@ class App:
             elif choice.startswith("🔬"):
                 self.cmd_diagnose()
                 self.ui.input("Press Enter to continue")
+            elif choice.startswith("🩺"):
+                self.cmd_selfcheck()
+                self.ui.input("Press Enter to continue")
             else:
                 return
 
@@ -3979,6 +4042,7 @@ COMMANDS = {
     # bundles (the two headline menu entries)
     "scan": lambda app, a: app.cmd_scan_all(),
     "diagnose": lambda app, a: app.cmd_diagnose(a),
+    "selfcheck": lambda app, a: app.cmd_selfcheck(a),
     "adopt": lambda app, a: app.cmd_adopt(a),
     "restore-shortcuts": lambda app, a: app.cmd_restore_shortcuts(a),
     "collect-logs": lambda app, a: app.cmd_collect_logs(a),
