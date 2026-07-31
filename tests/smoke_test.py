@@ -2128,6 +2128,54 @@ def main():
               "selfcheck" in gfm_mod.COMMANDS
               and "🩺" in _i.getsource(gfm_mod.App.menu))
 
+        # --- adopted appid pins live OUTSIDE the git checkout -------------
+        # Adoption used to append to store/prefix_registry.json, a TRACKED
+        # file. That wedged every later `git pull --ff-only`, and — quieter —
+        # put reimage-survival pins inside a checkout a reimage destroys.
+        from core import adopted as _ad
+        _adtmp = tmp / "adoptstate"; _adtmp.mkdir()
+        _adstore = tmp / "adoptstore"; _adstore.mkdir()
+        (_adstore / "prefix_registry.json").write_text(__import__("json").dumps(
+            {"entries": [{"appid": 111, "name": "Curated", "recipe_id": "cur"}]}),
+            encoding="utf-8")
+        check("adopted pins land under _state, never in the store",
+              "_state" in str(_ad.path(_adtmp))
+              and _adstore not in _ad.path(_adtmp).parents)
+        check("no payloads dir still gives a writable, untracked home",
+              "_state" not in str(_ad.path(None)))
+        check("missing adopted file reads as empty, not an error",
+              _ad.load(_adtmp) == [])
+        _w = _ad.append(_adtmp, [{"appid": 222, "name": "Adopted"}])
+        check("append writes the adopted file", _w is not None and _w.is_file())
+        check("adopted entries read back", len(_ad.load(_adtmp)) == 1)
+        _ad.append(_adtmp, [{"appid": 222, "name": "Adopted again"}])
+        check("appending the same appid twice doesn't duplicate it",
+              len(_ad.load(_adtmp)) == 1)
+        _ad.append(_adtmp, [{"appid": 333, "name": "Second"}])
+        check("a different appid does get added", len(_ad.load(_adtmp)) == 2)
+        _merged = _ad.merged_entries(_adstore, _adtmp)
+        check("merged view carries curated AND adopted", len(_merged) == 3)
+        # Curated must win: the file a human vouched for beats a discovered pin.
+        _ad.append(_adtmp, [{"appid": 111, "name": "Adopted clash"}])
+        _m2 = _ad.merged_entries(_adstore, _adtmp)
+        check("curated wins over an adopted pin on the same appid",
+              len([e for e in _m2 if str(e.get("appid")) == "111"]) == 1
+              and [e for e in _m2
+                   if str(e.get("appid")) == "111"][0]["name"] == "Curated")
+        _gsrc = _i.getsource(gfm_mod.App._append_registry_entries)
+        # Assert on behaviour, not on the word: the docstring names
+        # prefix_registry.json deliberately, to explain what it stopped doing.
+        check("the adopt writer no longer writes into the store",
+              "adopted.append" in _gsrc and "write_text" not in _gsrc)
+        check("repair is wired to the CLI and the Settings menu",
+              "repair" in gfm_mod.COMMANDS
+              and "🩹" in _i.getsource(gfm_mod.App.menu_settings))
+        _rsrc = _i.getsource(gfm_mod.App.cmd_repair)
+        check("repair backs up before it discards anything",
+              _rsrc.index("copy2") < _rsrc.index('"checkout"'))
+        check("repair stops rather than discarding if backup fails",
+              "stopping rather than" in _rsrc)
+
         # --- deploy gap-fillers: runner install + prefix restore -------
         from core.steps import install_runner as _ir
         import tarfile as _tf

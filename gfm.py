@@ -23,10 +23,10 @@ import time
 import traceback
 from pathlib import Path
 
-from core import (deckysettings, deploy, detect, engine, fetch, manifest,
-                  prefixbackup, prefiximport, prefixes, reclaim, saves, sdmap,
-                  sdscan, shortcutsvdf, shortcutstate, steamart, steamperf,
-                  steamscan, steamvdf, store)
+from core import (adopted, deckysettings, deploy, detect, engine, fetch,
+                  manifest, prefixbackup, prefiximport, prefixes, reclaim,
+                  saves, sdmap, sdscan, shortcutsvdf, shortcutstate, steamart,
+                  steamperf, steamscan, steamvdf, store)
 from ui import get_ui
 
 STATUS_ICON = {engine.APPLIED: "✅", engine.NOT_APPLIED: "☐ ",
@@ -211,10 +211,11 @@ class App:
     # --- commands ---
 
     def _gospel_appid(self, recipe):
-        """The pinned non-Steam appid for a recipe, from prefix_registry.json."""
-        reg = self.store_root / "prefix_registry.json"
+        """The pinned non-Steam appid for a recipe: curated pins from the
+        git-tracked store, plus adopted ones from the NAS (see core/adopted)."""
         try:
-            data = json.loads(reg.read_text(encoding="utf-8"))
+            data = {"entries": adopted.merged_entries(self.store_root,
+                                                      self.local_payloads)}
         except (OSError, ValueError):
             return None
         for e in data.get("entries", []):
@@ -1418,13 +1419,10 @@ class App:
         return queued
 
     def _registry_by_appid(self) -> dict:
-        """prefix_registry.json entries keyed by appid string."""
-        reg = self.store_root / "prefix_registry.json"
-        try:
-            data = json.loads(reg.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return {}
-        return {str(e["appid"]): e for e in data.get("entries", [])
+        """Registry entries keyed by appid string — curated + adopted."""
+        return {str(e["appid"]): e
+                for e in adopted.merged_entries(self.store_root,
+                                                self.local_payloads)
                 if e.get("appid") is not None}
 
     def _import_one(self, backup, reg) -> None:
@@ -1480,28 +1478,22 @@ class App:
         return len(entries)
 
     def _registry_entries(self) -> list:
-        reg = self.store_root / "prefix_registry.json"
-        try:
-            return json.loads(reg.read_text(encoding="utf-8")).get("entries", [])
-        except (OSError, ValueError):
-            return []
+        return adopted.merged_entries(self.store_root, self.local_payloads)
 
     def _append_registry_entries(self, new: list) -> bool:
-        """Add entries to prefix_registry.json, preserving everything else in
-        the file. Returns True if it wrote. This is the ONE writer of adopted
-        pins, so the gospel file's shape and comments stay intact."""
+        """Record adopted appid pins. Writes to _state/adopted_appids.json on
+        the NAS — NOT to the git-tracked store/prefix_registry.json, which is
+        what used to wedge every future `git pull` and which a reimage would
+        have destroyed along with the checkout. See core/adopted."""
         if not new:
             return False
-        reg = self.store_root / "prefix_registry.json"
-        try:
-            data = json.loads(reg.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            self.ui.msg("Can't read prefix_registry.json — not adopting.",
-                        "error")
+        where = adopted.append(self.local_payloads, new)
+        if where is None:
+            self.ui.msg("Couldn't record the adopted appid(s) — no writable "
+                        "state location. Connect the NAS and re-run Scan.",
+                        "warn")
             return False
-        data.setdefault("entries", []).extend(new)
-        reg.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n",
-                       encoding="utf-8")
+        self.ui.msg(f"  Adopted pin(s) recorded in {where}", "dim")
         return True
 
     def cmd_adopt(self, args=None):
@@ -2344,6 +2336,7 @@ class App:
                 "🗓  Weekly Reclaim Timer (set up / remove)",
                 "💾 Mirror Store (offline copy of recipes on SD/NAS)",
                 "⬆️  Update (git pull latest recipes + code)",
+                "🩹 Repair (fix an update that won't apply)",
                 "🖥️  Install Shortcut (put GFM on Desktop + Game Mode)",
                 "⬅️  Back"])
             choice = choice[0] if choice else "⬅️  Back"
@@ -2370,6 +2363,8 @@ class App:
                 self.cmd_mirror(None)
             elif choice.startswith("⬆"):
                 self.cmd_update()
+            elif choice.startswith("🩹"):
+                self.cmd_repair()
             elif choice.startswith("🖥"):
                 self.cmd_install()
             else:
@@ -3830,6 +3825,78 @@ class App:
         self.ui.msg("  'Keyboard (WASD) and Mouse' template (or map D-pad to arrow", "dim")
         self.ui.msg("  keys, A to Enter, B to Esc).", "dim")
 
+    def cmd_repair(self, args=None):
+        """Un-wedge a checkout that can't update, without a terminal.
+
+        The tool can put itself in this state — adopting a shortcut used to
+        write into the tracked store — and the fix was a git incantation typed
+        on a handheld. Everything here is a confirm-and-go button instead:
+        back up whatever is locally modified, discard it, pull."""
+        app_dir = Path(__file__).resolve().parent
+        self.ui.header("🩹 REPAIR")
+        if not (app_dir / ".git").is_dir():
+            self.ui.msg(f"Not a git checkout: {app_dir}", "warn")
+            self.ui.msg("Nothing to repair — this copy can't self-update "
+                        "anyway.", "dim")
+            return
+
+        def git(*a) -> subprocess.CompletedProcess:
+            return subprocess.run(["git", "-C", str(app_dir), *a],
+                                  capture_output=True, text=True)
+
+        dirty = [f for f in git("diff", "--name-only").stdout.split() if f]
+        staged = [f for f in git("diff", "--cached", "--name-only").stdout.split()
+                  if f]
+        blocking = sorted(set(dirty) | set(staged))
+        head = git("log", "-1", "--format=%h %cs %s").stdout.strip()
+        self.ui.msg(f"HEAD: {head}", "dim")
+        if not blocking:
+            self.ui.msg("Nothing is blocking an update — the checkout is "
+                        "clean.", "success")
+            self.ui.msg("If updates still fail it's the network or the "
+                        "remote, not local edits.", "dim")
+            return
+
+        self.ui.msg(f"{len(blocking)} locally-modified file(s) are blocking "
+                    "the pull:", "warn")
+        for f in blocking:
+            self.ui.msg(f"  • {f}", "dim")
+        if "store/prefix_registry.json" in blocking:
+            self.ui.msg("prefix_registry.json is one the TOOL used to write "
+                        "when adopting a shortcut. Adopted pins now live on "
+                        "the NAS instead, so this shouldn't recur.", "dim")
+
+        if not self.ui.confirm(f"Back up these {len(blocking)} file(s) and "
+                               "discard the local changes?"):
+            return
+
+        # Back up before discarding — always. These may hold adopted pins that
+        # exist nowhere else, and "discard" has to be recoverable.
+        base = (self.local_payloads / "_state" / "repair-backup"
+                if self.local_payloads else store.CONFIG_DIR / "repair-backup")
+        saved = 0
+        try:
+            base.mkdir(parents=True, exist_ok=True)
+            for f in blocking:
+                src = app_dir / f
+                if src.is_file():
+                    dst = base / f.replace("/", "__")
+                    shutil.copy2(src, dst)
+                    saved += 1
+        except OSError as e:
+            self.ui.msg(f"Couldn't write backups ({e}) — stopping rather than "
+                        "discarding anything.", "error")
+            return
+        self.ui.msg(f"Backed up {saved} file(s) to {base}", "success")
+
+        r = git("checkout", "--", *blocking)
+        if r.returncode != 0:
+            self.ui.msg(f"Discard failed: {(r.stderr or '').strip()}", "error")
+            return
+        self.ui.msg("Local changes discarded.", "success")
+        self.ui.msg("", "dim")
+        self.cmd_update()
+
     def cmd_selfcheck(self, args=None):
         """Report what this machine is ACTUALLY running, and whether the
         menus fit in its terminal.
@@ -4069,6 +4136,7 @@ COMMANDS = {
     "scan": lambda app, a: app.cmd_scan_all(),
     "diagnose": lambda app, a: app.cmd_diagnose(a),
     "selfcheck": lambda app, a: app.cmd_selfcheck(a),
+    "repair": lambda app, a: app.cmd_repair(a),
     "adopt": lambda app, a: app.cmd_adopt(a),
     "restore-shortcuts": lambda app, a: app.cmd_restore_shortcuts(a),
     "collect-logs": lambda app, a: app.cmd_collect_logs(a),

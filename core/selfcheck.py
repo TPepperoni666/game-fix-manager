@@ -164,16 +164,30 @@ def build_rows() -> list[Row]:
                    "" if has_tw
                    else "ui/textwidth.py missing — this checkout predates the "
                         "fix; git pull"))
-    head = ""
+    head, dirty = "", []
     try:
         import subprocess
         r = subprocess.run(["git", "-C", str(root), "log", "-1",
                             "--format=%h %cs %s"], capture_output=True,
                            text=True, timeout=5)
         head = (r.stdout or "").strip()
+        d = subprocess.run(["git", "-C", str(root), "status", "--porcelain"],
+                           capture_output=True, text=True, timeout=5)
+        dirty = [ln[3:] for ln in (d.stdout or "").splitlines()
+                 if ln[:2].strip() and not ln.startswith("??")]
     except (OSError, subprocess.SubprocessError):
-        head = ""
+        pass
     out.append(Row("checkout HEAD", head or "(not a git checkout)", INFO))
+    # THE missing signal. Adoption used to write into the tracked store, which
+    # silently blocked every later `git pull --ff-only` — a Deck sat six
+    # commits behind for a day and the only symptom was an update that failed
+    # if you happened to try one. Offline, cheap, and would have caught it.
+    if head:
+        out.append(Row("local modifications", str(len(dirty)) or "0",
+                       BAD if dirty else OK,
+                       "these BLOCK every update until resolved — "
+                       f"{', '.join(dirty[:4])}. Settings > 🩹 Repair fixes it"
+                       if dirty else "nothing blocking an update"))
     return out
 
 
