@@ -1,0 +1,36 @@
+{
+  "id": "skate-3",
+  "name": "Skate 3",
+  "aliases": [
+    "Skate3",
+    "Skate 3 Recomp",
+    "Skate3Recomp"
+  ],
+  "detect": {
+    "install_dir_names": ["Skate 3", "Skate3", "Skate 3 Recomp"],
+    "marker_files": ["Skate3Recomp-Windows/skate3.exe"]
+  },
+  "save_paths": [
+    "{game_dir}/Skate3Recomp-Windows/saves"
+  ],
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "copy_files",
+      "from": "payload/portable",
+      "to": "{game_dir}/Skate3Recomp-Windows"
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "Skate3Recomp-Windows/skate3.exe",
+      "start_dir": "{game_dir}/Skate3Recomp-Windows",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "post_apply_message": "Skate 3 (mchughalex/skate3recomp — a static RECOMPILATION of the Xbox 360 build, not an emulator) — Apply points the existing Steam shortcut at the WINDOWS build under GE-Proton 10.34 and turns on portable mode.\n\nWHY THE WINDOWS BUILD ON LINUX: the project's own README says the Windows build 'may have a better experience running through a translation layer like Proton rather than the native Linux build itself' on some hardware, and Tony measured exactly that. The shortcut previously pointed at Skate3Recomp-Linux/skate3; this recipe repoints the SAME appid (3283182477) at Skate3Recomp-Windows/skate3.exe, so your artwork stays put and no duplicate entry appears.\n\nSET THE GRAPHICS API TO VULKAN — this is the single biggest win and it CANNOT be scripted; there's no command-line flag for it. Go to Settings > Video > Graphics API, choose Vulkan, then Apply & Restart. DirectX 12 is the default, and under Proton that means game -> VKD3D-Proton -> Vulkan. Picking Vulkan makes it game -> winevulkan -> Vulkan and drops a whole translation layer.\n\nPORTABLE MODE: the recipe drops an empty portable.txt beside skate3.exe, which the README says keeps all user data in the executable's folder. Without it a Proton run writes saves to %APPDATA%\\skate3 INSIDE THE PREFIX, where a prefix wipe destroys them and GFM's save capture can't see them. With it, saves sit in the game folder, travel with Deploy and survive a reimage. NOTE: your progress from the native Linux build lives in the Linux user-data folder and will NOT carry over — copy it in by hand if you want it.\n\nCONTROLLER: Xbox controls are the project's primary input and the Deck/Go 2 present as an Xbox pad, so nothing to do. A PlayStation or Switch pad needs Settings > Controls > Controller Backend = SDL, then a restart (the Linux build always uses SDL; the Windows build under Proton does not).\n\nDLC: create a 'dlc' folder beside skate3.exe and drop the DLC packages in.\n\nCOMMAND-LINE: the exe accepts --game_data_root, --fullscreen, --window_width and --window_height if you ever want them as Steam launch options. None are set by default — the in-app settings persist in the portable folder, so they're the better place to configure it.",
+  "notes": "Built 2026-07-31. Source: github.com/mchughalex/skate3recomp. NOT an emulator and not a port — a static recompilation of the Xbox 360 binary; v2.0.0+ uses a native D3D12/Vulkan renderer rather than emulating the 360 GPU. Requires a user-supplied legally-obtained 360 ISO, which the app extracts once via its own GUI.\n\nSTAGED COPY IS ALREADY EXTRACTED. X:\\_games\\Skate 3\\Skate3Recomp-Windows\\ holds skate3.exe (96.9 MB), rexruntime.dll (17.8 MB) and game/data/ with the 51 extracted .big files (~4.7 GB) — 107 files, 6.08 GB total. So a deploy lands a ready-to-run copy; the ISO step does not need repeating.\n\nAPPID PINNED to 3283182477, read out of _state/shortcuts/steamdeck.json where the existing shortcut points at Skate3Recomp-Linux/skate3. That appid also keys the captured artwork in _state/artwork/3283182477. Without the pin, steam_shortcut would derive crc32('gfm:skate-3')|0x80000000 = 3655991565 and add a SECOND entry — the same trap that caught gow2-hollow. Registry entry added alongside.\n\nNESTED LAYOUT: the exe is one level down in Skate3Recomp-Windows/, so exe and start_dir are both relative to that, and marker_files matches it. Detection still resolves by folder name first ('Skate 3'), so it matches before the Windows build is deployed.\n\nWATCH THE DISK: the device already has Skate3Recomp-Linux/ in Games/Skate 3/. Deploy adds files, it doesn't remove them, so after deploying you'll have BOTH builds — roughly 12 GB. Delete the Linux folder once the Windows build is confirmed good.\n\nsave_paths points at Skate3Recomp-Windows/saves, which is where portable mode should put user data — CONFIRM THE ACTUAL LAYOUT on first run (the README documents 'a saves folder next to the executable' but doesn't spell out where the settings file lands) and widen save_paths if the config sits elsewhere in that folder. Getting this right is what makes the Vulkan setting itself reimage-proof.\n\nKnown upstream issues (project README): texture/asset pop-in on fast traversal, skater customisation rendering, Hall of Meat rendering, skate park visual parity. UNTESTED as a recipe on hardware."
+}
