@@ -2176,6 +2176,49 @@ def main():
         check("repair stops rather than discarding if backup fails",
               "stopping rather than" in _rsrc)
 
+        # --- weekly FULL backup + its timer ------------------------------
+        # The prefix backup's --auto path called itself "the weekly timer"
+        # while no timer existed to run it, so it never fired once and the
+        # backup count sat unchanged for eight days.
+        _wsrc = _i.getsource(gfm_mod.App.cmd_weekly_backup)
+        check("weekly backup covers more than prefixes",
+              all(s in _wsrc for s in ("_refresh_map", "_adopt_shortcuts",
+                                       "_sync_shortcut_state", "_capture_all",
+                                       "cmd_backup_prefixes")))
+        check("weekly backup forces unattended mode",
+              '"auto", True' in _wsrc)
+        check("weekly backup adopts without prompting",
+              "interactive=False" in _wsrc)
+        # A timer run has nobody to answer a prompt; one input() hangs the unit.
+        check("weekly backup never prompts",
+              "self.ui.input(" not in _wsrc and "self.ui.confirm(" not in _wsrc)
+        # One bad file must not cost you the prefix backup.
+        check("a failed step doesn't abort the rest",
+              "except Exception" in _wsrc and "results.append" in _wsrc)
+        check("weekly backup reports which steps failed",
+              "step(s)" in _wsrc and "for lbl, err in failed" in _wsrc)
+
+        _tsrc = _i.getsource(gfm_mod.App.cmd_setup_backup_timer)
+        check("backup timer fires Sundays at 19:00",
+              "OnCalendar=Sun *-*-* 19:00:00" in _tsrc)
+        check("backup timer is persistent (a Deck-off Sunday still runs)",
+              "Persistent=true" in _tsrc)
+        # 7pm means 7pm — randomising would defeat the point of a stated time.
+        # Match the SETTING, not the word: the source comments on why it's
+        # absent, which is exactly what a bare-word check would trip over.
+        check("backup timer doesn't randomise the stated time",
+              "RandomizedDelaySec=" not in _tsrc)
+        check("backup timer runs the full backup, not just prefixes",
+              "weekly-backup" in _tsrc)
+        check("backup timer mentions lingering as the fix for missed runs",
+              "enable-linger" in _tsrc)
+        check("weekly backup is wired to the CLI and Settings",
+              "weekly-backup" in gfm_mod.COMMANDS
+              and "setup-backup-timer" in gfm_mod.COMMANDS
+              and "📅" in _i.getsource(gfm_mod.App.menu_settings))
+        check("selfcheck reports both scheduled jobs",
+              set(_sc.TIMERS) == {"gfm-backup.timer", "gfm-reclaim.timer"})
+
         # --- deploy gap-fillers: runner install + prefix restore -------
         from core.steps import install_runner as _ir
         import tarfile as _tf

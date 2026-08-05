@@ -2242,6 +2242,113 @@ class App:
             list(by_label), multi=True)
         return [by_label[p] for p in picked if p in by_label]
 
+    def cmd_weekly_backup(self, args=None):
+        """EVERYTHING, unattended: map, adopted pins, shortcut bodies,
+        art/saves/settings, then the prefixes.
+
+        The prefix backup already had an --auto path and a docstring calling
+        it "the weekly timer" — but nothing ever installed a timer that ran
+        it, so it never fired once. This is that job, and it deliberately
+        covers more than prefixes: art, saves, per-game settings and the
+        generic shortcut bodies are all part of surviving a reimage, and
+        backing up prefixes alone would leave the rest a week stale.
+
+        Every step below is prompt-free BY CONSTRUCTION (_refresh_map,
+        _capture_all and _sync_shortcut_state don't ask; _adopt_shortcuts
+        takes interactive=False; backup reads args.auto). A single input()
+        anywhere in here would hang the systemd unit until it timed out."""
+        self.ui.header("🗓  WEEKLY BACKUP")
+        started = time.monotonic()
+        # Force unattended for everything downstream that checks args.auto.
+        if self.args is not None:
+            setattr(self.args, "auto", True)
+
+        results: list[tuple[str, bool, str]] = []
+
+        def step(label: str, fn) -> None:
+            self.ui.msg(f"── {label} " + "─" * max(1, 34 - len(label)), "info")
+            try:
+                fn()
+                results.append((label, True, ""))
+            except Exception as e:  # noqa: BLE001 — see below
+                # One failed step must never abort the rest. This runs
+                # unattended once a week; losing the prefix backup because
+                # art capture hit a bad file would be the worst outcome, and
+                # nobody is watching to re-run it.
+                results.append((label, False, f"{type(e).__name__}: {e}"))
+                self.ui.msg(f"  ! {label} failed — {e}", "error")
+
+        step("1/5 map refresh", self._refresh_map)
+        step("2/5 adopt new shortcuts",
+             lambda: self._adopt_shortcuts(interactive=False))
+        step("3/5 shortcut bodies", self._sync_shortcut_state)
+        step("4/5 art + saves + settings", self._capture_all)
+        step("5/5 prefix backup",
+             lambda: self.cmd_backup_prefixes(use_saved=True))
+
+        mins, secs = divmod(int(time.monotonic() - started), 60)
+        failed = [(lbl, err) for lbl, ok, err in results if not ok]
+        self.ui.msg("", "dim")
+        if failed:
+            self.ui.msg(f"Weekly backup finished with {len(failed)} failed "
+                        f"step(s) in {mins}m {secs}s:", "error")
+            for lbl, err in failed:
+                self.ui.msg(f"  ✗ {lbl}: {err}", "warn")
+        else:
+            self.ui.msg(f"Weekly backup complete — all {len(results)} steps "
+                        f"OK in {mins}m {secs}s.", "success")
+        return len(failed)
+
+    def cmd_setup_backup_timer(self):
+        """Install the weekly FULL backup timer — Sundays at 19:00."""
+        if os.name == "nt":
+            self.ui.msg("The backup timer is Deck/Linux only.", "warn")
+            return
+        self.ui.header("🗓  WEEKLY BACKUP TIMER")
+        self.ui.msg("Installs a user systemd timer that runs the full backup "
+                    "every SUNDAY AT 7PM: map refresh, adopt new shortcuts, "
+                    "shortcut bodies, art + saves + settings, then the Proton "
+                    "prefixes. It prompts for nothing.", "dim")
+        self.ui.msg("Persistent, so a Sunday with the Deck switched off runs "
+                    "on the next boot instead of being skipped.", "dim")
+        if not self.ui.confirm("Install the weekly backup timer?"):
+            return
+        app_dir = Path(__file__).resolve().parent
+        unit_dir = Path.home() / ".config" / "systemd" / "user"
+        unit_dir.mkdir(parents=True, exist_ok=True)
+        py = sys.executable or "python3"
+        (unit_dir / "gfm-backup.service").write_text(
+            "[Unit]\nDescription=GFM weekly full backup (prefixes, art, "
+            "saves, settings)\n\n[Service]\nType=oneshot\n"
+            f"WorkingDirectory={app_dir}\n"
+            f"ExecStart={py} {app_dir / 'gfm.py'} weekly-backup\n",
+            encoding="utf-8")
+        # No RandomizedDelaySec: Tony asked for 7pm, so it runs at 7pm. The
+        # reclaim timer randomises because "some time this week" is fine there.
+        (unit_dir / "gfm-backup.timer").write_text(
+            "[Unit]\nDescription=Run the GFM full backup weekly\n\n[Timer]\n"
+            "OnCalendar=Sun *-*-* 19:00:00\nPersistent=true\n\n"
+            "[Install]\nWantedBy=timers.target\n", encoding="utf-8")
+        try:
+            subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
+            subprocess.run(["systemctl", "--user", "enable", "--now",
+                            "gfm-backup.timer"], check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            self.ui.msg(f"Couldn't enable the timer: {e}", "error")
+            self.ui.msg("Units are written to ~/.config/systemd/user/ — enable "
+                        "manually with: systemctl --user enable --now "
+                        "gfm-backup.timer", "warn")
+            return
+        self.ui.msg("Installed — runs Sundays at 19:00.", "success")
+        # User timers only fire while the user has a session. Game Mode keeps
+        # deck logged in, so this normally just works; lingering is the fix if
+        # a run is ever missed while the device is idle at the login screen.
+        self.ui.msg("If a Sunday is ever missed, enable lingering so user "
+                    "timers fire without an active session:", "dim")
+        self.ui.msg("  sudo loginctl enable-linger $USER", "dim")
+        self.ui.msg("Check it with: systemctl --user list-timers "
+                    "gfm-backup.timer", "dim")
+
     def cmd_setup_reclaim_timer(self):
         """Install a WEEKLY user systemd timer that runs `gfm reclaim --auto`.
         User-level (systemctl --user) — no sudo, and the deck user is always
@@ -2334,6 +2441,7 @@ class App:
                 "🧰 Stage GE-Proton Runner to NAS",
                 "🧹 Reclaim SD Space (free removed games now)",
                 "🗓  Weekly Reclaim Timer (set up / remove)",
+                "📅 Weekly Backup Timer (full backup, Sundays 7pm)",
                 "💾 Mirror Store (offline copy of recipes on SD/NAS)",
                 "⬆️  Update (git pull latest recipes + code)",
                 "🩹 Repair (fix an update that won't apply)",
@@ -2359,6 +2467,8 @@ class App:
                 self.cmd_reclaim()
             elif choice.startswith("🗓"):
                 self.cmd_setup_reclaim_timer()
+            elif choice.startswith("📅"):
+                self.cmd_setup_backup_timer()
             elif choice.startswith("💾"):
                 self.cmd_mirror(None)
             elif choice.startswith("⬆"):
@@ -3931,6 +4041,7 @@ class App:
                 cols, rows, sys.stdin.isatty(), sys.stdout.isatty(),
                 os.environ.get("TERM", ""))),
             ("does it fit", sc.fit_rows(cols, rows, gum, longest, len(labels))),
+            ("scheduled jobs", sc.timer_rows()),
             ("environment", sc.env_rows(self.steam_root, self.store_root,
                                         self.local_payloads, payloads_up)),
         ]
@@ -4137,6 +4248,8 @@ COMMANDS = {
     "diagnose": lambda app, a: app.cmd_diagnose(a),
     "selfcheck": lambda app, a: app.cmd_selfcheck(a),
     "repair": lambda app, a: app.cmd_repair(a),
+    "weekly-backup": lambda app, a: app.cmd_weekly_backup(a),
+    "setup-backup-timer": lambda app, a: app.cmd_setup_backup_timer(),
     "adopt": lambda app, a: app.cmd_adopt(a),
     "restore-shortcuts": lambda app, a: app.cmd_restore_shortcuts(a),
     "collect-logs": lambda app, a: app.cmd_collect_logs(a),

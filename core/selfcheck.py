@@ -191,6 +191,50 @@ def build_rows() -> list[Row]:
     return out
 
 
+TIMERS = {
+    "gfm-backup.timer": "full backup (Sundays 19:00)",
+    "gfm-reclaim.timer": "reclaim (weekly)",
+}
+
+
+def timer_rows() -> list[Row]:
+    """Are the scheduled jobs installed, enabled, and actually firing?
+
+    The weekly prefix backup had an --auto path whose docstring called it
+    "the weekly timer" while no timer existed to run it. Nothing surfaced
+    that, so it silently never ran and the backup count sat unchanged for
+    over a week. A job you can't see the status of is a job you can't trust."""
+    import subprocess
+    if os.name == "nt":
+        return [Row("scheduled jobs", "n/a on Windows", INFO)]
+    out = []
+    for unit, what in TIMERS.items():
+        try:
+            en = subprocess.run(["systemctl", "--user", "is-enabled", unit],
+                                capture_output=True, text=True, timeout=5)
+            state = (en.stdout or en.stderr or "").strip() or "unknown"
+        except (OSError, subprocess.SubprocessError):
+            state = "unknown"
+        last = ""
+        try:
+            lt = subprocess.run(
+                ["systemctl", "--user", "show", unit,
+                 "--property=LastTriggerUSec", "--value"],
+                capture_output=True, text=True, timeout=5)
+            last = (lt.stdout or "").strip()
+        except (OSError, subprocess.SubprocessError):
+            pass
+        never = last in ("", "0", "n/a")
+        out.append(Row(unit, state,
+                       OK if state == "enabled" and not never
+                       else (WARN if state == "enabled" else BAD),
+                       f"{what} — "
+                       + ("NEVER fired yet" if never else f"last ran {last}")
+                       + ("" if state == "enabled"
+                          else "; not enabled, so it will not run")))
+    return out
+
+
 def env_rows(steam_root, store_root, payloads, payloads_up: bool) -> list[Row]:
     return [
         Row("host", socket.gethostname(), INFO,
