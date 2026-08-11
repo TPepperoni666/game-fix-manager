@@ -33,6 +33,35 @@ _EXE_SKIP = re.compile(
 )
 
 
+def _is_elf(p: Path) -> bool:
+    """Is this a native Linux binary? Decided by ELF magic, NOT the execute
+    bit: a game copied off the SMB share usually arrives without +x, so the
+    bit would say "not a program" about the very files we're looking for."""
+    try:
+        with open(p, "rb") as f:
+            return f.read(4) == b"\x7fELF"
+    except OSError:
+        return False
+
+
+def _is_launchable(name: str, path: Path) -> bool:
+    """Windows .exe, or a native Linux launcher.
+
+    .exe-only was a Windows-shaped assumption that quietly broke the whole
+    native-Linux category: deploying Jak and Daxter offered NO candidates
+    (its launcher is an .AppImage), so it got no shortcut, and reclaim then
+    read "no shortcut" as "you deleted it" and removed 34 GB. The recomp
+    projects are increasingly native, so this is not a one-off."""
+    low = name.lower()
+    if low.endswith(".exe"):
+        return True
+    if low.endswith((".appimage", ".sh", ".x86_64", ".x86")):
+        return True
+    # Extension-less files are the remaining case (OpenGOAL's `gk`, a recomp's
+    # bare binary). Only those get the magic read, so this stays cheap.
+    return "." not in name and _is_elf(path)
+
+
 def find_exes(folder: Path, max_depth: int = 3, limit: int = 8) -> list[dict]:
     """Candidate launch executables inside a game folder, best guess first.
 
@@ -55,11 +84,11 @@ def find_exes(folder: Path, max_depth: int = 3, limit: int = 8) -> list[dict]:
         if depth >= max_depth:
             dirnames[:] = []  # don't descend past max_depth
         for fn in filenames:
-            if not fn.lower().endswith(".exe"):
+            p = Path(dirpath) / fn
+            if not _is_launchable(fn, p):
                 continue
             if _EXE_SKIP.match(Path(fn).stem):
                 continue
-            p = Path(dirpath) / fn
             try:
                 size = p.stat().st_size
             except OSError:

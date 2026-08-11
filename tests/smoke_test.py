@@ -2176,6 +2176,37 @@ def main():
         check("repair stops rather than discarding if backup fails",
               "stopping rather than" in _rsrc)
 
+        # --- deploy always ends with a shortcut, native games included ----
+        # find_exes was .exe-only, so deploying a native Linux game offered NO
+        # candidates; the user skipped, and reclaim read "no shortcut" as "not
+        # wanted" and deleted a freshly-copied 34 GB Jak and Daxter.
+        _ex = tmp / "exescan"; (_ex / "Binaries").mkdir(parents=True)
+        (_ex / "Game.exe").write_bytes(b"MZ" + b"\0" * 4000)
+        (_ex / "Launcher_2.10.4_amd64.AppImage").write_bytes(b"\x7fELF" + b"\0" * 9000)
+        (_ex / "run.sh").write_bytes(b"#!/bin/sh\n")
+        (_ex / "Binaries" / "gk").write_bytes(b"\x7fELF" + b"\0" * 500)
+        (_ex / "Binaries" / "notes").write_bytes(b"just text, not a binary")
+        _rels = {e["rel"] for e in sdscan.find_exes(_ex)}
+        check("find_exes still finds Windows exes",
+              "Game.exe" in _rels)
+        check("find_exes finds an AppImage",
+              "Launcher_2.10.4_amd64.AppImage" in _rels)
+        check("find_exes finds a shell launcher", "run.sh" in _rels)
+        check("find_exes finds an extension-less ELF by magic",
+              "Binaries/gk" in _rels)
+        # Magic, not the exec bit — SMB copies arrive without +x, and a plain
+        # text file with no extension must not be offered as a launcher.
+        check("find_exes ignores extension-less non-binaries",
+              "Binaries/notes" not in _rels)
+        _gsc = _i.getsource(gfm_mod.App._make_generic_shortcut)
+        check("backing out of the exe picker still makes a shortcut",
+              "best guess" in _gsc and "exes[0]" in _gsc)
+        check("the picker no longer offers a skip-entirely option",
+              "don't add a shortcut" not in _gsc)
+        # Forcing Proton onto an AppImage would have Steam run it through Wine.
+        check("a native launcher gets no compat tool",
+              'endswith(".exe") else ""' in _gsc)
+
         # --- weekly FULL backup + its timer ------------------------------
         # The prefix backup's --auto path called itself "the weekly timer"
         # while no timer existed to run it, so it never fired once and the

@@ -1099,19 +1099,30 @@ class App:
                             "add it to Steam by hand.", "warn")
                 return False
             labels = [f"{e['rel']}  ({e['size'] // (1 << 20)} MB)" for e in exes]
-            skip = "⬅️  Skip — don't add a shortcut"
             # Own screen per game: deploying several at once otherwise stacks
             # each picker under the last one's output.
             self.ui.header(f"🎮 PICK THE LAUNCH EXE — {folder_name}")
             self.ui.msg("No recipe for this game, so choose what Steam should "
                         "launch (best guess first).", "dim")
-            picked = self.ui.choose(f"Shortcut exe for {folder_name}?",
-                                    labels + [skip])
-            if not picked or picked[0] == skip:
-                self.ui.msg(f"  · {folder_name}: skipped — no shortcut.", "dim")
-                return False
-            rel = exes[labels.index(picked[0])]["rel"]
-            runner, launch = "GE-Proton10-34", ""
+            picked = self.ui.choose(f"Shortcut exe for {folder_name}?", labels)
+            if picked and picked[0] in labels:
+                rel = exes[labels.index(picked[0])]["rel"]
+            else:
+                # A DEPLOY ALWAYS ENDS WITH A SHORTCUT. Skipping used to leave
+                # the game with none, and reclaim treats "no shortcut" as "you
+                # didn't want it" — which is how a freshly-copied 34 GB Jak got
+                # deleted four days later. Backing out of the picker now takes
+                # the best guess instead of nothing; it's one edit in Steam to
+                # change, versus a silent deletion to discover.
+                rel = exes[0]["rel"]
+                self.ui.msg(f"  · {folder_name}: no pick made — using the best "
+                            f"guess ({rel}). Change it in Steam if that's the "
+                            "wrong one.", "warn")
+            launch = ""
+            # Proton is for Windows binaries. A native Linux launcher (an
+            # AppImage, a bare ELF) must get NO compat tool or Steam will try
+            # to run it through Wine.
+            runner = "GE-Proton10-34" if rel.lower().endswith(".exe") else ""
 
         exe = str(dest / rel)
         # Windows games run NATIVELY — no Proton. Forcing a compat tool would
