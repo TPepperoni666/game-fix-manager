@@ -2184,7 +2184,26 @@ def main():
         check("weekly backup covers more than prefixes",
               all(s in _wsrc for s in ("_refresh_map", "_adopt_shortcuts",
                                        "_sync_shortcut_state", "_capture_all",
-                                       "cmd_backup_prefixes")))
+                                       "cmd_backup_prefixes", "cmd_reclaim")))
+        # Reclaim reads the map to decide what to delete, so it has to come
+        # after capture and the backup — never before them.
+        check("reclaim is the LAST step, after capture and backup",
+              _wsrc.index("cmd_backup_prefixes") < _wsrc.index("cmd_reclaim("))
+        check("weekly backup doesn't re-walk the SD for reclaim",
+              "cmd_reclaim(skip_map=True)" in _wsrc)
+        # The duplication that woke two processes at once after a missed
+        # Sunday, both writing the same prefix-backup folder.
+        _rcsrc = _i.getsource(gfm_mod.App.cmd_reclaim)
+        check("reclaim no longer does its own maintenance pass",
+              "_capture_all" not in _rcsrc
+              and "cmd_backup_prefixes" not in _rcsrc)
+        check("reclaim still honours --auto after the split",
+              'getattr(self.args, "auto"' in _rcsrc)
+        check("reclaim can skip the map refresh when told to",
+              "skip_map" in _rcsrc and "if not skip_map" in _rcsrc)
+        check("installing the backup timer retires the reclaim timer",
+              "gfm-reclaim.timer" in _i.getsource(
+                  gfm_mod.App.cmd_setup_backup_timer))
         check("weekly backup forces unattended mode",
               '"auto", True' in _wsrc)
         check("weekly backup adopts without prompting",

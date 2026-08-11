@@ -2124,30 +2124,25 @@ class App:
             self.ui.msg(f"Map refreshed -> {dest}", "dim")
         return wrote
 
-    def cmd_reclaim(self):
-        """General upkeep scan: refresh the map, then free SD space taken by
-        big tool-deployed games whose Steam shortcut you've since deleted.
-        `--auto` (the weekly timer) skips the prompt and uninstalls what passes
-        every guard, refusing a suspicious batch. Interactive always confirms."""
+    def cmd_reclaim(self, skip_map: bool = False):
+        """Free SD space taken by big tool-deployed games whose Steam shortcut
+        you've since deleted. `--auto` skips the prompt and uninstalls what
+        passes every guard, refusing a suspicious batch; interactive always
+        confirms.
+
+        This USED to do the whole weekly maintenance pass (capture + prefix
+        backup) when run with --auto, because it was the only unattended job.
+        cmd_weekly_backup owns that now and calls reclaim as its last step, so
+        doing it here too meant two timers waking together after a missed
+        Sunday and writing the same prefix-backup folder concurrently.
+
+        skip_map is for that caller: weekly_backup has already refreshed the
+        map as its first step, and reclaim decides what to delete from what the
+        map says, so refreshing twice is just a second walk of the SD."""
         auto = getattr(self.args, "auto", False)
         self.ui.header("🧹 RECLAIM SD SPACE")
-        self._refresh_map()
-        if auto:
-            # The weekly timer is the only unattended run, so it does the whole
-            # maintenance pass — otherwise backups only happen when Tony
-            # remembers to Scan, which defeats the point of automating.
-            self.ui.msg("── weekly maintenance: capture " + "─" * 10, "info")
-            try:
-                self._capture_all()
-            except Exception as e:              # never let upkeep kill the run
-                self.ui.msg(f"capture skipped: {e}", "warn")
-            self.ui.msg("── weekly maintenance: prefix backup " + "─" * 4,
-                        "info")
-            try:
-                self.cmd_backup_prefixes()
-            except Exception as e:
-                self.ui.msg(f"prefix backup skipped: {e}", "warn")
-            self.ui.msg("── weekly maintenance: reclaim " + "─" * 10, "info")
+        if not skip_map:
+            self._refresh_map()
         if self.steam_root is None:
             self.ui.msg("No Steam root — can't tell which shortcuts exist. "
                         "Nothing reclaimed.", "warn")
@@ -2278,13 +2273,17 @@ class App:
                 results.append((label, False, f"{type(e).__name__}: {e}"))
                 self.ui.msg(f"  ! {label} failed — {e}", "error")
 
-        step("1/5 map refresh", self._refresh_map)
-        step("2/5 adopt new shortcuts",
+        step("1/6 map refresh", self._refresh_map)
+        step("2/6 adopt new shortcuts",
              lambda: self._adopt_shortcuts(interactive=False))
-        step("3/5 shortcut bodies", self._sync_shortcut_state)
-        step("4/5 art + saves + settings", self._capture_all)
-        step("5/5 prefix backup",
+        step("3/6 shortcut bodies", self._sync_shortcut_state)
+        step("4/6 art + saves + settings", self._capture_all)
+        step("5/6 prefix backup",
              lambda: self.cmd_backup_prefixes(use_saved=True))
+        # Reclaim LAST and with the map already refreshed: it decides what to
+        # delete from what the map says, so it must run after capture and the
+        # prefix backup, never before them.
+        step("6/6 reclaim SD space", lambda: self.cmd_reclaim(skip_map=True))
 
         mins, secs = divmod(int(time.monotonic() - started), 60)
         failed = [(lbl, err) for lbl, ok, err in results if not ok]
@@ -2339,6 +2338,22 @@ class App:
                         "manually with: systemctl --user enable --now "
                         "gfm-backup.timer", "warn")
             return
+        # The reclaim timer is now redundant — weekly-backup runs reclaim as
+        # its last step. Leaving both enabled is what caused two processes to
+        # wake together after a missed Sunday (Persistent=true on each) and
+        # write the same prefix-backup folder at the same moment.
+        try:
+            r = subprocess.run(["systemctl", "--user", "is-enabled",
+                                "gfm-reclaim.timer"], capture_output=True,
+                               text=True)
+            if (r.stdout or "").strip() == "enabled":
+                subprocess.run(["systemctl", "--user", "disable", "--now",
+                                "gfm-reclaim.timer"], capture_output=True)
+                self.ui.msg("Disabled the old gfm-reclaim.timer — reclaim is "
+                            "step 6 of this job now, and running both woke two "
+                            "processes at once.", "warn")
+        except (OSError, subprocess.SubprocessError):
+            pass
         self.ui.msg("Installed — runs Sundays at 19:00.", "success")
         # User timers only fire while the user has a session. Game Mode keeps
         # deck logged in, so this normally just works; lingering is the fix if
