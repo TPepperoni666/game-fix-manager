@@ -27,7 +27,10 @@ def _lean_store(dest: Path) -> None:
     dest — NOT the payload/artwork/saves folders. The committed payloads (Watch
     Dogs mod, Force Unleashed exe swaps, …) are hundreds of MB and belong on the
     NAS local-payloads, which payload_path reads first anyway. Keeps the exe
-    ~15MB instead of ~800MB."""
+    ~15MB instead of ~800MB.
+
+    _mirror_payloads then puts them ON the NAS — leaving them out here is only
+    safe if they are actually there to fall back to."""
     src = ROOT / "store"
     (dest / "games").mkdir(parents=True, exist_ok=True)
     for reg in src.glob("*.json"):
@@ -36,6 +39,50 @@ def _lean_store(dest: Path) -> None:
         gdir = dest / "games" / manifest.parent.name
         gdir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(manifest, gdir / "manifest.json")
+
+
+def _mirror_payloads(root: Path) -> None:
+    """Copy every committed payload to the NAS the lean exe reads from.
+
+    _lean_store deliberately leaves payloads OUT of the exe — they're hundreds
+    of MB and payload_path() prefers the NAS copy anyway. But nothing ever PUT
+    them there. A Windows box therefore found 16 recipes failing with "payload
+    missing": the lean store was all it had, and there was no
+    _recipes/<id>/payload/ on the NAS to fall back to. Staging the exe without
+    the files it depends on isn't staging it at all.
+
+    Size + whole-second mtime skip, so a rebuild doesn't re-push ~700 MB over
+    SMB every time."""
+    src_root = ROOT / "store" / "games"
+    copied = skipped = 0
+    total = 0
+    for game in sorted(src_root.iterdir()):
+        src = game / "payload"
+        if not src.is_dir():
+            continue
+        for f in src.rglob("*"):
+            if not f.is_file():
+                continue
+            rel = f.relative_to(src)
+            dst = root / "_recipes" / game.name / "payload" / rel
+            try:
+                s = f.stat()
+                if dst.is_file():
+                    d = dst.stat()
+                    if d.st_size == s.st_size and int(d.st_mtime) >= int(s.st_mtime):
+                        skipped += 1
+                        continue
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(f, dst)
+                copied += 1
+                total += s.st_size
+            except OSError as e:
+                print(f"  ! {game.name}/{rel}: {e}")
+    if copied:
+        print(f"Mirrored {copied} payload file(s) "
+              f"({total / (1 << 20):.0f} MB) -> {root / '_recipes'}")
+    if skipped:
+        print(f"  ({skipped} payload file(s) already current)")
 
 
 def _publish_to_nas(exe: Path) -> None:
@@ -54,8 +101,13 @@ def _publish_to_nas(exe: Path) -> None:
             dest.mkdir(parents=True, exist_ok=True)
             shutil.copy2(exe, dest / "gfm.exe")
             print(f"Staged on the NAS -> {dest / 'gfm.exe'}")
+            # The exe is useless on its own — see _mirror_payloads.
+            _mirror_payloads(root)
             print("  On a Windows box:  copy \"" + str(dest / "gfm.exe")
                   + "\" C:\\gfm.exe")
+            print("  Then run 🔌 Connect NAS Payloads there — the lean exe "
+                  "reads payloads from the NAS, so without it every recipe "
+                  "that installs files fails.")
             return
         except OSError:
             continue
