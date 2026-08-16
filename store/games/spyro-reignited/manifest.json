@@ -1,12 +1,22 @@
 {
   "id": "spyro-reignited",
   "name": "Spyro Reignited Trilogy",
-  "aliases": ["Spyro Reignited", "Spyro Trilogy"],
+  "aliases": [
+    "Spyro Reignited",
+    "Spyro Trilogy"
+  ],
   "steam_appid": 996580,
   "detect": {
-    "install_dir_names": ["Spyro Reignited Trilogy"],
-    "marker_files": ["Falcon.exe"]
+    "install_dir_names": [
+      "Spyro Reignited Trilogy"
+    ],
+    "marker_files": [
+      "Falcon.exe"
+    ]
   },
+  "save_paths": [
+    "{localappdata}/Falcon/Saved/SaveGames"
+  ],
   "steps": [
     {
       "type": "remove_files",
@@ -21,5 +31,5 @@
     }
   ],
   "post_apply_message": "Spyro Reignited — 6 intro Bumpers renamed to .gfm-orig (ATVI, Toys for Bob, Unreal — Standard + Gamma pair for each). Boot straight to menu next launch. Reversible.",
-  "notes": "Intro skip only. UE4 game, internal name 'Falcon' (Toys for Bob's codename). Filenames from PCGW. The 6 files are 3 logos × 2 variants (base + Gamma-corrected). If your monitor/Deck uses one variant, removing both is fine — the game falls through to menu."
+  "notes": "Intro skip only. UE4 game, internal name 'Falcon' (Toys for Bob's codename). Filenames from PCGW. The 6 files are 3 logos × 2 variants (base + Gamma-corrected). If your monitor/Deck uses one variant, removing both is fine — the game falls through to menu.\n\nsave_paths added 2026-08-12 from PCGamingWiki (Spyro Reignited Trilogy) — Windows path translated to GFM's platform-aware templates. NOT verified against a live save folder; a capture that comes back empty means the path is wrong."
 }

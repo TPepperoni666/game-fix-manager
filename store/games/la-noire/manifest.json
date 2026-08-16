@@ -1,12 +1,24 @@
 {
   "id": "la-noire",
   "name": "L.A. Noire",
-  "aliases": ["LA Noire", "LaNoire", "L.A.Noire"],
+  "aliases": [
+    "LA Noire",
+    "LaNoire",
+    "L.A.Noire"
+  ],
   "steam_appid": 110800,
   "detect": {
-    "install_dir_names": ["L.A.Noire", "LANoire"],
-    "marker_files": ["LaNoire.exe"]
+    "install_dir_names": [
+      "L.A.Noire",
+      "LANoire"
+    ],
+    "marker_files": [
+      "LaNoire.exe"
+    ]
   },
+  "save_paths": [
+    "{documents}/Rockstar Games/L.A. Noire/Profiles"
+  ],
   "steps": [
     {
       "type": "copy_files",
@@ -19,5 +31,5 @@
       "value": "WINEDLLOVERRIDES=\"dinput8=n,b\" %command%"
     }
   ],
-  "notes": "V-Patch 2.0 for L.A. Noire: Complete Edition, by VaanaCZ (Aug 2024). FPS uncap + aspect ratio/ultrawide fixes via Ultimate ASI Loader. Source: https://github.com/VaanaCZ/LANVP — license CC BY-NC 4.0, see docs/. Config: plugins/lanvp.ini in the game dir after install."
+  "notes": "V-Patch 2.0 for L.A. Noire: Complete Edition, by VaanaCZ (Aug 2024). FPS uncap + aspect ratio/ultrawide fixes via Ultimate ASI Loader. Source: https://github.com/VaanaCZ/LANVP — license CC BY-NC 4.0, see docs/. Config: plugins/lanvp.ini in the game dir after install.\n\nsave_paths added 2026-08-12 from PCGamingWiki (L.A. Noire) — Windows path translated to GFM's platform-aware templates. NOT verified against a live save folder; a capture that comes back empty means the path is wrong."
 }

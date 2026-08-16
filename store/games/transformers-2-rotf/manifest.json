@@ -1,14 +1,25 @@
 {
   "id": "transformers-2-rotf",
   "name": "Transformers: Revenge of the Fallen",
-  "aliases": ["Transformers 2 Revenge of the Fallen", "Transformers 2",
-              "Transformers: Revenge of the Fallen (2009)", "Transformers ROTF"],
+  "aliases": [
+    "Transformers 2 Revenge of the Fallen",
+    "Transformers 2",
+    "Transformers: Revenge of the Fallen (2009)",
+    "Transformers ROTF"
+  ],
   "detect": {
-    "install_dir_names": ["transformers 2 revenge of the fallen",
-                          "Transformers 2 Revenge of the Fallen",
-                          "Transformers Revenge of the Fallen"],
-    "marker_files": ["transformers2.exe"]
+    "install_dir_names": [
+      "transformers 2 revenge of the fallen",
+      "Transformers 2 Revenge of the Fallen",
+      "Transformers Revenge of the Fallen"
+    ],
+    "marker_files": [
+      "transformers2.exe"
+    ]
   },
+  "save_paths": [
+    "{documents}/Activision/Transfomers2/Saved Games"
+  ],
   "steps": [
     {
       "type": "install_runner",
@@ -23,5 +34,5 @@
     }
   ],
   "post_apply_message": "Transformers: Revenge of the Fallen (2009, non-Steam, cracked/abandonware) — Apply AUTO-ADDS the Steam shortcut (Transformers2.exe, game folder as start dir, a stable computed appid, GE-Proton 10.34). Steam closes briefly to write it; stage GE first with 'gfm stage-runner'. Then run it. If you hit missing-DLL errors, install the _Redist files (per Chemical's readme). Optional: PCGW has an Ultrawide Fix + FPS Unlock by killer-m if you want widescreen. No backed-up prefix, so the appid is derived from the recipe id (stable).",
-  "notes": "Built 2026-07-10 from the SD scan (exe transformers2.exe at root; Chemical crack, readme '_how to run game!!.txt' = 'run Transformers2.exe as admin, install _Redist for DLLs'). Also present: launcher.exe, mc.exe. Not in the gospel registry, so steam_shortcut derives a stable appid from the recipe id. Distinct from transformers-the-game (2007) and twfc (War for Cybertron)."
+  "notes": "Built 2026-07-10 from the SD scan (exe transformers2.exe at root; Chemical crack, readme '_how to run game!!.txt' = 'run Transformers2.exe as admin, install _Redist for DLLs'). Also present: launcher.exe, mc.exe. Not in the gospel registry, so steam_shortcut derives a stable appid from the recipe id. Distinct from transformers-the-game (2007) and twfc (War for Cybertron).\n\nsave_paths added 2026-08-12 from PCGamingWiki (Transformers: Revenge of the Fallen) — Windows path translated to GFM's platform-aware templates. NOT verified against a live save folder; a capture that comes back empty means the path is wrong."
 }

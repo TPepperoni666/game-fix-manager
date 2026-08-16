@@ -1726,6 +1726,20 @@ def main():
                       _docs.replace("\\", "/"))
                 check("Linux resolves {savedgames} into the prefix",
                       "steamuser/Saved Games" in _saved.replace("\\", "/"))
+            # Ubisoft Connect keeps Watch Dogs / AC Shadows / Wildlands saves
+            # under Program Files (x86) — inside the prefix on Linux, a real
+            # system folder on Windows.
+            _pf = str(_c.resolve_target(
+                "{programfilesx86}/Ubisoft/Ubisoft Game Launcher/savegames"))
+            if _os.name == "nt":
+                check("Windows resolves {programfilesx86} off the prefix",
+                      "drive_c" not in _pf and "Ubisoft" in _pf)
+            else:
+                check("Linux resolves {programfilesx86} into the prefix",
+                      "drive_c/Program Files (x86)/Ubisoft" in
+                      _pf.replace("\\", "/"))
+            check("{programfilesx86} leaves no placeholder behind",
+                  "{programfilesx86}" not in _pf and "{prefix}" not in _pf)
             check("no token survives resolution unexpanded",
                   not any(t in _docs + _saved + _roam
                           for t in ("{documents}", "{savedgames}",

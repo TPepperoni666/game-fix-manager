@@ -1,12 +1,23 @@
 {
   "id": "rise-of-the-dark-spark",
   "name": "Transformers: Rise of the Dark Spark",
-  "aliases": ["Rise of the Dark Spark", "RotDS", "Transformers RotDS"],
+  "aliases": [
+    "Rise of the Dark Spark",
+    "RotDS",
+    "Transformers RotDS"
+  ],
   "steam_appid": 245760,
   "detect": {
-    "install_dir_names": ["Transformers - Rise of the Dark Spark"],
-    "marker_files": ["TransGame/CookedPC/Startup.upk"]
+    "install_dir_names": [
+      "Transformers - Rise of the Dark Spark"
+    ],
+    "marker_files": [
+      "TransGame/CookedPC/Startup.upk"
+    ]
   },
+  "save_paths": [
+    "{documents}/My Games/TransformersRotDS/TransGame/SaveData"
+  ],
   "steps": [
     {
       "type": "remove_files",
@@ -19,5 +30,5 @@
     }
   ],
   "post_apply_message": "Rise of the Dark Spark — 4 intro Bink videos renamed to .gfm-orig. Reversible. Same UE3 engine as TWFC so the filename layout matches; if a .bik still plays on your install, the case might differ — run 'ls' on the Movies folder and I'll case-correct.",
-  "notes": "Intro skip only — RotDS is the High Moon Studios follow-up to TWFC, same TransGame/Movies/*.bik layout. Filenames from PCGW. Unlike TWFC there is NO FPS unlock recipe here — RotDS has less mature modding scene and no static patch exists. Marker file Startup.upk is a Steam-depot constant to distinguish this game from siblings without needing the exe name."
+  "notes": "Intro skip only — RotDS is the High Moon Studios follow-up to TWFC, same TransGame/Movies/*.bik layout. Filenames from PCGW. Unlike TWFC there is NO FPS unlock recipe here — RotDS has less mature modding scene and no static patch exists. Marker file Startup.upk is a Steam-depot constant to distinguish this game from siblings without needing the exe name.\n\nsave_paths added 2026-08-12 from PCGamingWiki (Transformers: Rise of the Dark Spark) — Windows path translated to GFM's platform-aware templates. NOT verified against a live save folder; a capture that comes back empty means the path is wrong."
 }

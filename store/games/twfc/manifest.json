@@ -1,11 +1,22 @@
 {
   "id": "twfc",
   "name": "Transformers: War for Cybertron",
-  "aliases": ["Transformers War for Cybertron", "TWFC", "War for Cybertron"],
+  "aliases": [
+    "Transformers War for Cybertron",
+    "TWFC",
+    "War for Cybertron"
+  ],
   "steam_appid": 42650,
   "detect": {
-    "install_dir_names": ["Transformers War for Cybertron", "Transformers - War for Cybertron"]
+    "install_dir_names": [
+      "Transformers War for Cybertron",
+      "Transformers - War for Cybertron"
+    ]
   },
+  "save_paths": [
+    "{game_dir}/TransGame/SaveData",
+    "{documents}/My Games/Transformers/TransGame/SaveData"
+  ],
   "steps": [
     {
       "type": "remove_files",
@@ -20,5 +31,5 @@
     }
   ],
   "post_apply_message": "TWFC — intros skipped (6 .bik files renamed to .gfm-orig, revertible). FPS unlock is NOT available: Psych's trainer runs under Proton but Wine's low-level keyboard hook (WH_KEYBOARD_LL) doesn't deliver Numpad 0 to it while the game has input focus — confirmed 2026-07-07. Game plays at its stock 30 FPS. If you cleaned up an earlier apply, delete ~/TWFC_Unlocker and ~/gfm-wrappers/twfc.sh, and clear the Steam launch options manually.",
-  "notes": "Intro-skip only recipe. FPS trainer removed after Deck test: Psych's 2010 trainer attaches and runs visibly under Proton, but Numpad 0 never reaches it (WH_KEYBOARD_LL hook delivery through Wine while game has focus — a long-standing Wine wart). Trainer + wrapper payloads still in git history if anyone finds a working delivery path or writes a static exe patch. Bink filenames from PCGamingWiki (TransGame/Movies/); Linux is case-sensitive so if any filename doesn't match on the actual install, that remove_files line silently no-ops. Game is delisted; Steam appid 42650."
+  "notes": "Intro-skip only recipe. FPS trainer removed after Deck test: Psych's 2010 trainer attaches and runs visibly under Proton, but Numpad 0 never reaches it (WH_KEYBOARD_LL hook delivery through Wine while game has focus — a long-standing Wine wart). Trainer + wrapper payloads still in git history if anyone finds a working delivery path or writes a static exe patch. Bink filenames from PCGamingWiki (TransGame/Movies/); Linux is case-sensitive so if any filename doesn't match on the actual install, that remove_files line silently no-ops. Game is delisted; Steam appid 42650.\n\nsave_paths added 2026-08-12 from PCGamingWiki (Transformers: War for Cybertron) — Windows path translated to GFM's platform-aware templates. NOT verified against a live save folder; a capture that comes back empty means the path is wrong."
 }

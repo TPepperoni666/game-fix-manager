@@ -125,6 +125,19 @@ class Ctx:
                 # rewrite to a {prefix} path and let the block below expand it.
                 out = out.replace(
                     token, "{prefix}/drive_c/users/steamuser/" + "/".join(sub))
+        if "{programfilesx86}" in out:
+            # Not a user folder, but the same cross-platform problem: Ubisoft
+            # Connect keeps every game's saves under
+            # Program Files (x86)/Ubisoft/Ubisoft Game Launcher/savegames,
+            # which is inside the prefix on Linux and a real system folder on
+            # Windows. Watch Dogs, AC Shadows and Wildlands all live there.
+            if os.name == "nt":
+                out = out.replace("{programfilesx86}",
+                                  os.environ.get("ProgramFiles(x86)")
+                                  or r"C:\Program Files (x86)")
+            else:
+                out = out.replace("{programfilesx86}",
+                                  "{prefix}/drive_c/Program Files (x86)")
         if "{prefix" in out:
             from . import detect
             pfx = detect.find_prefix(self.recipe, self.steam_root)

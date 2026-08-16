@@ -1,11 +1,21 @@
 {
   "id": "barnyard",
   "name": "Barnyard",
-  "aliases": ["Barnyard (2006)", "Nickelodeon Barnyard"],
+  "aliases": [
+    "Barnyard (2006)",
+    "Nickelodeon Barnyard"
+  ],
   "detect": {
-    "install_dir_names": ["Barnyard"],
-    "marker_files": ["Barnyard.exe"]
+    "install_dir_names": [
+      "Barnyard"
+    ],
+    "marker_files": [
+      "Barnyard.exe"
+    ]
   },
+  "save_paths": [
+    "{game_dir}/Save"
+  ],
   "steps": [
     {
       "type": "copy_files",
@@ -32,9 +42,11 @@
       "type": "wine_registry",
       "optional": true,
       "key": "Software\\THQ\\Barnyard",
-      "values": { "ControllerEnabled": 1 }
+      "values": {
+        "ControllerEnabled": 1
+      }
     }
   ],
   "post_apply_message": "Barnyard (retail 'Full-Rip', non-Steam) — 1920x1200 via the game's OWN widescreen patch (reliable, replaces the old flaky ASI):\n1. Apply — it swaps in the pre-patched 1920x1200 Barnyard.exe (your original backed up as .gfm-orig), drops the matching Setup.exe, skips intros, sets the controller registry key, and AUTO-ADDS the Steam shortcut (Barnyard.exe, game folder, gospel appid, Proton 7.0-6). Steam blips closed to write the shortcut.\n2. Run Setup.exe once VIA PROTON, confirm 1920x1200, quit — that writes the display config the game needs.\n3. Run the game once (creates the prefix), then RE-APPLY so the controller registry key lands in the prefix.\nCONTROLLER: ControllerEnabled is set in HKCU\\SOFTWARE\\THQ\\Barnyard; on the Deck the pad arrives via Steam Input as XInput. If it still won't respond, set the shortcut's Steam Input layout to 'Gamepad'.\nRevert restores your original Barnyard.exe. (dgVoodoo + XInput Plus from the Full-Rip are deliberately NOT deployed — Proton's DXVK handles D3D8 and Steam Input handles the pad.)",
-  "notes": "REWORKED 2026-07-09: dropped the AlphaYellow widescreen ASI + Ultimate ASI Loader (the dinput8 proxy load was hit-or-miss under Proton). Now uses Tony's Full-Rip's own widescreen patch: a PRE-PATCHED Barnyard.exe for the 1920x1200 / 2560x1600 / 3840x2400 set (hex-edited, reliable) staged OFF-GIT at NAS 'Game Fixes/barnyard/payload/widescreen1200/' (Barnyard.exe + Setup.exe). copy_files swaps it in with backup_originals; the user runs Setup.exe once to set the resolution. Controller = HKCU\\SOFTWARE\\THQ\\Barnyard ControllerEnabled=1 (matches the Full-Rip's 'Enable Controller Support.reg') + Steam Input. Runner = Proton 7.0-6 (proton_7) which inits the display where Proton 9 / GE failed. Dropped the WINEDLLOVERRIDES dinput8 override (no ASI loader anymore). dgVoodoo skipped (Proton's DXVK translates D3D8 natively); XInput Plus skipped (Steam Input provides XInput). Full-Rip source: NAS roms/win/Barnyard/Barnyard.zip — a bundle with per-resolution widescreen patches, dgVoodoo, XInput Plus, and controller/windowed .reg files (Readme confirms the copy-exe-then-run-Setup procedure). Pre-patched exe is a hex-edit of the standard Barnyard.exe, so it works on a standard install too. Save games live in <game>/Save (ride along on the SD)."
+  "notes": "REWORKED 2026-07-09: dropped the AlphaYellow widescreen ASI + Ultimate ASI Loader (the dinput8 proxy load was hit-or-miss under Proton). Now uses Tony's Full-Rip's own widescreen patch: a PRE-PATCHED Barnyard.exe for the 1920x1200 / 2560x1600 / 3840x2400 set (hex-edited, reliable) staged OFF-GIT at NAS 'Game Fixes/barnyard/payload/widescreen1200/' (Barnyard.exe + Setup.exe). copy_files swaps it in with backup_originals; the user runs Setup.exe once to set the resolution. Controller = HKCU\\SOFTWARE\\THQ\\Barnyard ControllerEnabled=1 (matches the Full-Rip's 'Enable Controller Support.reg') + Steam Input. Runner = Proton 7.0-6 (proton_7) which inits the display where Proton 9 / GE failed. Dropped the WINEDLLOVERRIDES dinput8 override (no ASI loader anymore). dgVoodoo skipped (Proton's DXVK translates D3D8 natively); XInput Plus skipped (Steam Input provides XInput). Full-Rip source: NAS roms/win/Barnyard/Barnyard.zip — a bundle with per-resolution widescreen patches, dgVoodoo, XInput Plus, and controller/windowed .reg files (Readme confirms the copy-exe-then-run-Setup procedure). Pre-patched exe is a hex-edit of the standard Barnyard.exe, so it works on a standard install too. Save games live in <game>/Save (ride along on the SD).\n\nsave_paths added 2026-08-12 from PCGamingWiki (Barnyard) — Windows path translated to GFM's platform-aware templates. NOT verified against a live save folder; a capture that comes back empty means the path is wrong."
 }

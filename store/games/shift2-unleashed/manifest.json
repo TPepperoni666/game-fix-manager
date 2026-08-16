@@ -1,12 +1,27 @@
 {
   "id": "shift2-unleashed",
   "name": "Shift 2 Unleashed",
-  "aliases": ["SHIFT 2 UNLEASHED", "NFS Shift 2", "Need for Speed Shift 2 Unleashed", "Need for Speed: Shift 2"],
+  "aliases": [
+    "SHIFT 2 UNLEASHED",
+    "NFS Shift 2",
+    "Need for Speed Shift 2 Unleashed",
+    "Need for Speed: Shift 2"
+  ],
   "steam_appid": 47920,
   "detect": {
-    "install_dir_names": ["Shift 2 Unleashed", "SHIFT 2 UNLEASHED", "need for speed shift 2"],
-    "marker_files": ["shift2u.exe", "PakFiles/BOOTFLOW.bff"]
+    "install_dir_names": [
+      "Shift 2 Unleashed",
+      "SHIFT 2 UNLEASHED",
+      "need for speed shift 2"
+    ],
+    "marker_files": [
+      "shift2u.exe",
+      "PakFiles/BOOTFLOW.bff"
+    ]
   },
+  "save_paths": [
+    "{documents}/SHIFT 2 UNLEASHED/profiles"
+  ],
   "steps": [
     {
       "type": "swap_exe",
@@ -21,5 +36,5 @@
       ]
     }
   ],
-  "notes": "Two things: (1) Xbox 360 controller button prompts by Garcias-Garage.de — single pak swap, 'Updated Version for Patch 01'. (2) Intro-skip: renames BootFlow_in.bik / BootFlow_out.bik in Movies/ (names from PCGamingWiki). Both reversible via .gfm-orig. Game is delisted from Steam; appid 47920 is best-effort — if detection misses on the Deck, the path prompt covers it (and remembers). Not installed on the Windows PC (2026-07-06), so file paths unverified against a real install — Linux is case-sensitive so if Movies/ or the .bik casing differs, the intro-skip lines silently no-op; sha256 of BFF payload: 3678f1bc9a79124f3d5c0ecd716103e72ab7e545d4fc54293284972fd91989d1."
+  "notes": "Two things: (1) Xbox 360 controller button prompts by Garcias-Garage.de — single pak swap, 'Updated Version for Patch 01'. (2) Intro-skip: renames BootFlow_in.bik / BootFlow_out.bik in Movies/ (names from PCGamingWiki). Both reversible via .gfm-orig. Game is delisted from Steam; appid 47920 is best-effort — if detection misses on the Deck, the path prompt covers it (and remembers). Not installed on the Windows PC (2026-07-06), so file paths unverified against a real install — Linux is case-sensitive so if Movies/ or the .bik casing differs, the intro-skip lines silently no-op; sha256 of BFF payload: 3678f1bc9a79124f3d5c0ecd716103e72ab7e545d4fc54293284972fd91989d1.\n\nsave_paths added 2026-08-12 from PCGamingWiki (Shift 2 Unleashed) — Windows path translated to GFM's platform-aware templates. NOT verified against a live save folder; a capture that comes back empty means the path is wrong."
 }
