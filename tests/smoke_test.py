@@ -1681,6 +1681,58 @@ def main():
             missing_raised = True
         check("ini_edit raises on a missing target", missing_raised)
 
+        # --- platform-aware user-dir templates ---------------------------
+        # A save captured on the Deck has to restore on Windows, so ONE
+        # template must resolve on both. saves.py stores the template and
+        # re-resolves it on the target machine; hardcoding {prefix}/drive_c/…
+        # would capture fine and restore somewhere Windows never reads.
+        import core.engine as _eng
+        check("all four user-dir tokens exist",
+              set(_eng._USER_DIRS) == {"{localappdata}", "{appdata}",
+                                       "{documents}", "{savedgames}"})
+        _esrc = _i.getsource(_eng.Ctx.resolve_target)
+        check("user-dir tokens route through the prefix on Linux",
+              "drive_c/users/steamuser/" in _esrc)
+        check("and to the real folder on Windows",
+              "_windows_user_dir" in _esrc)
+        # Redirection is normal — Tony's Documents are under OneDrive — so a
+        # home-relative guess would silently write where no game looks.
+        _wsrc = _i.getsource(_eng._windows_user_dir)
+        check("Documents/Saved Games come from the shell-folder registry",
+              "User Shell Folders" in _wsrc and "winreg" in _wsrc)
+        check("shell-folder lookup expands %USERPROFILE% style values",
+              "expandvars" in _wsrc)
+        check("a failed registry read still returns something usable",
+              "Path.home().joinpath" in _wsrc)
+        # Resolution itself, with the prefix stubbed so it works off a Deck.
+        _pfx = tmp / "pfxstub" / "pfx"
+        (_pfx / "drive_c" / "users" / "steamuser").mkdir(parents=True)
+        import core.detect as _det
+        _real_fp = _det.find_prefix
+        try:
+            _det.find_prefix = lambda *a, **k: _pfx
+            _c = _e2.Ctx(rec, gdir, log=lambda _m: None)
+            _docs = str(_c.resolve_target("{documents}/My Game/save"))
+            _saved = str(_c.resolve_target("{savedgames}/My Game"))
+            _roam = str(_c.resolve_target("{appdata}/My Game"))
+            if _os.name == "nt":
+                check("Windows resolves {documents} off the prefix",
+                      "drive_c" not in _docs and "My Game" in _docs)
+                check("Windows resolves {appdata} to Roaming or the env var",
+                      "drive_c" not in _roam)
+            else:
+                check("Linux resolves {documents} into the prefix",
+                      "drive_c/users/steamuser/Documents" in
+                      _docs.replace("\\", "/"))
+                check("Linux resolves {savedgames} into the prefix",
+                      "steamuser/Saved Games" in _saved.replace("\\", "/"))
+            check("no token survives resolution unexpanded",
+                  not any(t in _docs + _saved + _roam
+                          for t in ("{documents}", "{savedgames}",
+                                    "{appdata}", "{prefix}")))
+        finally:
+            _det.find_prefix = _real_fp
+
         # --- ini_edit per-machine overrides (values_by_host) --------------
         # Display settings are the one thing that can't be shared across a
         # handheld, a TV box and a desktop. _hostname is stubbed because the

@@ -22,6 +22,53 @@ BACKUP_SUFFIX = ".gfm-orig"
 
 _REGISTRY: dict[str, type] = {}
 
+# Platform-aware user-directory tokens, and where each one lives inside a
+# Proton prefix relative to the steamuser home.
+#
+# The point of these is that ONE template has to resolve on BOTH platforms.
+# saves.py captures by template and re-resolves it on the target machine, so
+# "{documents}/My Game/save" captured from inside a Proton prefix on the Deck
+# restores to the real Documents folder on Windows. Hardcoding
+# {prefix}/drive_c/... instead would capture fine and never restore anywhere
+# a Windows game would look.
+_USER_DIRS = {
+    "{localappdata}": ("AppData", "Local"),
+    "{appdata}": ("AppData", "Roaming"),
+    "{documents}": ("Documents",),
+    "{savedgames}": ("Saved Games",),
+}
+# Shell-folder registry names for the two that aren't plain env vars.
+_SHELL_FOLDER = {
+    "{documents}": "Personal",
+    "{savedgames}": "{4C5C32FF-BB9D-43B0-B5B4-2D72E54EAAA4}",
+}
+
+
+def _windows_user_dir(token: str) -> str:
+    """The REAL Windows folder for a user-dir token.
+
+    Documents and Saved Games come from the shell-folder registry rather than
+    being built from the home directory, because REDIRECTION IS NORMAL —
+    Tony's Documents live under OneDrive. Assuming ~/Documents would write
+    somewhere the game never reads, and the failure is silent: the restore
+    reports success and the save simply isn't there."""
+    env = {"{localappdata}": "LOCALAPPDATA", "{appdata}": "APPDATA"}.get(token)
+    if env and os.environ.get(env):
+        return os.environ[env]
+    name = _SHELL_FOLDER.get(token)
+    if name:
+        try:
+            import winreg
+            key = (r"Software\Microsoft\Windows\CurrentVersion"
+                   r"\Explorer\User Shell Folders")
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as k:
+                raw, _ = winreg.QueryValueEx(k, name)
+                if raw:
+                    return os.path.expandvars(raw)
+        except OSError:
+            pass  # fall through to the home-relative guess
+    return str(Path.home().joinpath(*_USER_DIRS[token]))
+
 
 def register_step(name: str):
     def deco(cls):
@@ -55,23 +102,29 @@ class Ctx:
         {game_dir}  — the game install directory
         {prefix}    — the game's Proton prefix (…/compatdata/<id>/pfx)
         {prefix_localappdata} — drive_c LocalAppData for steamuser
-        {localappdata} — LocalAppData WHEREVER THE GAME ACTUALLY RUNS: the
-                      prefix's copy under Proton, the real %LOCALAPPDATA% on
-                      Windows. Lets one recipe target a game's user config on
-                      both platforms instead of needing two.
+        {localappdata} {appdata} {documents} {savedgames}
+                    — the user folder WHEREVER THE GAME ACTUALLY RUNS: the
+                      prefix's copy under Proton, the real Windows folder on
+                      Windows. One recipe then names a save location that
+                      resolves on both platforms, which is what lets a save
+                      captured on the Deck restore on the HTPC. On Windows,
+                      Documents and Saved Games come from the shell-folder
+                      registry, so OneDrive redirection is honoured.
         ~           — the user's home dir
         Prefix templates need the game to have run once; a StepError is
         raised (usually caught by an optional step) if no prefix exists yet.
         """
         out = template
-        if "{localappdata}" in out:
+        for token, sub in _USER_DIRS.items():
+            if token not in out:
+                continue
             if os.name == "nt":
-                real = os.environ.get("LOCALAPPDATA") or str(
-                    Path.home() / "AppData" / "Local")
-                out = out.replace("{localappdata}", real)
+                out = out.replace(token, _windows_user_dir(token))
             else:
-                # Under Proton the game only ever sees the prefix's AppData.
-                out = out.replace("{localappdata}", "{prefix_localappdata}")
+                # Under Proton the game only ever sees the prefix's copy, so
+                # rewrite to a {prefix} path and let the block below expand it.
+                out = out.replace(
+                    token, "{prefix}/drive_c/users/steamuser/" + "/".join(sub))
         if "{prefix" in out:
             from . import detect
             pfx = detect.find_prefix(self.recipe, self.steam_root)
