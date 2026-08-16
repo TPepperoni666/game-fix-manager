@@ -12,8 +12,13 @@
       "Medal of Honor - Pacific Assault",
       "Medal of Honor Pacific Assault"
     ],
-    "marker_files": ["mohpa.exe"]
+    "marker_files": [
+      "mohpa.exe"
+    ]
   },
+  "save_paths": [
+    "{documents}/EA Games/Medal of Honor Pacific Assault(tm)"
+  ],
   "steps": [
     {
       "type": "install_runner",
@@ -35,5 +40,5 @@
     }
   ],
   "post_apply_message": "Medal of Honor: Pacific Assault (2004, GOG, DRM-free) — Apply installs the MedalFixer widescreen fix and adds the Steam shortcut on GE-Proton 10.34 (launch exe mohpa.exe, NOT the DSLauncher front-end).\n\nHOW IT WORKS — the whole fix hinges on the d3d9 override: MedalFixer ships a d3d9.dll (DxWrapper) that loads its MedalFixer.asi plugin, so the shortcut carries WINEDLLOVERRIDES=\"d3d9=n,b\" to make Wine load THAT dll rather than its own DXVK. Without it the fix is inert. The plugin does the FOV fix, 2D/HUD widescreen, intro skip, video fix, and removes the cinematic bars; a widescreen-textures pak (main/z_WideTextures16_9.pk3) rides along. Settings live in scripts/MedalFixer.ini in the game folder — the defaults are Deck-friendly (SkipIntro on, FOV fix on, no forced frame cap).\n\nIF IT STILL LOOKS 4:3: confirm the wrapper loaded — set launch options to PROTON_LOG=1 WINEDLLOVERRIDES=\"d3d9=n,b\" %command%, launch, quit, and grep ~/steam-<appid>.log for d3d9/dxwrapper. If it never loads it's a search-path/override problem.\n\nCONTROLLER: no native pad support — use a Steam Input keyboard/mouse layout.",
-  "notes": "Built 2026-07-21 from Tony's GOG copy at NAS _games/'Medal of Honor - Pacific Assault' (goggame markers — DRM-free, delisted). Launch target mohpa.exe (9.3MB); DSLauncher.exe is a front-end, the *_setup.exe are installers.\n\nWIDESCREEN via MedalFixer (Tony sourced MedalFixer.7z 2026-07-21), staged OFF-GIT to NAS _recipes/mohpa/payload/medalfixer/: d3d9.dll (485KB) + dxwrapper.dll (8MB, elishacloud DxWrapper) + dxwrapper.ini at root, scripts/ (MedalFixer.asi + .ini + global.ini), main/z_WideTextures16_9.pk3. copy_files overlays the lot onto the SD copy (originals backed up .gfm-orig); the NAS _games copy stays clean. The earlier plan (manual newconfig.cfg edit in the prefix) is SUPERSEDED — MedalFixer is a proper wrapper fix and needs no first-run edit. dxwrapper.ini resolution left at AUTO/native (0). MedalFixer.ini: EnableFOVFix, Enable2DFix, SkipIntro, FixVideos, DisableCinematicBars all true; FixFrameLimit false. Non-Steam -> computed appid. UNTESTED — first check is that the d3d9 override loads the wrapper."
+  "notes": "Built 2026-07-21 from Tony's GOG copy at NAS _games/'Medal of Honor - Pacific Assault' (goggame markers — DRM-free, delisted). Launch target mohpa.exe (9.3MB); DSLauncher.exe is a front-end, the *_setup.exe are installers.\n\nWIDESCREEN via MedalFixer (Tony sourced MedalFixer.7z 2026-07-21), staged OFF-GIT to NAS _recipes/mohpa/payload/medalfixer/: d3d9.dll (485KB) + dxwrapper.dll (8MB, elishacloud DxWrapper) + dxwrapper.ini at root, scripts/ (MedalFixer.asi + .ini + global.ini), main/z_WideTextures16_9.pk3. copy_files overlays the lot onto the SD copy (originals backed up .gfm-orig); the NAS _games copy stays clean. The earlier plan (manual newconfig.cfg edit in the prefix) is SUPERSEDED — MedalFixer is a proper wrapper fix and needs no first-run edit. dxwrapper.ini resolution left at AUTO/native (0). MedalFixer.ini: EnableFOVFix, Enable2DFix, SkipIntro, FixVideos, DisableCinematicBars all true; FixFrameLimit false. Non-Steam -> computed appid. UNTESTED — first check is that the d3d9 override loads the wrapper.\n\nsave_paths added 2026-08-12 from PCGamingWiki (Medal of Honor: Pacific Assault) — the Windows path translated to GFM's platform-aware templates, so it resolves inside the Proton prefix on the Deck and to the real folder on Windows. NOT verified against a live save folder; correct it if a capture comes back empty."
 }

@@ -11,8 +11,13 @@
       "True Crime - Streets of LA",
       "True Crime Streets of LA"
     ],
-    "marker_files": ["TrueCrime.exe"]
+    "marker_files": [
+      "TrueCrime.exe"
+    ]
   },
+  "save_paths": [
+    "{game_dir}/Saves"
+  ],
   "steps": [
     {
       "type": "install_runner",
@@ -23,7 +28,10 @@
       "type": "ini_edit",
       "target": "{game_dir}/TrueCrime.ini",
       "values": {
-        "Renderer": { "ScreenWidth": 1280, "ScreenHeight": 800 }
+        "Renderer": {
+          "ScreenWidth": 1280,
+          "ScreenHeight": 800
+        }
       }
     },
     {
@@ -34,5 +42,5 @@
     }
   ],
   "post_apply_message": "True Crime: Streets of LA (2003, Activision, delisted) — Apply adds the Steam shortcut on GE-Proton 10.34 and sets the resolution.\n\nWIDESCREEN: resolution lives in TrueCrime.ini under [Renderer] as ScreenWidth/ScreenHeight — the recipe sets 1280x800 for the Deck's native panel. Setting a wide resolution gives you the full picture, but note this game renders 16:9/16:10 by expanding the vertical view (Vert-) rather than a true Hor+ widescreen, and the HUD sits at 4:3 anchor points; that's a game limitation, not a misconfig. On an external 16:9 screen, re-apply after changing the two values (or edit the ini directly).\n\nCONTROLLER: native pad support (TrueCrime.ini has a [Controller] block) — Steam Input's default gamepad layout works; the game was built around a controller.",
-  "notes": "Built 2026-07-21 from Tony's copy staged at NAS _games/'True Crime - Streets of LA'. TrueCrime.exe (2.8MB) is the only exe. Resolution is [Renderer] ScreenWidth/ScreenHeight in TrueCrime.ini AT THE GAME ROOT (confirmed on disk — arrived set to 1920x1080; recipe overrides to Deck-native 1280x800). This is the first recipe to use the new ini_edit step. Delisted/abandonware (no legit sale channel), so in the fixable lane. Non-Steam -> computed appid. UNTESTED on hardware as of build."
+  "notes": "Built 2026-07-21 from Tony's copy staged at NAS _games/'True Crime - Streets of LA'. TrueCrime.exe (2.8MB) is the only exe. Resolution is [Renderer] ScreenWidth/ScreenHeight in TrueCrime.ini AT THE GAME ROOT (confirmed on disk — arrived set to 1920x1080; recipe overrides to Deck-native 1280x800). This is the first recipe to use the new ini_edit step. Delisted/abandonware (no legit sale channel), so in the fixable lane. Non-Steam -> computed appid. UNTESTED on hardware as of build.\n\nsave_paths added 2026-08-12 from PCGamingWiki (True Crime: Streets of LA) — the Windows path translated to GFM's platform-aware templates, so it resolves inside the Proton prefix on the Deck and to the real folder on Windows. NOT verified against a live save folder; correct it if a capture comes back empty."
 }
