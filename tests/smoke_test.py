@@ -2313,6 +2313,17 @@ def main():
               "except Exception" in _wsrc and "results.append" in _wsrc)
         check("weekly backup reports which steps failed",
               "step(s)" in _wsrc and "for lbl, err in failed" in _wsrc)
+        # The log is the only thing read after an unattended run, so it has to
+        # record the CONDITIONS as well as the outcome — a run that captured
+        # nothing because the NAS was down otherwise looks like a run with
+        # nothing to capture.
+        check("weekly backup logs the health state before it starts",
+              "nas_rows" in _wsrc and "timer_rows" in _wsrc
+              and "build_rows" in _wsrc)
+        check("weekly backup shouts if the NAS is down",
+              "NOT MOUNTED" in _wsrc)
+        check("health logging comes before the steps",
+              _wsrc.index("nas_rows") < _wsrc.index("1/6 map refresh"))
 
         _tsrc = _i.getsource(gfm_mod.App.cmd_setup_backup_timer)
         check("backup timer fires Sundays at 19:00",

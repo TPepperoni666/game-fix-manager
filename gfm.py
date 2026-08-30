@@ -2263,11 +2263,36 @@ class App:
         _capture_all and _sync_shortcut_state don't ask; _adopt_shortcuts
         takes interactive=False; backup reads args.auto). A single input()
         anywhere in here would hang the systemd unit until it timed out."""
+        from core import selfcheck as sc
         self.ui.header("🗓  WEEKLY BACKUP")
         started = time.monotonic()
         # Force unattended for everything downstream that checks args.auto.
         if self.args is not None:
             setattr(self.args, "auto", True)
+
+        # HEALTH FIRST, into the log. This job runs unattended once a week and
+        # its log is the only thing read afterwards — so record the conditions
+        # it ran UNDER, not just what it did. A run that captured nothing
+        # because the NAS was unmounted otherwise looks identical to one that
+        # had nothing to capture, and that ambiguity has cost three sessions.
+        self.ui.msg("── health " + "─" * 25, "info")
+        health = (sc.nas_rows(self.local_payloads) + sc.timer_rows()
+                  + sc.build_rows())
+        marks = {sc.OK: "✓", sc.WARN: "!", sc.BAD: "✗", sc.INFO: "·"}
+        for r in health:
+            bad = r.verdict in (sc.WARN, sc.BAD)
+            self.ui.msg(f"  {marks.get(r.verdict, '·')} {r.label:<26} "
+                        f"{r.value}", "warn" if bad else "dim")
+            if bad and r.note:
+                self.ui.msg(f"      {r.note}", "dim")
+        # The NAS being down doesn't stop the run — prefix backups go to the
+        # SD card and still work — but it silently guts capture and every
+        # payload lookup, so it has to be impossible to miss in the log.
+        if any(r.verdict == sc.BAD for r in sc.nas_rows(self.local_payloads)):
+            self.ui.msg("⚠ THE NAS IS NOT MOUNTED — art, saves and settings "
+                        "capture will find nothing to write to, and this run's "
+                        "results are NOT comparable with a healthy one.",
+                        "error")
 
         results: list[tuple[str, bool, str]] = []
 
