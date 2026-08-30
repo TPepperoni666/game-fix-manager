@@ -2772,6 +2772,34 @@ class App:
         except (OSError, subprocess.SubprocessError) as e:
             self.ui.msg(f"Couldn't install the automount: {e}", "error")
             return False
+
+        # VERIFY — never assume it took. This has twice left a lone .mount
+        # with no .automount beside it, and a .mount alone is "static": it has
+        # no [Install], so nothing starts it at boot and the NAS is silently
+        # down after every reboot until somebody investigates. A partial
+        # install that reports success is worse than one that fails.
+        missing = [u for u in (mount_unit, auto_unit)
+                   if not Path("/etc/systemd/system") .joinpath(u).is_file()]
+        state = ""
+        try:
+            r = subprocess.run(["systemctl", "is-enabled", auto_unit],
+                               capture_output=True, text=True, timeout=5)
+            state = (r.stdout or r.stderr or "").strip()
+        except (OSError, subprocess.SubprocessError):
+            state = "unknown"
+        if missing or state != "enabled":
+            self.ui.msg("⚠ The automount did NOT install cleanly — it will "
+                        "not survive a reboot:", "error")
+            for u in missing:
+                self.ui.msg(f"    missing unit: {u}", "warn")
+            if state != "enabled":
+                self.ui.msg(f"    {auto_unit} is '{state}', not 'enabled'",
+                            "warn")
+            self.ui.msg("The share may be mounted right now, but it won't "
+                        "come back on its own. Re-run this, and check "
+                        f"`systemctl status {auto_unit}` if it fails again.",
+                        "warn")
+            return False
         self.cfg["local_payloads_dir"] = mount_point
         self.local_payloads = Path(mount_point)
         store.save_config(self.cfg)
@@ -4068,6 +4096,7 @@ class App:
                 os.environ.get("TERM", ""))),
             ("does it fit", sc.fit_rows(cols, rows, gum, longest, len(labels))),
             ("scheduled jobs", sc.timer_rows()),
+            ("NAS share", sc.nas_rows(self.local_payloads)),
             ("environment", sc.env_rows(self.steam_root, self.store_root,
                                         self.local_payloads, payloads_up)),
         ]

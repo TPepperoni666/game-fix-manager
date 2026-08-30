@@ -2335,6 +2335,33 @@ def main():
         check("selfcheck reports both scheduled jobs",
               set(_sc.TIMERS) == {"gfm-backup.timer", "gfm-reclaim.timer"})
 
+        # --- NAS mount visibility ----------------------------------------
+        # Three sessions lost to this: a .mount with no .automount is
+        # 'static', so it never starts at boot, and the bare mountpoint then
+        # reads as an ordinary empty directory.
+        _nasdir = tmp / "nasmount"; _nasdir.mkdir()
+        _nr = {r.label: r for r in _sc.nas_rows(_nasdir)}
+        if _os.name == "nt":
+            check("nas_rows is a no-op on Windows", "NAS share" in _nr)
+        else:
+            check("an unmounted NAS reads as NOT mounted",
+                  _nr["NAS mounted"].verdict == _sc.BAD)
+            # The shadow case: files present but nothing mounted, which is
+            # what made mount_reachable report 'up' for weeks.
+            (_nasdir / "_state").mkdir()
+            _nr2 = {r.label: r for r in _sc.nas_rows(_nasdir)}
+            check("a shadowed mountpoint is called out as local files",
+                  "shadow" in _nr2["NAS mounted"].note)
+        check("nas_rows survives a None payloads dir",
+              _sc.nas_rows(None)[0].verdict == _sc.INFO)
+        _isrc = _i.getsource(gfm_mod.App._install_nas_automount)
+        check("automount install verifies both units afterwards",
+              "did NOT install cleanly" in _isrc and "is-enabled" in _isrc)
+        check("a partial automount install returns failure",
+              _isrc.count("return False") >= 2)
+        check("selfcheck shows the NAS section",
+              "nas_rows" in _i.getsource(gfm_mod.App.cmd_selfcheck))
+
         # --- deploy gap-fillers: runner install + prefix restore -------
         from core.steps import install_runner as _ir
         import tarfile as _tf

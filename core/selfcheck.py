@@ -235,6 +235,66 @@ def timer_rows() -> list[Row]:
     return out
 
 
+def nas_rows(payloads) -> list[Row]:
+    """Is the NAS share actually mounted, and will it come back by itself?
+
+    Three sessions have been lost to this. The share is a systemd .mount, and
+    a .mount ALONE is 'static' — no [Install], so nothing starts it at boot.
+    Without the .automount companion it is up until the next reboot and then
+    silently gone. Worse, the mountpoint then reads as an ordinary empty
+    directory, so anything that writes there lands on the internal disk and
+    shadows the mount forever after.
+
+    On SteamOS main, where OS updates land weekly, this needs to be visible
+    rather than rediscovered."""
+    import subprocess
+    if os.name == "nt" or payloads is None:
+        return [Row("NAS share", "n/a", INFO)]
+    p = Path(payloads)
+    mounted = False
+    try:
+        mounted = os.path.ismount(p)
+    except OSError:
+        pass
+    # Shadowed: not a mountpoint, but something is in it. Content is then
+    # coming off the internal disk, and "is it up?" by content would lie.
+    shadowed = False
+    if not mounted:
+        try:
+            shadowed = any(True for _ in p.iterdir())
+        except OSError:
+            pass
+    out = [Row("NAS mounted", "yes" if mounted else "NO",
+               OK if mounted else BAD,
+               "" if mounted else
+               ("the mountpoint has files in it but nothing is mounted — "
+                "those are local, and they shadow the share" if shadowed
+                else "nothing is mounted at the mountpoint"))]
+
+    units = sorted(Path("/etc/systemd/system").glob("*game*fixes*"))
+    kinds = {u.suffix for u in units}
+    has_auto = ".automount" in kinds
+    out.append(Row("NAS units", ", ".join(u.suffix.lstrip(".") for u in units)
+                   or "none",
+                   OK if has_auto else BAD,
+                   "" if has_auto else
+                   "no .automount — a .mount alone is 'static' and will NOT "
+                   "start at boot; re-run Connect NAS Payloads"))
+    if has_auto:
+        auto = next(u.name for u in units if u.suffix == ".automount")
+        try:
+            r = subprocess.run(["systemctl", "is-enabled", auto],
+                               capture_output=True, text=True, timeout=5)
+            state = (r.stdout or r.stderr or "").strip() or "unknown"
+        except (OSError, subprocess.SubprocessError):
+            state = "unknown"
+        out.append(Row("NAS automount", state,
+                       OK if state == "enabled" else BAD,
+                       "" if state == "enabled"
+                       else "not enabled, so it won't fire at boot"))
+    return out
+
+
 def env_rows(steam_root, store_root, payloads, payloads_up: bool) -> list[Row]:
     return [
         Row("host", socket.gethostname(), INFO,
