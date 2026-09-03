@@ -2440,8 +2440,16 @@ def main():
               "weekly-backup" in gfm_mod.COMMANDS
               and "setup-backup-timer" in gfm_mod.COMMANDS
               and "📅" in _i.getsource(gfm_mod.App.menu_settings))
-        check("selfcheck reports both scheduled jobs",
-              set(_sc.TIMERS) == {"gfm-backup.timer", "gfm-reclaim.timer"})
+        # The reclaim timer was retired INTO the backup, and selfcheck kept
+        # expecting it enabled — so a successful retirement was reported as a
+        # hard error on the live machine. Retiring a job has to flip the
+        # polarity of its check, not leave it behind.
+        check("selfcheck expects exactly one live scheduled job",
+              set(_sc.TIMERS) == {"gfm-backup.timer"})
+        check("the retired reclaim timer is graded the other way round",
+              set(_sc.RETIRED_TIMERS) == {"gfm-reclaim.timer"}
+              and "duplicates it"
+              in _i.getsource(_sc.timer_rows))
 
         # --- a yanked SD card must not kill detection ---------------------
         # Pull a card while mounted and the mountpoint survives as a zombie:

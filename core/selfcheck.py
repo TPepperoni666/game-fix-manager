@@ -193,7 +193,16 @@ def build_rows() -> list[Row]:
 
 TIMERS = {
     "gfm-backup.timer": "full backup (Sundays 19:00)",
-    "gfm-reclaim.timer": "reclaim (weekly)",
+}
+
+# Retired, and the polarity flips with it: reclaim used to have its own weekly
+# timer, which collided with the backup — both fired at the same second and
+# wrote the same prefix-backup folder. Reclaim is a step inside the backup
+# now, so this timer being ENABLED is the fault and disabled (or gone) is
+# correct. Leaving it in TIMERS reported the successful retirement as an
+# error, which is the same crying-wolf problem the SD card rows had.
+RETIRED_TIMERS = {
+    "gfm-reclaim.timer": "superseded — reclaim runs inside the weekly backup",
 }
 
 
@@ -232,6 +241,20 @@ def timer_rows() -> list[Row]:
                        + ("NEVER fired yet" if never else f"last ran {last}")
                        + ("" if state == "enabled"
                           else "; not enabled, so it will not run")))
+    for unit, why in RETIRED_TIMERS.items():
+        try:
+            en = subprocess.run(["systemctl", "--user", "is-enabled", unit],
+                                capture_output=True, text=True, timeout=5)
+            state = (en.stdout or en.stderr or "").strip() or "unknown"
+        except (OSError, subprocess.SubprocessError):
+            state = "unknown"
+        gone = state != "enabled"
+        out.append(Row(unit, "retired" if gone else "STILL ENABLED",
+                       OK if gone else WARN,
+                       why if gone else
+                       f"{why}, so this one duplicates it — they fire at the "
+                       "same second and write the same prefix-backup folder. "
+                       "Settings > 📅 Weekly Backup Timer retires it"))
     return out
 
 
