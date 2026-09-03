@@ -384,7 +384,7 @@ def _unit_enabled(unit: str) -> str:
 
 def sdcard_rows(steam_root, declared=None,
                 unit_dir=Path("/etc/systemd/system"),
-                fstab=Path("/etc/fstab")) -> list[Row]:
+                fstab=Path("/etc/fstab"), app_counts=None) -> list[Row]:
     """Is the SD card here, and will it still be here after a reboot?
 
     Written 2026-09-03, after a SteamOS update quietly stopped mounting the
@@ -415,6 +415,8 @@ def sdcard_rows(steam_root, declared=None,
             return [Row("SD card", "no Steam root — can't tell", INFO)]
         from . import detect
         declared = detect.declared_library_folders(Path(steam_root))
+        if app_counts is None:
+            app_counts = detect.declared_library_apps(Path(steam_root))
     # as_posix(), not str(): identical on Linux for the absolute paths we get
     # here, but it keeps the separators forward-facing so this is exercisable
     # from the Windows dev box, where str(Path("/run/media/…")) hands back
@@ -430,12 +432,33 @@ def sdcard_rows(steam_root, declared=None,
     for path in cards:
         fstype = _mount_fstype(path)
         mounted = fstype is not None
+        games = (app_counts or {}).get(path)
+        # A listed-but-absent library with NO games on it is cruft, not a
+        # fault: Steam remembers every path a card was ever mounted at, so a
+        # card that once came up as SD_Card1, or a Windows card plugged in
+        # once, lingers forever. Calling those BAD would leave this section
+        # permanently red, and a check that is always red gets ignored —
+        # which is exactly how the real failure went unnoticed for two
+        # sessions.
+        stale = not mounted and games == 0
+        if mounted:
+            verdict, note = OK, fstype
+        elif stale:
+            verdict, note = WARN, (
+                "Steam lists this library but records no games in it — a "
+                "leftover from a card mounted here once. Harmless, but worth "
+                "removing in Steam > Settings > Storage")
+        else:
+            verdict, note = BAD, (
+                (f"{games} game(s) Steam records here are missing"
+                 if games else "Steam still lists this library but nothing "
+                               "is mounted there")
+                + " — anything that launches from it will fail")
         out.append(Row("SD card mounted", path if mounted else f"{path} — NO",
-                       OK if mounted else BAD,
-                       fstype or
-                       "Steam still lists this library but nothing is mounted "
-                       "there — every game on the card is missing, and "
-                       "anything that launches from it will fail"))
+                       verdict, note))
+        if stale:
+            # No point asking how a path we want GONE comes back at boot.
+            continue
         kind, detail = boot_plan(path, unit_dir, fstab)
         if not kind:
             out.append(Row("SD card at boot", "nothing will mount it", BAD,

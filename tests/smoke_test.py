@@ -2240,6 +2240,30 @@ def main():
         check("selfcheck stays quiet when there is no removable library",
               _nosd["SD card"].verdict == _sc.INFO)
 
+        # Steam remembers every path a card was ever mounted at, so the real
+        # machine lists SD_Card (live), SD_Card1 (the same card under udisks'
+        # taken-mountpoint name) and a Windows card plugged in once. Grading
+        # an empty leftover the same as a card full of missing games leaves
+        # this section permanently red, and a permanently red check is one
+        # nobody reads — which is how the real failure survived two sessions.
+        _stale = {r.label: r
+                  for r in _sc.sdcard_rows(None, declared=[_card],
+                                           unit_dir=tmp / "no_units",
+                                           fstab=tmp / "no_fstab",
+                                           app_counts={_card.as_posix(): 0})}
+        check("an empty leftover library is a warning, not a failure",
+              _stale["SD card mounted"].verdict == _sc.WARN)
+        check("a stale entry doesn't also nag about mounting it at boot",
+              "SD card at boot" not in _stale)
+        _lost = {r.label: r
+                 for r in _sc.sdcard_rows(None, declared=[_card],
+                                          unit_dir=tmp / "no_units",
+                                          fstab=tmp / "no_fstab",
+                                          app_counts={_card.as_posix(): 22})}
+        check("a card holding games that isn't mounted is still a failure",
+              _lost["SD card mounted"].verdict == _sc.BAD
+              and "22 game(s)" in _lost["SD card mounted"].note)
+
         # declared_library_folders keeps what library_folders deliberately
         # drops — an unreadable root is the fault to report, not noise.
         _dsr = tmp / "declib" / "steam"
@@ -2251,6 +2275,17 @@ def main():
               _card in detect.declared_library_folders(_dsr))
         check("library_folders still drops it for everyone who reads files",
               _card not in detect.library_folders(_dsr))
+
+        # The app count comes out of libraryfolders.vdf, whose block layout is
+        # Valve's to change — so scan between "path" keys, not by indentation.
+        (_dsr / "steamapps" / "libraryfolders.vdf").write_text(
+            '"libraryfolders"\n{\n\t"0"\n\t{\n\t\t"path"\t\t"/one"\n'
+            '\t\t"apps"\n\t\t{\n\t\t\t"220"\t\t"1"\n\t\t\t"400"\t\t"2"\n'
+            '\t\t}\n\t}\n\t"1"\n\t{\n\t\t"path"\t\t"/two"\n'
+            '\t\t"apps"\n\t\t{\n\t\t}\n\t}\n}\n', encoding="utf-8")
+        _counts = detect.declared_library_apps(_dsr)
+        check("per-library app counts are read out of libraryfolders.vdf",
+              _counts.get("/one") == 2 and _counts.get("/two") == 0)
 
         check("the SD card is checked by selfcheck and the weekly backup",
               "sdcard_rows" in _i.getsource(gfm_mod.App.cmd_selfcheck)

@@ -111,6 +111,44 @@ def declared_library_folders(steam_root: Path) -> list[Path]:
     return libs
 
 
+def declared_library_apps(steam_root: Path) -> dict[str, int]:
+    """path -> how many games Steam RECORDS in that library.
+
+    Distinguishes the two ways a library can be listed but absent, which need
+    opposite reactions: a library holding games that isn't mounted is a fault
+    worth shouting about, while one holding nothing is just a stale entry
+    Steam kept after a card was mounted somewhere once. Grading both the same
+    means a permanently red check, and a check that is always red is one
+    nobody reads.
+
+    Scans between consecutive "path" keys rather than assuming the file's
+    indentation, because the block layout is Valve's to change."""
+    out: dict[str, int] = {}
+    try:
+        text = (steam_root / "steamapps" / "libraryfolders.vdf").read_text(
+            encoding="utf-8", errors="replace")
+    except OSError:
+        return out
+    marks = [(m.start(), m.group(1))
+             for m in re.finditer(r'"path"\s*"([^"]*)"', text)]
+    for i, (pos, path) in enumerate(marks):
+        end = marks[i + 1][0] if i + 1 < len(marks) else len(text)
+        seg = text[pos:end]
+        m = re.search(r'"apps"\s*\{', seg)
+        count = 0
+        if m:
+            depth, j = 1, m.end()
+            while j < len(seg) and depth:
+                if seg[j] == "{":
+                    depth += 1
+                elif seg[j] == "}":
+                    depth -= 1
+                j += 1
+            count = len(re.findall(r'"\d+"\s*"\d+"', seg[m.end():j - 1]))
+        out[path] = count
+    return out
+
+
 def library_folders(steam_root: Path) -> list[Path]:
     """All Steam library roots (internal + SD card etc.), steam_root always first.
 
