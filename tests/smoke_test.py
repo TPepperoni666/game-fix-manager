@@ -2194,6 +2194,68 @@ def main():
               "selfcheck" in gfm_mod.COMMANDS
               and "🩺" in _i.getsource(gfm_mod.App.menu))
 
+        # --- self-check: the SD card, now AND after the next reboot -------
+        # A SteamOS update stopped mounting the btrfs card at boot (stock
+        # SteamOS automounts ext4 only) and nothing anywhere said so. It
+        # mounts fine by hand, so it only ever surfaced downstream — "the
+        # tool only sees the internal SSD", then "I can't launch any games".
+        # Mounted right now is NOT the same as mounted next boot, which is
+        # why there are two rows and not one.
+        check("unit-name escaping matches systemd-escape --path",
+              _sc._unit_name_for("/run/media/deck/SD_Card")
+              == "run-media-deck-SD_Card"
+              and _sc._unit_name_for("/home/deck/mnt/game-fixes")
+              == "home-deck-mnt-game\\x2dfixes")
+
+        _units = tmp / "sd_units"
+        _units.mkdir()
+        _fstab = tmp / "sd_fstab"
+        _fstab.write_text("# nothing here\n", encoding="utf-8")
+        _card = Path("/run/media/deck/SD_Card")
+
+        check("boot_plan reports nothing when no unit and no fstab entry",
+              _sc.boot_plan(_card.as_posix(),_units, _fstab) == ("", ""))
+        (_units / "run-media-deck-SD_Card.mount").write_text("[Mount]\n",
+                                                             encoding="utf-8")
+        check("boot_plan finds the .mount unit that covers the path",
+              _sc.boot_plan(_card.as_posix(),_units, _fstab)
+              == ("mount", "run-media-deck-SD_Card.mount"))
+        _fstab.write_text(f"# c\nUUID=abc {_card.as_posix()} btrfs "
+                          "defaults 0 2\n", encoding="utf-8")
+        check("boot_plan falls back to an fstab entry for the same path",
+              _sc.boot_plan(_card.as_posix(),tmp / "no_units", _fstab)[0] == "fstab")
+
+        _sd = {r.label: r
+               for r in _sc.sdcard_rows(None, declared=[_card],
+                                        unit_dir=tmp / "no_units",
+                                        fstab=tmp / "no_fstab")}
+        check("selfcheck flags a card Steam lists but nothing is mounted at",
+              _sd["SD card mounted"].verdict == _sc.BAD)
+        check("selfcheck flags a card that nothing will mount at boot",
+              _sd["SD card at boot"].verdict == _sc.BAD
+              and "ext4 ONLY" in _sd["SD card at boot"].note)
+        # Don't cry wolf on a machine that simply has no card.
+        _nosd = {r.label: r for r in _sc.sdcard_rows(None, declared=[
+            Path.home() / ".local/share/Steam"])}
+        check("selfcheck stays quiet when there is no removable library",
+              _nosd["SD card"].verdict == _sc.INFO)
+
+        # declared_library_folders keeps what library_folders deliberately
+        # drops — an unreadable root is the fault to report, not noise.
+        _dsr = tmp / "declib" / "steam"
+        (_dsr / "steamapps").mkdir(parents=True)
+        (_dsr / "steamapps" / "libraryfolders.vdf").write_text(
+            '"libraryfolders"\n{\n\t"0"\n\t{\n\t\t"path"\t\t'
+            f'"{_card.as_posix()}"\n\t}}\n}}\n', encoding="utf-8")
+        check("declared_library_folders keeps an unmounted card library",
+              _card in detect.declared_library_folders(_dsr))
+        check("library_folders still drops it for everyone who reads files",
+              _card not in detect.library_folders(_dsr))
+
+        check("the SD card is checked by selfcheck and the weekly backup",
+              "sdcard_rows" in _i.getsource(gfm_mod.App.cmd_selfcheck)
+              and "sdcard_rows" in _i.getsource(gfm_mod.App.cmd_weekly_backup))
+
         # --- adopted appid pins live OUTSIDE the git checkout -------------
         # Adoption used to append to store/prefix_registry.json, a TRACKED
         # file. That wedged every later `git pull --ff-only`, and — quieter —

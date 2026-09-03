@@ -295,6 +295,165 @@ def nas_rows(payloads) -> list[Row]:
     return out
 
 
+# Removable media lands under /run/media on SteamOS (udisks) and /media on
+# most desktop distros. A Steam library under either is a card or a USB disk,
+# not internal storage — which is what makes "declared but not mounted" a
+# fault rather than a preference.
+REMOVABLE_ROOTS = ("/run/media", "/media")
+
+
+def _unit_name_for(path: str) -> str:
+    r"""systemd-escape --path, enough of it to look a unit up by name.
+
+    /run/media/deck/SD_Card    -> run-media-deck-SD_Card
+    /home/deck/mnt/game-fixes  -> home-deck-mnt-game\x2dfixes
+    """
+    out = []
+    for ch in path.strip("/"):
+        if ch == "/":
+            out.append("-")
+        elif ("a" <= ch <= "z") or ("A" <= ch <= "Z") or ("0" <= ch <= "9") \
+                or ch in "_.":
+            out.append(ch)
+        else:
+            out.append("\\x%02x" % ord(ch))
+    return "".join(out)
+
+
+def _unescape_mount(s: str) -> str:
+    """/proc/self/mounts octal-escapes the awkward characters in a path."""
+    return (s.replace("\\040", " ").replace("\\011", "\t")
+             .replace("\\012", "\n").replace("\\134", "\\"))
+
+
+def _mount_fstype(path: str) -> str | None:
+    """Filesystem type mounted exactly AT path, or None if nothing is.
+
+    Deliberately not os.path.ismount(): the fstype is the interesting half.
+    Stock SteamOS automounts ext4 and refuses everything else, so knowing the
+    card is btrfs is most of the explanation for why it isn't here."""
+    try:
+        with open("/proc/self/mounts", encoding="utf-8",
+                  errors="replace") as fh:
+            for line in fh:
+                parts = line.split()
+                if len(parts) >= 3 and _unescape_mount(parts[1]) == path:
+                    return parts[2]
+    except OSError:
+        pass
+    return None
+
+
+def boot_plan(path: str, unit_dir: Path, fstab: Path) -> tuple[str, str]:
+    """How — if at all — does `path` get mounted at boot?
+
+    Returns (kind, detail): ("mount"|"automount", unit name), ("fstab", line),
+    or ("", "") when nothing anywhere will bring it back. Pure enough to point
+    at a temp directory in tests, which is the only way to exercise the
+    'nothing will mount this' branch on a machine where something does."""
+    base = _unit_name_for(path)
+    for suffix in (".mount", ".automount"):
+        try:
+            if (unit_dir / (base + suffix)).is_file():
+                return suffix.lstrip("."), base + suffix
+        except OSError:
+            pass
+    try:
+        for ln in fstab.read_text(encoding="utf-8",
+                                  errors="replace").splitlines():
+            ln = ln.strip()
+            if not ln or ln.startswith("#"):
+                continue
+            fields = ln.split()
+            if len(fields) >= 2 and fields[1] == path:
+                return "fstab", ln
+    except OSError:
+        pass
+    return "", ""
+
+
+def _unit_enabled(unit: str) -> str:
+    import subprocess
+    try:
+        r = subprocess.run(["systemctl", "is-enabled", unit],
+                           capture_output=True, text=True, timeout=5)
+        return (r.stdout or r.stderr or "").strip() or "unknown"
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
+def sdcard_rows(steam_root, declared=None,
+                unit_dir=Path("/etc/systemd/system"),
+                fstab=Path("/etc/fstab")) -> list[Row]:
+    """Is the SD card here, and will it still be here after a reboot?
+
+    Written 2026-09-03, after a SteamOS update quietly stopped mounting the
+    card at boot. Stock SteamOS only automounts ext4 — holo-automount.sh
+    rejects btrfs with 'wrong fstype' and exits — and the steamos-btrfs patch
+    that fixes that had been silently REJECTED, because the same update
+    renamed the script it patches and left the old name as a symlink, which
+    GNU patch refuses to write through. Nothing in the system said any of
+    this out loud.
+
+    What made it expensive is that the card mounts fine by hand, so the fault
+    only ever showed up downstream: 'the tool only sees the internal SSD',
+    then 'I can't launch any games'. Two sessions on symptoms.
+
+    Steam's own libraryfolders.vdf is the source of truth for 'there is meant
+    to be a card here'. If it names a library under /run/media and nothing is
+    mounted at it, every game on that card has vanished — worth reporting
+    whatever the cause. The second row is the one that would actually have
+    saved the time: mounted right now is not the same as mounted next boot."""
+    # Windows has no /run/media convention, so there is nothing to look for —
+    # but only when we're the ones doing the looking. A caller that hands us a
+    # library list is driving deliberately (the tests do), and the logic below
+    # is platform-independent once the paths are given.
+    if os.name == "nt" and declared is None:
+        return [Row("SD card", "n/a on Windows", INFO)]
+    if declared is None:
+        if steam_root is None:
+            return [Row("SD card", "no Steam root — can't tell", INFO)]
+        from . import detect
+        declared = detect.declared_library_folders(Path(steam_root))
+    # as_posix(), not str(): identical on Linux for the absolute paths we get
+    # here, but it keeps the separators forward-facing so this is exercisable
+    # from the Windows dev box, where str(Path("/run/media/…")) hands back
+    # backslashes and every match below would quietly miss.
+    cards = [q for q in (p.as_posix() if isinstance(p, Path) else str(p)
+                         for p in declared)
+             if q.startswith(REMOVABLE_ROOTS)]
+    if not cards:
+        return [Row("SD card", "none in Steam's library list", INFO,
+                    "no library under " + " or ".join(REMOVABLE_ROOTS))]
+
+    out: list[Row] = []
+    for path in cards:
+        fstype = _mount_fstype(path)
+        mounted = fstype is not None
+        out.append(Row("SD card mounted", path if mounted else f"{path} — NO",
+                       OK if mounted else BAD,
+                       fstype or
+                       "Steam still lists this library but nothing is mounted "
+                       "there — every game on the card is missing, and "
+                       "anything that launches from it will fail"))
+        kind, detail = boot_plan(path, unit_dir, fstab)
+        if not kind:
+            out.append(Row("SD card at boot", "nothing will mount it", BAD,
+                           "no systemd unit and no fstab entry for this path. "
+                           "Stock SteamOS automounts ext4 ONLY, so a btrfs "
+                           "card stays unmounted until you mount it by hand"))
+        elif kind == "fstab":
+            out.append(Row("SD card at boot", "fstab", OK, detail))
+        else:
+            state = _unit_enabled(detail)
+            out.append(Row("SD card at boot", f"{detail} ({state})",
+                           OK if state == "enabled" else BAD,
+                           "" if state == "enabled"
+                           else "the unit exists but is not enabled, so "
+                                "nothing starts it at boot"))
+    return out
+
+
 def env_rows(steam_root, store_root, payloads, payloads_up: bool) -> list[Row]:
     return [
         Row("host", socket.gethostname(), INFO,

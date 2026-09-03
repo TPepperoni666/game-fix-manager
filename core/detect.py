@@ -83,29 +83,42 @@ def _readable_dir(p: Path) -> bool:
         return False
 
 
-def library_folders(steam_root: Path) -> list[Path]:
-    """All Steam library roots (internal + SD card etc.), steam_root always first.
+def declared_library_folders(steam_root: Path) -> list[Path]:
+    """Every library root Steam has ON FILE, readable or not, steam_root first.
 
-    Unreadable roots are DROPPED rather than returned: a library on a card
-    that has been yanked is not a library, and every caller here reads files
-    out of what we hand back."""
+    library_folders() drops the unreadable ones because everything downstream
+    of it reads files out of what it returns. Self-check needs the opposite
+    view: a library Steam still lists but that nothing is mounted at is not
+    noise to filter out, it IS the fault worth reporting — a card that didn't
+    come back, and every game on it silently gone."""
     libs = [steam_root]
     vdf = steam_root / "steamapps" / "libraryfolders.vdf"
     try:
         present = vdf.is_file()
     except OSError:
         present = False
-    if present:
-        try:
-            text = vdf.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            return libs
-        for k, v in _KV_RE.findall(text):
-            if k.lower() == "path":
-                p = Path(v)
-                if p not in libs and _readable_dir(p):
-                    libs.append(p)
+    if not present:
+        return libs
+    try:
+        text = vdf.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return libs
+    for k, v in _KV_RE.findall(text):
+        if k.lower() == "path":
+            p = Path(v)
+            if p not in libs:
+                libs.append(p)
     return libs
+
+
+def library_folders(steam_root: Path) -> list[Path]:
+    """All Steam library roots (internal + SD card etc.), steam_root always first.
+
+    Unreadable roots are DROPPED rather than returned: a library on a card
+    that has been yanked is not a library, and every caller here reads files
+    out of what we hand back."""
+    libs = declared_library_folders(steam_root)
+    return libs[:1] + [p for p in libs[1:] if _readable_dir(p)]
 
 
 def find_by_appid(appid: int, libs: list[Path]) -> Path | None:

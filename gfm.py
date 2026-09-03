@@ -2276,7 +2276,11 @@ class App:
         # because the NAS was unmounted otherwise looks identical to one that
         # had nothing to capture, and that ambiguity has cost three sessions.
         self.ui.msg("── health " + "─" * 25, "info")
-        health = (sc.nas_rows(self.local_payloads) + sc.timer_rows()
+        # The SD card belongs here as much as the NAS does: prefix backups are
+        # written to the card, so a run with the card missing produces a
+        # backup that looks fine and covers nothing.
+        health = (sc.nas_rows(self.local_payloads)
+                  + sc.sdcard_rows(self.steam_root) + sc.timer_rows()
                   + sc.build_rows())
         marks = {sc.OK: "✓", sc.WARN: "!", sc.BAD: "✗", sc.INFO: "·"}
         for r in health:
@@ -4122,6 +4126,7 @@ class App:
             ("does it fit", sc.fit_rows(cols, rows, gum, longest, len(labels))),
             ("scheduled jobs", sc.timer_rows()),
             ("NAS share", sc.nas_rows(self.local_payloads)),
+            ("SD card", sc.sdcard_rows(self.steam_root)),
             ("environment", sc.env_rows(self.steam_root, self.store_root,
                                         self.local_payloads, payloads_up)),
         ]
