@@ -65,30 +65,67 @@ def _vdf_pairs(text: str) -> dict[str, str]:
     return {k.lower(): v for k, v in _KV_RE.findall(text)}
 
 
+def _readable_dir(p: Path) -> bool:
+    """Is this a directory we can actually LIST?
+
+    is_dir() is not enough for removable media. Pull an SD card while it is
+    mounted and the mountpoint survives as a zombie: stat() still succeeds, so
+    is_dir() says True, but every read returns EIO. Steam's libraryfolders.vdf
+    goes on naming it, so the dead path gets admitted here and the first
+    appmanifest read takes the whole tool down with
+    'OSError: [Errno 5] Input/output error'. Listing it is the cheap question
+    that a zombie mount actually fails."""
+    try:
+        with os.scandir(p) as it:
+            next(it, None)
+        return True
+    except OSError:
+        return False
+
+
 def library_folders(steam_root: Path) -> list[Path]:
-    """All Steam library roots (internal + SD card etc.), steam_root always first."""
+    """All Steam library roots (internal + SD card etc.), steam_root always first.
+
+    Unreadable roots are DROPPED rather than returned: a library on a card
+    that has been yanked is not a library, and every caller here reads files
+    out of what we hand back."""
     libs = [steam_root]
     vdf = steam_root / "steamapps" / "libraryfolders.vdf"
-    if vdf.is_file():
-        for k, v in _KV_RE.findall(vdf.read_text(encoding="utf-8", errors="replace")):
+    try:
+        present = vdf.is_file()
+    except OSError:
+        present = False
+    if present:
+        try:
+            text = vdf.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return libs
+        for k, v in _KV_RE.findall(text):
             if k.lower() == "path":
                 p = Path(v)
-                if p.is_dir() and p not in libs:
+                if p not in libs and _readable_dir(p):
                     libs.append(p)
     return libs
 
 
 def find_by_appid(appid: int, libs: list[Path]) -> Path | None:
+    """Belt and braces alongside library_folders' filter: a card can be pulled
+    BETWEEN that check and this read, and detection failing to find a game is
+    always better than detection killing the process."""
     for lib in libs:
         manifest = lib / "steamapps" / f"appmanifest_{appid}.acf"
-        if not manifest.is_file():
+        try:
+            if not manifest.is_file():
+                continue
+            pairs = _vdf_pairs(
+                manifest.read_text(encoding="utf-8", errors="replace"))
+            installdir = pairs.get("installdir")
+            if installdir:
+                game_dir = lib / "steamapps" / "common" / installdir
+                if game_dir.is_dir():
+                    return game_dir
+        except OSError:
             continue
-        pairs = _vdf_pairs(manifest.read_text(encoding="utf-8", errors="replace"))
-        installdir = pairs.get("installdir")
-        if installdir:
-            game_dir = lib / "steamapps" / "common" / installdir
-            if game_dir.is_dir():
-                return game_dir
     return None
 
 
@@ -108,16 +145,24 @@ def find_by_markers(recipe: Recipe, libs: list[Path]) -> Path | None:
     common_dirs = []
     for lib in libs:
         common = lib / "steamapps" / "common"
-        if common.is_dir():
-            common_dirs.extend(d for d in common.iterdir() if d.is_dir())
+        # Same reason as find_by_appid: a yanked card leaves a mountpoint that
+        # stats fine and reads EIO, so every walk of it has to be survivable.
+        try:
+            if common.is_dir():
+                common_dirs.extend(d for d in common.iterdir() if d.is_dir())
+        except OSError:
+            continue
 
     for d in common_dirs:
         if _norm(d.name) in dir_names:
             return d
     if markers:
         for d in common_dirs:
-            if all((d / m).is_file() for m in markers):
-                return d
+            try:
+                if all((d / m).is_file() for m in markers):
+                    return d
+            except OSError:
+                continue
     return None
 
 

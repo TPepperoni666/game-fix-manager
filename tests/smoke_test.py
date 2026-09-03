@@ -2346,6 +2346,38 @@ def main():
         check("selfcheck reports both scheduled jobs",
               set(_sc.TIMERS) == {"gfm-backup.timer", "gfm-reclaim.timer"})
 
+        # --- a yanked SD card must not kill detection ---------------------
+        # Pull a card while mounted and the mountpoint survives as a zombie:
+        # stat() succeeds so is_dir() says True, but every read is EIO. Steam's
+        # libraryfolders.vdf goes on naming it, so the dead path was admitted
+        # and the first appmanifest read took the whole tool down.
+        from core import detect as _dt
+        check("a readable dir passes the listing check",
+              _dt._readable_dir(tmp))
+        check("a nonexistent dir fails it",
+              not _dt._readable_dir(tmp / "no-such-dir"))
+        _lib = tmp / "steamlib"; (_lib / "steamapps").mkdir(parents=True)
+        (_lib / "steamapps" / "libraryfolders.vdf").write_text(
+            '"libraryfolders"{"0"{"path" "' + str(_lib).replace("\\", "\\\\")
+            + '"}"1"{"path" "' + str(tmp / "yanked-card").replace("\\", "\\\\")
+            + '"}}', encoding="utf-8")
+        _libs = _dt.library_folders(_lib)
+        check("an unreadable library root is dropped, not returned",
+              all("yanked-card" not in str(p) for p in _libs))
+        check("the real library root survives", _lib in _libs)
+        # Detection must fail to FIND, never fail loudly, if a card vanishes
+        # between the filter and the read.
+        _dead = tmp / "gone-mid-scan"
+        check("find_by_appid survives a vanished library",
+              _dt.find_by_appid(12345, [_dead]) is None)
+        from core import manifest as _mf
+        _rc = _mf.Recipe(id="z", name="Z", aliases=[], steam_appid=None,
+            detect={"install_dir_names": ["Z"], "marker_files": ["z.exe"]},
+            steps=[], notes="", post_apply_message="", remote_payloads=[],
+            requires_game=True, save_paths=[], dir=tmp)
+        check("find_by_markers survives a vanished library",
+              _dt.find_by_markers(_rc, [_dead]) is None)
+
         # --- NAS mount visibility ----------------------------------------
         # Three sessions lost to this: a .mount with no .automount is
         # 'static', so it never starts at boot, and the bare mountpoint then
