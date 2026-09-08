@@ -70,6 +70,18 @@ def _windows_user_dir(token: str) -> str:
     return str(Path.home().joinpath(*_USER_DIRS[token]))
 
 
+def _xdg(var: str, fallback: str) -> str:
+    """XDG base dir, honouring the env var the spec says owns it.
+
+    Only an ABSOLUTE value counts — the spec says a relative one is invalid and
+    must be ignored, and treating one as valid would silently scatter saves
+    into the current working directory."""
+    raw = os.environ.get(var, "")
+    if raw and os.path.isabs(raw):
+        return raw
+    return str(Path.home() / fallback)
+
+
 def register_step(name: str):
     def deco(cls):
         _REGISTRY[name] = cls
@@ -110,7 +122,12 @@ class Ctx:
                       captured on the Deck restore on the HTPC. On Windows,
                       Documents and Saved Games come from the shell-folder
                       registry, so OneDrive redirection is honoured.
-        ~           — the user's home dir
+        {xdg_data} {xdg_config}
+                    — where a NATIVE Linux build keeps its saves/settings
+                      (~/.local/share, ~/.config), and the Windows folders a
+                      port of the same program uses (LocalAppData, Roaming).
+                      Never rewritten into the prefix — that is the point.
+        ~           — the user's home dir (leading only)
         Prefix templates need the game to have run once; a StepError is
         raised (usually caught by an optional step) if no prefix exists yet.
         """
@@ -138,6 +155,23 @@ class Ctx:
             else:
                 out = out.replace("{programfilesx86}",
                                   "{prefix}/drive_c/Program Files (x86)")
+        # Native-Linux save locations. Unlike the _USER_DIRS tokens these must
+        # NOT be rewritten into the prefix: a native build — OpenGOAL, Dolphin,
+        # a Linux recomp — writes to the real XDG dirs, outside any prefix.
+        # Recipes were spelling these as a raw "~/.config/...", which resolves
+        # on Windows to C:\Users\<you>\.config, a path nothing ever writes to,
+        # so those saves could be captured on the Deck and never restored.
+        # The Windows halves are the conventional counterparts: XDG_DATA_HOME
+        # is per-machine state (LocalAppData), XDG_CONFIG_HOME is roaming
+        # user settings (AppData\Roaming).
+        if "{xdg_data}" in out:
+            out = out.replace("{xdg_data}", _windows_user_dir("{localappdata}")
+                              if os.name == "nt" else _xdg("XDG_DATA_HOME",
+                                                           ".local/share"))
+        if "{xdg_config}" in out:
+            out = out.replace("{xdg_config}", _windows_user_dir("{appdata}")
+                              if os.name == "nt" else _xdg("XDG_CONFIG_HOME",
+                                                           ".config"))
         if "{prefix" in out:
             from . import detect
             pfx = detect.find_prefix(self.recipe, self.steam_root)
@@ -149,7 +183,14 @@ class Ctx:
             out = out.replace("{prefix_localappdata}", str(local_appdata))
             out = out.replace("{prefix}", str(pfx))
         out = out.replace("{game_dir}", str(self.game_dir))
-        out = out.replace("~", str(Path.home()))
+        # LEADING ~ only. A blanket replace also ate a '~' anywhere else in the
+        # path — a save named "settings.ini~", or a Windows box whose
+        # ProgramFiles(x86) comes back as a short name like C:\PROGRA~2 — and
+        # silently produced a path pointing nowhere near the real one. It runs
+        # after the token expansions above, so any ~ left here that isn't in
+        # column zero belongs to a real filename.
+        if out.startswith("~"):
+            out = str(Path.home()) + out[1:]
         return Path(out)
 
     def payload_path(self, rel: str) -> Path:

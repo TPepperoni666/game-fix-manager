@@ -1740,6 +1740,55 @@ def main():
                       _pf.replace("\\", "/"))
             check("{programfilesx86} leaves no placeholder behind",
                   "{programfilesx86}" not in _pf and "{prefix}" not in _pf)
+
+            # Native builds (OpenGOAL, Dolphin, a Linux recomp) write to the
+            # real XDG dirs, OUTSIDE any prefix — so these two must never be
+            # rewritten into one, which is the opposite of every token above.
+            _xd = str(_c.resolve_target("{xdg_data}/BanjoRecompiled"))
+            _xc = str(_c.resolve_target("{xdg_config}/OpenGOAL/jak1/saves"))
+            check("XDG tokens never resolve into the prefix",
+                  "drive_c" not in _xd and "drive_c" not in _xc)
+            check("XDG tokens leave no placeholder behind",
+                  "{xdg" not in _xd + _xc)
+            if _os.name == "nt":
+                # A native Linux save has to land somewhere Windows actually
+                # writes. Spelled "~/.config/..." it resolved to
+                # C:\Users\<you>\.config — captured on the Deck, restored to a
+                # path nothing on Windows ever reads.
+                check("Windows maps {xdg_data} to LocalAppData",
+                      "AppData" in _xd and ".local" not in _xd)
+                check("Windows maps {xdg_config} to Roaming",
+                      "AppData" in _xc and ".config" not in _xc)
+            else:
+                check("Linux maps {xdg_data} to ~/.local/share",
+                      _xd.replace("\\", "/").endswith(
+                          ".local/share/BanjoRecompiled"))
+                check("Linux maps {xdg_config} to ~/.config",
+                      "/.config/OpenGOAL/" in _xc.replace("\\", "/"))
+                # The spec says a relative XDG_* value is invalid and must be
+                # ignored; honouring one would scatter saves into the cwd.
+                _old = _os.environ.get("XDG_DATA_HOME")
+                try:
+                    _os.environ["XDG_DATA_HOME"] = "relative/nope"
+                    check("a relative XDG_DATA_HOME is ignored, not obeyed",
+                          _os.path.isabs(str(_c.resolve_target(
+                              "{xdg_data}/X"))))
+                finally:
+                    if _old is None:
+                        _os.environ.pop("XDG_DATA_HOME", None)
+                    else:
+                        _os.environ["XDG_DATA_HOME"] = _old
+
+            # A blanket ~ replace also ate one MID-path: a save named
+            # "settings.ini~", or a Windows ProgramFiles(x86) that comes back
+            # as a short name like C:\PROGRA~2, silently became a path
+            # pointing nowhere near the real one.
+            _tilde = str(_c.resolve_target("{game_dir}/settings.ini~"))
+            check("a ~ inside a filename survives resolution",
+                  _tilde.endswith("settings.ini~"))
+            check("a LEADING ~ still expands to home",
+                  str(_c.resolve_target("~/x")).replace("\\", "/")
+                  == str(Path.home()).replace("\\", "/") + "/x")
             check("no token survives resolution unexpanded",
                   not any(t in _docs + _saved + _roam
                           for t in ("{documents}", "{savedgames}",

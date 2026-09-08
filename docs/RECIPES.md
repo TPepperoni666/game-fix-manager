@@ -90,7 +90,29 @@ Usable in any step that takes a path:
 | `{prefix}` | the Proton prefix (`compatdata/<appid>/pfx`) |
 | `{prefix_localappdata}` | `drive_c/users/steamuser/AppData/Local` |
 | `{localappdata}` | the prefix copy on Linux, the REAL one on Windows |
-| `~` | your home directory |
+| `{appdata}` `{documents}` `{savedgames}` | same deal — prefix copy, or the real folder on Windows |
+| `{programfilesx86}` | ditto; Ubisoft Connect keeps every game's saves here |
+| `{xdg_data}` | `~/.local/share`, or `%LOCALAPPDATA%` on Windows |
+| `{xdg_config}` | `~/.config`, or `%APPDATA%` on Windows |
+| `~` | your home directory (**leading only**) |
+
+### Which one for a save?
+
+The question is *what runs the game*, not what the game was written for:
+
+- **Runs under Proton** (a Windows exe, including Windows recomps) — use
+  `{localappdata}` / `{appdata}` / `{documents}`. They point inside the prefix
+  on Linux and at the real folder on Windows, so one entry covers both.
+- **Native Linux build** (OpenGOAL, Dolphin, a Linux recomp) — use
+  `{xdg_data}` / `{xdg_config}`. These are never rewritten into a prefix,
+  because a native build has none. Do **not** write `~/.config/...` by hand:
+  that resolves on Windows to `C:\Users\<you>\.config`, where nothing lives,
+  so the save captures on the Deck and restores nowhere.
+- **Writes next to the exe** (portable mode, `{game_dir}/saves`) — use
+  `{game_dir}`, but list the AppData location too if the game is only portable
+  because a recipe step made it so. Banjo is exactly this: portable on the
+  Legion via `payload/portable`, but plain `%LOCALAPPDATA%\BanjoRecompiled` on
+  a Windows box that never ran that step.
 
 Two are step-specific rather than general:
 
