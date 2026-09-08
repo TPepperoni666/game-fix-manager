@@ -1636,6 +1636,63 @@ def main():
         check("App._sync_shortcut_state exists",
               hasattr(gfm_mod.App, "_sync_shortcut_state"))
 
+        # --- make_executable step ----------------------------------------
+        # Native Linux binaries come off a Windows box, across SMB, onto the
+        # Deck. Neither NTFS nor a default SMB mount carries a POSIX mode, so
+        # WheelWizard_Linux and the WiiCompiled AppImage arrive 0644 and fail
+        # to launch with 'Permission denied' — which reads like a bad download
+        # rather than a lost metadata bit.
+        from core.steps.make_executable import MakeExecutable as _MX
+        from core import engine as _e3, manifest as _m3
+        _xdir = tmp / "xgame"; _xdir.mkdir()
+        (_xdir / "WheelWizard_Linux").write_text("bin", encoding="utf-8")
+        (_xdir / "WiiCompiled.AppImage").write_text("bin", encoding="utf-8")
+        (_xdir / "readme.txt").write_text("doc", encoding="utf-8")
+        _xrec = _m3.Recipe(id="x", name="x", aliases=[], steam_appid=None,
+            detect={}, steps=[], notes="", post_apply_message="",
+            remote_payloads=[], requires_game=True, save_paths=[], dir=_xdir)
+        _xctx = _e3.Ctx(_xrec, _xdir, log=lambda _m: None)
+        _xstep = _MX({"type": "make_executable",
+                      "paths": ["{game_dir}/WheelWizard_Linux",
+                                "{game_dir}/*.AppImage",
+                                "{game_dir}/not_here_at_all"]})
+        try:
+            _MX({"type": "make_executable"})
+            _mx_guarded = False
+        except Exception:                                    # noqa: BLE001
+            _mx_guarded = True
+        check("make_executable needs at least one path", _mx_guarded)
+        # +x mirrors the READ bits, same as chmod +x: don't hand execute to a
+        # group that can't even read the file.
+        check("+x mirrors the read bits, not a blanket 0777",
+              _MX._wanted(0o644) == 0o755 and _MX._wanted(0o600) == 0o700)
+        if _os.name == "nt":
+            # No bit to set; a recipe must not report itself broken on a
+            # platform where the question is meaningless.
+            check("make_executable is a no-op that verifies on Windows",
+                  _xstep.verify(_xctx) == "applied")
+            _xstep.apply(_xctx)  # must not raise
+            check("make_executable apply is harmless on Windows", True)
+        else:
+            check("make_executable reports not_applied before running",
+                  _xstep.verify(_xctx) == "not_applied")
+            _xstep.apply(_xctx)
+            _mode = lambda n: __import__("stat").S_IMODE(  # noqa: E731
+                (_xdir / n).stat().st_mode)
+            check("the named binary became executable",
+                  _mode("WheelWizard_Linux") & 0o111)
+            check("the glob caught the AppImage too",
+                  _mode("WiiCompiled.AppImage") & 0o111)
+            check("a file nobody asked about is left alone",
+                  not _mode("readme.txt") & 0o111)
+            check("make_executable verifies after applying",
+                  _xstep.verify(_xctx) == "applied")
+        # Revert must NOT strip the bit — that would leave a game that can't
+        # start, and undoing a fix never implies breaking the launcher.
+        _xstep.revert(_xctx)
+        check("revert leaves the executable bit alone",
+              _os.name == "nt" or _mode("WheelWizard_Linux") & 0o111)
+
         # --- ini_edit step ---------------------------------------------
         from core.steps.ini_edit import IniEdit
         from core import engine as _e2, manifest as _m2

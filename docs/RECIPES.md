@@ -80,6 +80,24 @@ is how the Halo MCC recipe broke: the path was `mcc/` lowercase on disk, not
 
 ---
 
+### `make_executable`
+
+```json
+{ "type": "make_executable",
+  "paths": ["{game_dir}/WheelWizard_Linux",
+            "{game_dir}/*.AppImage"] }
+```
+
+For native Linux binaries. The executable bit does not survive the trip from
+a Windows box, across SMB on the NAS, onto the Deck — neither NTFS nor a
+default SMB mount carries a POSIX mode — so a binary that was executable at
+the source arrives `0644` and fails to launch with `Permission denied`.
+
+Globs are allowed; entries that match nothing are skipped. `+x` mirrors the
+read bits (`0644` → `0755`), exactly as `chmod +x` does. On Windows it is a
+no-op that verifies as applied. Revert deliberately does nothing: stripping
+the bit would leave a game that cannot start.
+
 ## Path templates
 
 Usable in any step that takes a path:
