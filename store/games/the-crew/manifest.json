@@ -18,14 +18,17 @@
     ]
   },
   "save_paths": [
-    "{game_dir}/the crew/data.bin",
+    "{game_dir}/the crew/data.bin*",
     "{game_dir}/data.bin",
     "{game_dir}/the crew/data.json",
     "{game_dir}/data.json",
+    "{game_dir}/the crew/tcu/srv",
     "{game_dir}/server.ini",
+    "{game_dir}/the crew/server.ini",
+    "{game_dir}/tcu.manifest.*.xml",
+    "{game_dir}/the crew/tcu.manifest.*.xml",
     "{game_dir}/addon_items.xml",
-    "{game_dir}/addon_missions.xml",
-    "{game_dir}/tcu.manifest.*.xml"
+    "{game_dir}/addon_missions.xml"
   ],
   "steps": [
     {
