@@ -1,16 +1,27 @@
 {
   "id": "simpsons-hit-and-run",
   "name": "The Simpsons Hit & Run",
-  "aliases": ["The Simpsons - Hit & Run", "Simpsons Hit and Run",
-              "Simpsons: Hit & Run", "SHAR", "Hit and Run",
-              "Lucas Simpsons Hit & Run Mod Launcher"],
+  "aliases": [
+    "The Simpsons - Hit & Run",
+    "Simpsons Hit and Run",
+    "Simpsons: Hit & Run",
+    "SHAR",
+    "Hit and Run",
+    "Lucas Simpsons Hit & Run Mod Launcher"
+  ],
   "detect": {
-    "install_dir_names": ["The Simpsons - Hit & Run",
-                          "The Simpsons Hit & Run"],
-    "marker_files": ["game/simpsons.exe"]
+    "install_dir_names": [
+      "The Simpsons - Hit & Run",
+      "The Simpsons Hit & Run"
+    ],
+    "marker_files": [
+      "game/simpsons.exe"
+    ]
   },
   "save_paths": [
-    "{game_dir}/Save1"
+    "{game_dir}/game/save*",
+    "{game_dir}/mods & launcher/mods",
+    "{game_dir}/simpson prefix/pfx/user.reg"
   ],
   "steps": [
     {
@@ -25,6 +36,6 @@
       "proton": "GE-Proton10-34"
     }
   ],
-  "post_apply_message": "The Simpsons Hit & Run — auto-sets up the modded-launcher shortcut:\n1. Apply — it AUTO-ADDS the Steam shortcut pointing at 'Lucas Simpsons Hit & Run Mod Launcher.exe' (NOT the raw Game/Simpsons.exe — the launcher applies your .lmlm mods and starts the game), named 'The Simpsons Hit & Run', gospel appid 3714559883, GE-Proton 10.34. Steam closes briefly to write it. Stage GE first with 'gfm stage-runner' (install_runner side-loads it from the NAS; it's optional so nothing blocks if GE is missing).\n2. Launch it, tick which mods to enable in the launcher UI, Play.\nEverything is SD-resident: Game/ (base game + your Save1 ~7KB) and Mods & Launcher/ (the launcher + mods) — so it survives reimages by location, no prefix sync needed.\nNOTE: the Lucas launcher is a .NET app; GE's wine-mono usually runs it, but if it won't start, 'protontricks <appid> dotnet48'.",
-  "notes": "REWORKED 2026-07-10: added install_runner + steam_shortcut. The shortcut targets the LUCAS MOD LAUNCHER (mods & launcher/lucas simpsons hit & run mod launcher.exe) not the game exe — the launcher activates the .lmlm mods at runtime and boots the game. Game is nested: <folder>/game/simpsons.exe + <folder>/mods & launcher/ (both lowercase, per the SD scan — marker updated to game/simpsons.exe). Gospel appid 3714559883. Mods (.lmlm) already installed in Mods & Launcher/Mods/ — GFM writes nothing into the game files. Save file (game/Save1, ~7KB) lives IN the game folder — SD-resident, reimage-proof by location. Confirmed mods (2026-07-07): Controller Button Icons, HQ Dialogue (FLAC, 375MB), More Costumes 3.0, NeverBusted, NoAudio, NoHUD, NoLicenseScreenDelay, NoTraffic, RepairCarOnReset, Speedometer, TextNames, UnlockAllRewards. Future work: persist mod-enable state (pfx/.../AppData/Roaming/Lucas/...) via the perf/state capture."
+  "post_apply_message": "The Simpsons Hit & Run \u2014 auto-sets up the modded-launcher shortcut:\n1. Apply \u2014 it AUTO-ADDS the Steam shortcut pointing at 'Lucas Simpsons Hit & Run Mod Launcher.exe' (NOT the raw Game/Simpsons.exe \u2014 the launcher applies your .lmlm mods and starts the game), named 'The Simpsons Hit & Run', gospel appid 3714559883, GE-Proton 10.34. Steam closes briefly to write it. Stage GE first with 'gfm stage-runner' (install_runner side-loads it from the NAS; it's optional so nothing blocks if GE is missing).\n2. Launch it, tick which mods to enable in the launcher UI, Play.\nEverything is SD-resident: Game/ (base game + your Save1 ~7KB) and Mods & Launcher/ (the launcher + mods) \u2014 so it survives reimages by location, no prefix sync needed.\nNOTE: the Lucas launcher is a .NET app; GE's wine-mono usually runs it, but if it won't start, 'protontricks <appid> dotnet48'.",
+  "notes": "REWORKED 2026-07-10: added install_runner + steam_shortcut. The shortcut targets the LUCAS MOD LAUNCHER (mods & launcher/lucas simpsons hit & run mod launcher.exe) not the game exe \u2014 the launcher activates the .lmlm mods at runtime and boots the game. Game is nested: <folder>/game/simpsons.exe + <folder>/mods & launcher/ (both lowercase, per the SD scan \u2014 marker updated to game/simpsons.exe). Gospel appid 3714559883. Mods (.lmlm) already installed in Mods & Launcher/Mods/ \u2014 GFM writes nothing into the game files. Save file (game/Save1, ~7KB) lives IN the game folder \u2014 SD-resident, reimage-proof by location. Confirmed mods (2026-07-07): Controller Button Icons, HQ Dialogue (FLAC, 375MB), More Costumes 3.0, NeverBusted, NoAudio, NoHUD, NoLicenseScreenDelay, NoTraffic, RepairCarOnReset, Speedometer, TextNames, UnlockAllRewards. Future work: persist mod-enable state (pfx/.../AppData/Roaming/Lucas/...) via the perf/state capture."
 }
