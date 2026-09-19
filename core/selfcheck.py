@@ -294,7 +294,12 @@ def nas_rows(payloads) -> list[Row]:
                 "those are local, and they shadow the share" if shadowed
                 else "nothing is mounted at the mountpoint"))]
 
-    units = sorted(Path("/etc/systemd/system").glob("*game*fixes*"))
+    # Only real unit files. The glob also catches the .bak-<stamp> copies a
+    # repair leaves beside them, and reporting "automount, mount, bak-2026…"
+    # as if a backup were a unit makes the one row you check in a crisis
+    # read like something is wrong with it.
+    units = sorted(u for u in Path("/etc/systemd/system").glob("*game*fixes*")
+                   if u.suffix in (".mount", ".automount"))
     kinds = {u.suffix for u in units}
     has_auto = ".automount" in kinds
     out.append(Row("NAS units", ", ".join(u.suffix.lstrip(".") for u in units)

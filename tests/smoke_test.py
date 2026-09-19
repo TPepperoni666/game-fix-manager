@@ -2608,6 +2608,21 @@ def main():
                   "shadow" in _nr2["NAS mounted"].note)
         check("nas_rows survives a None payloads dir",
               _sc.nas_rows(None)[0].verdict == _sc.INFO)
+        # A repair leaves <unit>.bak-<stamp> beside the units, and the glob
+        # was counting it: "NAS units  automount, mount, bak-20260920-0801".
+        # The one row you read during an outage should not itself look wrong.
+        _nsrc = _i.getsource(_sc.nas_rows)
+        check("only real unit suffixes count as NAS units",
+              '".mount", ".automount"' in _nsrc
+              and "u.suffix in" in _nsrc)
+        # Blank username must NOT become the bare "guest" option. That mounts
+        # as an anonymous null session: the share root is readable and
+        # writable, but every subdirectory listing and every file read fails
+        # with EPERM — a mount that passes "is it up?" and serves nothing.
+        _snsrc = _i.getsource(gfm_mod.App.cmd_setup_nas)
+        check("guest mounts name the account rather than mounting anonymously",
+              "username=guest,password=" in _snsrc
+              and 'cred_opt = "guest"' not in _snsrc)
         _isrc = _i.getsource(gfm_mod.App._install_nas_automount)
         check("automount install verifies both units afterwards",
               "did NOT install cleanly" in _isrc and "is-enabled" in _isrc)

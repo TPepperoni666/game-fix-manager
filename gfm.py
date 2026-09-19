@@ -3527,7 +3527,14 @@ class App:
                        mode="600")
             cred_opt = f"credentials={cred_file}"
         else:
-            cred_opt = "guest"
+            # NOT the bare "guest" option. That mounts as an anonymous null
+            # session (sec=none), which on a TrueNAS guest share can see the
+            # share root and write to it but cannot list subdirectories or
+            # read files — every payload lookup and every save capture fails
+            # with EPERM while the mount itself looks perfectly healthy.
+            # Naming the account authenticates AS "guest" instead, which is
+            # what the unit that worked for months actually used.
+            cred_opt = "username=guest,password="
 
         # A previous mount may still be sitting on this path — and if it's
         # STALE, even stat()ing it fails. Clear it first (lazy unmount detaches
