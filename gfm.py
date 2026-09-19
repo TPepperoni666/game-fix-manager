@@ -2248,6 +2248,68 @@ class App:
             list(by_label), multi=True)
         return [by_label[p] for p in picked if p in by_label]
 
+    def _nas_ok(self) -> bool:
+        """Is the share actually MOUNTED — not merely a directory with files
+        in it? A shadowed mountpoint reads as a perfectly good folder, which
+        is exactly how a week of captures ended up on the internal disk."""
+        if self.local_payloads is None:
+            return False
+        try:
+            return os.path.ismount(self.local_payloads)
+        except OSError:
+            return False
+
+    def _repair_nas_mount(self) -> bool:
+        """Try to bring the NAS back with nobody watching. True if mounted.
+
+        On 13 Sep this job found the share down, said so loudly, and then
+        carried on: a week of art and saves went onto the internal disk and
+        shadowed the real share. The warning was correct and useless — nobody
+        reads a log at 19:00 on a Sunday. So try to fix it first, and let the
+        caller skip the writing steps if we can't.
+
+        Only NON-INTERACTIVE privilege is attempted (sudo -n). This runs from
+        a timer with no one to type a password, and a prompt there would hang
+        the job until the timeout rather than fail it cleanly.
+        """
+        import subprocess
+        if self.local_payloads is None:
+            return False
+        if self._nas_ok():
+            return True
+        target = str(self.local_payloads)
+        base = sc.unit_name_for(target)
+        auto = base + ".automount"
+        if not (Path("/etc/systemd/system") / auto).is_file():
+            # Writing a unit needs root, which we haven't got here. Say
+            # precisely which thing is missing and which menu rebuilds it.
+            self.ui.msg(f"  ! {auto} does not exist — only Settings > "
+                        "🔌 Connect NAS Payloads can recreate it (needs sudo).",
+                        "error")
+            return False
+        for cmd in (["systemctl", "start", auto],
+                    ["sudo", "-n", "systemctl", "start", auto]):
+            try:
+                r = subprocess.run(cmd, capture_output=True, text=True,
+                                   timeout=60)
+            except (OSError, subprocess.SubprocessError):
+                continue
+            if r.returncode == 0:
+                break
+        # An automount only mounts on ACCESS — starting the unit arms it, it
+        # doesn't mount anything. Touch the path or we'd declare failure on a
+        # share that was one listdir away from being up.
+        try:
+            os.listdir(target)
+        except OSError:
+            pass
+        if self._nas_ok():
+            self.ui.msg("  ✓ NAS remounted automatically.", "success")
+            return True
+        self.ui.msg("  ! could not remount the NAS without a password.",
+                    "error")
+        return False
+
     def cmd_weekly_backup(self, args=None):
         """EVERYTHING, unattended: map, adopted pins, shortcut bodies,
         art/saves/settings, then the prefixes.
@@ -2289,19 +2351,32 @@ class App:
                         f"{r.value}", "warn" if bad else "dim")
             if bad and r.note:
                 self.ui.msg(f"      {r.note}", "dim")
-        # The NAS being down doesn't stop the run — prefix backups go to the
-        # SD card and still work — but it silently guts capture and every
-        # payload lookup, so it has to be impossible to miss in the log.
-        if any(r.verdict == sc.BAD for r in sc.nas_rows(self.local_payloads)):
-            self.ui.msg("⚠ THE NAS IS NOT MOUNTED — art, saves and settings "
-                        "capture will find nothing to write to, and this run's "
-                        "results are NOT comparable with a healthy one.",
-                        "error")
+        # REPAIR, don't just report. The NAS being down doesn't stop the run —
+        # prefix backups go to the SD card and still work — but every step
+        # that writes to the share would instead write to the bare mountpoint
+        # on the internal disk, where it shadows the share for good.
+        nas_down = not self._nas_ok()
+        if nas_down:
+            self.ui.msg("⚠ THE NAS IS NOT MOUNTED — trying to repair it "
+                        "before anything writes…", "error")
+            nas_down = not self._repair_nas_mount()
+        if nas_down:
+            self.ui.msg("⚠ NAS STILL DOWN — every step that writes to it is "
+                        "being SKIPPED. Writing now would land on the internal "
+                        "disk and shadow the share. Prefix backups go to the "
+                        "SD card, so those still run.", "error")
 
-        results: list[tuple[str, bool, str]] = []
+        results: list[tuple[str | None, bool | None, str]] = []
 
-        def step(label: str, fn) -> None:
+        def step(label: str, fn, needs_nas: bool = False) -> None:
             self.ui.msg(f"── {label} " + "─" * max(1, 34 - len(label)), "info")
+            if needs_nas and nas_down:
+                # Skipped is its OWN outcome. Recording it as success would
+                # reproduce the original fault in the log; recording it as a
+                # failure would blame the step for a mount problem.
+                results.append((label, None, "skipped — NAS not mounted"))
+                self.ui.msg("  ⏭  SKIPPED — the NAS is not mounted.", "warn")
+                return
             try:
                 fn()
                 results.append((label, True, ""))
@@ -2313,11 +2388,14 @@ class App:
                 results.append((label, False, f"{type(e).__name__}: {e}"))
                 self.ui.msg(f"  ! {label} failed — {e}", "error")
 
+        # needs_nas marks the steps whose OUTPUT lands on the share: adopted
+        # pins and shortcut bodies go to _state/, capture to _recipes/. The
+        # map refresh only reads, and the prefix backup writes to the SD card.
         step("1/6 map refresh", self._refresh_map)
         step("2/6 adopt new shortcuts",
-             lambda: self._adopt_shortcuts(interactive=False))
-        step("3/6 shortcut bodies", self._sync_shortcut_state)
-        step("4/6 art + saves + settings", self._capture_all)
+             lambda: self._adopt_shortcuts(interactive=False), needs_nas=True)
+        step("3/6 shortcut bodies", self._sync_shortcut_state, needs_nas=True)
+        step("4/6 art + saves + settings", self._capture_all, needs_nas=True)
         step("5/6 prefix backup",
              lambda: self.cmd_backup_prefixes(use_saved=True))
         # Reclaim LAST and with the map already refreshed: it decides what to
@@ -2326,17 +2404,34 @@ class App:
         step("6/6 reclaim SD space", lambda: self.cmd_reclaim(skip_map=True))
 
         mins, secs = divmod(int(time.monotonic() - started), 60)
-        failed = [(lbl, err) for lbl, ok, err in results if not ok]
+        # `ok is False` — not `not ok` — so a SKIPPED step (None) isn't
+        # miscounted as one that failed.
+        failed = [(lbl, err) for lbl, ok, err in results if ok is False]
+        skipped = [(lbl, err) for lbl, ok, err in results if ok is None]
         self.ui.msg("", "dim")
-        if failed:
-            self.ui.msg(f"Weekly backup finished with {len(failed)} failed "
+        if failed or skipped:
+            parts = []
+            if failed:
+                parts.append(f"{len(failed)} failed")
+            if skipped:
+                parts.append(f"{len(skipped)} skipped")
+            self.ui.msg(f"Weekly backup finished with {' and '.join(parts)} "
                         f"step(s) in {mins}m {secs}s:", "error")
             for lbl, err in failed:
                 self.ui.msg(f"  ✗ {lbl}: {err}", "warn")
+            for lbl, err in skipped:
+                self.ui.msg(f"  ⏭  {lbl}: {err}", "warn")
+            if skipped:
+                self.ui.msg("Fix the NAS mount and re-run — this run did NOT "
+                            "back up art, saves or settings.", "error")
         else:
             self.ui.msg(f"Weekly backup complete — all {len(results)} steps "
                         f"OK in {mins}m {secs}s.", "success")
-        return len(failed)
+        # Skips count toward the exit code too: a run that backed up none of
+        # the things it exists to back up must not report success to systemd,
+        # or `systemctl show gfm-backup.service -p Result` says "success" for
+        # the exact failure we're guarding against.
+        return len(failed) + len(skipped)
 
     def cmd_setup_backup_timer(self):
         """Install the weekly FULL backup timer — Sundays at 19:00."""

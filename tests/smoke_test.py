@@ -2308,9 +2308,9 @@ def main():
         # Mounted right now is NOT the same as mounted next boot, which is
         # why there are two rows and not one.
         check("unit-name escaping matches systemd-escape --path",
-              _sc._unit_name_for("/run/media/deck/SD_Card")
+              _sc.unit_name_for("/run/media/deck/SD_Card")
               == "run-media-deck-SD_Card"
-              and _sc._unit_name_for("/home/deck/mnt/game-fixes")
+              and _sc.unit_name_for("/home/deck/mnt/game-fixes")
               == "home-deck-mnt-game\\x2dfixes")
 
         _units = tmp / "sd_units"
@@ -2527,6 +2527,44 @@ def main():
               "NOT MOUNTED" in _wsrc)
         check("health logging comes before the steps",
               _wsrc.index("nas_rows") < _wsrc.index("1/6 map refresh"))
+
+        # --- NAS down: repair, then REFUSE to write ----------------------
+        # On 13 Sep this job found the share down, shouted correctly, and
+        # carried on anyway: a week of art and saves went to the internal
+        # disk and shadowed the real share. A warning nobody reads at 19:00
+        # on a Sunday is not a safeguard.
+        check("it tries to repair the mount before writing anything",
+              "_repair_nas_mount" in _wsrc
+              and _wsrc.index("_repair_nas_mount") < _wsrc.index("1/6 map"))
+        check("steps that write to the NAS are marked needs_nas",
+              _wsrc.count("needs_nas=True") == 3)
+        # The map refresh only reads, and the prefix backup goes to the SD
+        # card — skipping those would lose backups the NAS never held.
+        for _lbl in ("1/6 map refresh", "5/6 prefix backup"):
+            _line = [ln for ln in _wsrc.splitlines() if _lbl in ln
+                     and "step(" in ln]
+            check(f"{_lbl} still runs with the NAS down",
+                  bool(_line) and "needs_nas" not in _line[0])
+        check("a skipped step is its own outcome, not a success",
+              "results.append((label, None" in _wsrc)
+        check("skips are counted with 'is False', not falsiness",
+              "if ok is False" in _wsrc and "if ok is None" in _wsrc)
+        # systemd only sees the exit code. Reporting success for a run that
+        # backed up none of what it exists for is the original bug again.
+        check("skips make the run exit non-zero for systemd",
+              "len(failed) + len(skipped)" in _wsrc)
+
+        _rsrc = _i.getsource(gfm_mod.App._repair_nas_mount)
+        check("repair only uses non-interactive sudo",
+              '"sudo", "-n"' in _rsrc and "askpass" not in _rsrc)
+        # An automount ARMS on start and mounts on ACCESS — without touching
+        # the path we'd call a working share broken.
+        check("repair pokes the mountpoint to trigger the automount",
+              "listdir" in _rsrc)
+        check("repair says which unit is missing when it can't rebuild it",
+              "Connect NAS Payloads" in _rsrc)
+        check("_nas_ok tests the MOUNT, not merely that files exist",
+              "ismount" in _i.getsource(gfm_mod.App._nas_ok))
 
         _tsrc = _i.getsource(gfm_mod.App.cmd_setup_backup_timer)
         check("backup timer fires Sundays at 19:00",

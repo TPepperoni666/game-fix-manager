@@ -330,7 +330,7 @@ def nas_rows(payloads) -> list[Row]:
 REMOVABLE_ROOTS = ("/run/media", "/media")
 
 
-def _unit_name_for(path: str) -> str:
+def unit_name_for(path: str) -> str:
     r"""systemd-escape --path, enough of it to look a unit up by name.
 
     /run/media/deck/SD_Card    -> run-media-deck-SD_Card
@@ -379,7 +379,7 @@ def boot_plan(path: str, unit_dir: Path, fstab: Path) -> tuple[str, str]:
     or ("", "") when nothing anywhere will bring it back. Pure enough to point
     at a temp directory in tests, which is the only way to exercise the
     'nothing will mount this' branch on a machine where something does."""
-    base = _unit_name_for(path)
+    base = unit_name_for(path)
     for suffix in (".mount", ".automount"):
         try:
             if (unit_dir / (base + suffix)).is_file():
