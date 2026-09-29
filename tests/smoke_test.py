@@ -2554,6 +2554,45 @@ def main():
         check("skips make the run exit non-zero for systemd",
               "len(failed) + len(skipped)" in _wsrc)
 
+        # EXECUTE the repair, don't read it. Its first real run — the 27 Sep
+        # timer — died on `sc.unit_name_for` with NameError, because selfcheck
+        # is imported locally throughout gfm.py and this method had no import
+        # of its own. Every check written for it passed, because every one of
+        # them grepped the source. The crash then aborted the entire weekly
+        # backup: no map refresh, no capture, no prefix backup.
+        class _StubUI:
+            def __init__(self):
+                self.msgs = []
+
+            def msg(self, text, kind="dim"):
+                self.msgs.append((kind, str(text)))
+
+        class _StubApp:
+            def __init__(self, payloads):
+                self.local_payloads = payloads
+                self.ui = _StubUI()
+
+            def _nas_ok(self):
+                return False
+
+        # A temp dir as the mount path: the unit name derived from it cannot
+        # collide with a real unit, so this stays read-only even on the Deck.
+        _fakemnt = tmp / "notamount"
+        _fakemnt.mkdir(exist_ok=True)
+        _stub = _StubApp(_fakemnt)
+        check("the NAS repair RUNS without raising",
+              gfm_mod.App._repair_nas_mount(_stub) is False)
+        check("and names the unit it cannot rebuild",
+              any("Connect NAS Payloads" in m for _k, m in _stub.ui.msgs))
+        check("_nas_ok says no for a plain directory",
+              gfm_mod.App._nas_ok(_StubApp(_fakemnt)) is False)
+        check("_nas_ok says no when no payloads dir is configured",
+              gfm_mod.App._nas_ok(_StubApp(None)) is False)
+        # Belt: even if the repair throws, the backup must carry on and treat
+        # the NAS as down rather than dying in the preamble.
+        check("a throwing repair cannot abort the whole backup",
+              "repair attempt itself failed" in _wsrc)
+
         _rsrc = _i.getsource(gfm_mod.App._repair_nas_mount)
         check("repair only uses non-interactive sudo",
               '"sudo", "-n"' in _rsrc and "askpass" not in _rsrc)

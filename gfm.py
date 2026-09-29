@@ -2273,6 +2273,11 @@ class App:
         the job until the timeout rather than fail it cleanly.
         """
         import subprocess
+        # selfcheck is imported LOCALLY throughout this file, so a module-level
+        # `sc` does not exist. Relying on the one inside cmd_weekly_backup gave
+        # this method a NameError the first time it ever ran for real — on the
+        # 27 Sep timer, which then aborted the whole backup.
+        from core import selfcheck as sc
         if self.local_payloads is None:
             return False
         if self._nas_ok():
@@ -2359,7 +2364,17 @@ class App:
         if nas_down:
             self.ui.msg("⚠ THE NAS IS NOT MOUNTED — trying to repair it "
                         "before anything writes…", "error")
-            nas_down = not self._repair_nas_mount()
+            # The repair runs OUTSIDE step(), so it had none of step()'s
+            # protection — and a NameError in it aborted the entire 27 Sep
+            # backup before a single step ran. The whole point of this job is
+            # that no one part can take down the rest; a repair attempt that
+            # fails must leave us exactly where we were, which is "NAS down,
+            # skip the writes".
+            try:
+                nas_down = not self._repair_nas_mount()
+            except Exception as e:  # noqa: BLE001
+                self.ui.msg(f"  ! repair attempt itself failed — {e}", "error")
+                nas_down = True
         if nas_down:
             self.ui.msg("⚠ NAS STILL DOWN — every step that writes to it is "
                         "being SKIPPED. Writing now would land on the internal "
