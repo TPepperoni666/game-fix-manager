@@ -1,0 +1,31 @@
+{
+  "id": "f1-manager-24",
+  "name": "F1 Manager 2024",
+  "aliases": [
+    "F1 Manager 24",
+    "F1Manager24",
+    "F1 Manager"
+  ],
+  "steam_appid": 2591280,
+  "detect": {
+    "install_dir_names": [
+      "F1 Manager 2024"
+    ],
+    "marker_files": [
+      "F1Manager24.exe"
+    ]
+  },
+  "save_paths": [
+    "{localappdata}/F1Manager24/Saved/SaveGames"
+  ],
+  "steps": [
+    {
+      "type": "copy_files",
+      "from": "payload/paks",
+      "to": "{game_dir}/F1Manager24/Content/Paks",
+      "backup_originals": true
+    }
+  ],
+  "notes": "Tony's full pak mod set, captured 2026-09-30 from the authoritative Windows install (F:\\SteamLibrary\\steamapps\\common\\F1 Manager 2024). 423 files, 12.2 GB: the RRacing26 suite plus ten category folders (BaseCarModFiles, Car Livery, DataBase, DriverCaps, Helmets, IndividualCarMods, LogicMods, Misc, Team Package, UI). UE5 loads paks from Content/Paks recursively, so the folder structure is preserved rather than flattened.\n\nTHE BASE GAME PAKS ARE DELIBERATELY NOT IN THE PAYLOAD. pakchunk0-Windows.*, pakchunk0_s1..s4-Windows.* and global.* (17 files, 6.4 GB) belong to Steam and are replaced on every game patch; shipping a snapshot of them would overwrite the live ones with stale copies and would need re-capturing after each update. They were excluded by exact filename, not by a pakchunk0* wildcard, because legitimate mods share that prefix (e.g. pakchunk0-extendedstandings_2_P.pak).\n\nDo NOT use D:\\F1 Manager Paks as a payload source. It is a Syncthing folder holding a COMPLETE Paks directory, base game included, so it fails the rule above.\n\nThe 12.2 GB payload lives only on the NAS at _recipes/f1-manager-24/payload/paks/ — far too large for git, and payload_path() reads the NAS override first anyway. On a machine with no NAS this recipe reports 'payload missing' rather than half-applying.\n\nSyncthing note: Content/Paks is itself a Syncthing folder on both the desktop and the Legion (.stfolder present in each), which is what already keeps the two at parity — 423 identical mod files on both as of 2026-09-30. This recipe is the reimage/verify-integrity safety net, not the day-to-day sync: after a reimage Syncthing has to be reconfigured before it helps, and Steam's 'verify integrity' deletes files it does not recognise. Applying it writes into a synced folder, so expect Syncthing to propagate anything it adds.\n\nsave_paths verified on the Windows install 2026-09-30: autosave.sav, autosave.sav.bak, customisation.sav, player.sav, save0.sav.",
+  "post_apply_message": "Mod paks installed into F1Manager24/Content/Paks. Launch once and check the in-game liveries/UI look right. If Steam ever runs 'verify integrity' it will strip these again — re-apply this fix afterwards."
+}
