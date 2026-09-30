@@ -2666,6 +2666,61 @@ def main():
         check("find_by_markers survives a vanished library",
               _dt.find_by_markers(_rc, [_dead]) is None)
 
+        # --- hash cache ---------------------------------------------------
+        # same_file() runs for every file of every recipe on every `list`.
+        # A 12 GB recipe (F1 Manager's paks) took list from ~10s to 175s: it
+        # hashed 12 GB off the NAS and 12 GB off local disk each time to answer
+        # a question whose inputs had not changed.
+        from core import hashutil as _hu
+        _hdir = tmp / "hashcache"
+        _hdir.mkdir()
+        _os.environ["XDG_CACHE_HOME"] = str(_hdir)
+        _hu._cache, _hu._dirty = None, False       # cold start for this test
+        _big = _hdir / "big.bin"
+        _big.write_bytes(b"A" * (_hu.CACHE_MIN_SIZE + 16))
+        _small = _hdir / "small.bin"
+        _small.write_bytes(b"B" * 32)
+
+        _h1 = _hu.file_hash(_big, use_cache=True)
+        check("a large file is cached after first hashing",
+              any(str(_big) in k for k in _hu._load()))
+        check("the cached hash is returned unchanged",
+              _hu.file_hash(_big, use_cache=True) == _h1)
+        # Small files stay uncached: the bookkeeping costs more than the hash,
+        # and it keeps the cache's one weakness off the files most likely to be
+        # rewritten in place.
+        _hu.file_hash(_small, use_cache=True)
+        check("small files are never cached",
+              not any(str(_small) in k for k in _hu._load()))
+        # The integrity gate. fetch.py hashes a freshly downloaded payload
+        # against a declared sha256 — answering that from a cache would make
+        # the check meaningless, so caching is opt-in and off by default.
+        for _k in list(_hu._load()):
+            if str(_big) in _k:
+                _hu._load()[_k] = "poisoned"
+        check("the default call ignores the cache entirely",
+              _hu.file_hash(_big) == _h1)
+        check("and an opted-in call would have trusted it",
+              _hu.file_hash(_big, use_cache=True) == "poisoned")
+        # Content change must invalidate: the key carries size and mtime_ns.
+        _big.write_bytes(b"C" * (_hu.CACHE_MIN_SIZE + 32))
+        check("a changed file is re-hashed, not served stale",
+              _hu.file_hash(_big, use_cache=True) not in ("poisoned", _h1))
+        # Persistence round-trip, and a corrupt cache must read as a cold
+        # start rather than throwing.
+        _hu._dirty = True
+        _hu.save_cache()
+        check("the cache persists to disk", _hu.cache_path().is_file())
+        _hu.cache_path().write_text("{not json", encoding="utf-8")
+        _hu._cache = None
+        check("a corrupt cache is a cold start, not a crash",
+              _hu._load() == {})
+        _hu._cache, _hu._dirty = None, False
+        _os.environ.pop("XDG_CACHE_HOME", None)
+        check("same_file answers False for an unreadable path "
+              "instead of raising",
+              _hu.same_file(_hdir / "nope", _big) is False)
+
         # --- NAS mount visibility ----------------------------------------
         # Three sessions lost to this: a .mount with no .automount is
         # 'static', so it never starts at boot, and the bare mountpoint then
