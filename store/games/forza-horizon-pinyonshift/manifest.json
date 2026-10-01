@@ -1,0 +1,38 @@
+{
+  "id": "forza-horizon-pinyonshift",
+  "name": "Forza Horizon (PinyonShift)",
+  "aliases": [
+    "PinyonShift",
+    "Forza Horizon",
+    "Forza Horizon 1",
+    "FH1"
+  ],
+  "steam_appid": null,
+  "detect": {
+    "install_dir_names": [
+      "PinyonShift"
+    ],
+    "marker_files": [
+      "PinyonShiftLauncher.exe"
+    ]
+  },
+  "save_paths": [
+    "{game_dir}/data/source/0.1.1/.local/preview",
+    "{game_dir}/data/source/0.1.2/.local/preview"
+  ],
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton10-34"
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "PinyonShiftLauncher.exe",
+      "start_dir": "{game_dir}",
+      "proton": "GE-Proton10-34"
+    }
+  ],
+  "notes": "Static recompilation of Forza Horizon (Xbox 360) built by PinyonShift. Staged 2026-10-01 as a PORTABLE install, which upstream supports explicitly: an empty portable.txt beside PinyonShiftLauncher.exe makes the launcher keep source, toolchain, build, saves, settings and shader caches in a data/ folder beside itself. Its README is unambiguous that this relocates — 'No absolute path is stored: the launcher finds every location from its own folder at each start' and 'A build moved this way plays as it is' — which is why this works as a staged folder at all. Nothing is written to %LOCALAPPDATA%\\PinyonShift or the registry in this mode.\n\nThe game is NOT a recipe payload: it is staged to the NAS under _games/PinyonShift and placed by Deploy like any other game. This recipe only makes it launchable (Proton runner + Steam shortcut), which is the normal division of labour here.\n\nStaged complete (~14 GB) rather than trimmed to the ~8 GB that is strictly needed to play (out/build/win-amd64-release 0.89 GB + .local/game 6.73 GB + .local/generated 0.36 GB). The extra 5.8 GB is the toolchain and downloads, which are regenerable — but only by rebuilding, and it was not worth discovering mid-session that the launcher refuses to start the game without them.\n\nPath length matters here: the launcher will not build when the data folder's path exceeds 70 characters, because the build creates files ~185 characters below it. Deployed to the SD card the Proton-visible path is Z:\\run\\media\\deck\\SD_Card\\Games\\PinyonShift\\data, 48 characters, so there is headroom — but a deeper deploy target would break it.\n\nEXPECT TROUBLE ON THE LEGION, and not because of anything GFM does. This is a Windows x64 binary, so it runs under Proton, and upstream states 'Only NVIDIA GPUs are qualified so far; AMD and Intel are untested'. The Legion Go 2 is AMD. Vulkan 1.3 is required and present, so it is not a hard blocker, but AMD plus Proton is two unqualified axes at once. The desktop build works; this one is speculative until it is actually launched.\n\nRequires the USA retail base disc (serial MS-2505, title ID 4D5309C9) — the ISO stays on the desktop; what travels is the extraction PinyonShift made from it.\n\nsave_paths are NOT verified: .local/preview was empty on the desktop at staging time (only a cache lock and an empty config dir), so there was nothing to confirm against. Per the README it holds saves, settings, photos, save backups and crash reports. The 0.1.2 path is listed speculatively for the next version — a save_paths entry that is not there costs nothing. These are version-pinned because capture only globs the FINAL path component, so data/source/*/.local/preview would not resolve; a new launcher version needs a line adding here.",
+  "post_apply_message": "PinyonShift added to Steam. First launch may rebuild (it needs the toolchain, which is staged). If it fails, the report is at data/source/<version>/.local/logs/setup-error.json — that names the failing step, not just 'build failed'. Note upstream only qualifies NVIDIA; on this AMD handheld under Proton, treat it as an experiment."
+}
