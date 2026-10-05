@@ -1,0 +1,37 @@
+{
+  "id": "reskate",
+  "name": "skate. (ReSkate)",
+  "aliases": [
+    "ReSkate",
+    "reskate.",
+    "skate. offline",
+    "ReSkate Launcher",
+    "ReSkateLauncher"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "ReSkate",
+      "reskate.",
+      "reskate"
+    ],
+    "marker_files": [
+      "ReSkateLauncher.exe"
+    ]
+  },
+  "save_paths": [
+    "{localappdata}/ReSkate/profiles",
+    "{localappdata}/ReSkate/Game",
+    "{game_dir}/ReSkateLauncher.settings.json",
+    "{game_dir}/Mods"
+  ],
+  "steps": [
+    {
+      "type": "steam_shortcut",
+      "exe": "ReSkateLauncher.exe",
+      "start_dir": "{game_dir}",
+      "proton": "proton_experimental"
+    }
+  ],
+  "post_apply_message": "skate. via ReSkate (offline play + self-hosted lobbies). Apply adds a Steam shortcut to ReSkateLauncher.exe under Proton Experimental, with the game folder as its start folder. Steam closes briefly while it writes the shortcut.\n\nFIRST RUN: launch it from Steam. The launcher checks for ReSkate updates, then checks the game files against the build it supports. If any are missing it asks you to sign in to Steam and downloads them (about 14 GB) straight into this folder. Use the QR CODE sign-in so your password never goes into a third-party app. You need skate. in your Steam library; it's free-to-play, so just claim it.\n\nThe folder is a frozen copy. Steam updates don't touch it, so it keeps working when the live game moves to a build ReSkate doesn't support, or when EA turns the servers off.\n\nSAVES live in the Proton prefix (%LOCALAPPDATA%\\ReSkate\\profiles\\offline = skater, progress, parks; ...\\ReSkate\\Game = the game's own settings). They're in save_paths, so capture backs them up. A prefix wipe without a capture loses your progress.\n\nOFFLINE WITHOUT STEAM: the launcher accepts --offline. Set it as a launch option only if you want to play with Steam closed. Launching from Steam doesn't need it.",
+  "notes": "Built 2026-10-05. Source: github.com/Dingo-Shenanigans/ReSkate. It's a fan runtime for EA's skate. (Steam appid 3354750) with offline play, self-hosted lobbies and modding: a launcher (ReSkateLauncher.exe) plus a runtime DLL (ReSkate.dll) next to it.\n\nNO REMOTE PAYLOAD, ON PURPOSE. Release builds update themselves: the launcher reads launcher.json from the latest GitHub release and replaces ReSkateLauncher.exe and ReSkate.dll. Upstream shipped v1.0.9, v1.1.0 and v1.1.1 within ~10 hours (2026-10-04/05), so a sha-pinned GFM payload would be stale within a day, and dropping an old pinned exe over a self-updated one would DOWNGRADE it. The two files sit in the game folder, which travels with Deploy, the same way the PinyonShift launcher does. STAGED 2026-10-05 at NAS _games/ReSkate: v1.1.1 release zip extracted (ReSkateLauncher.exe 4,656,128 B sha256 5b9485ad..., ReSkate.dll 12,152,832 B sha256 8e06f410..., both matching that release's launcher.json; plus launcher.json and licenses/). Only ~17 MB, the launcher only, so Deploy creates Games/ReSkate and the first launch pulls the 14 GB game from Steam into it. Once Tony's folder has the game in it, consider restaging the full folder so a reimage doesn't need the Steam download (and survives a delisting). Bootstrap without the NAS: download ReSkate-<ver>.zip from the Releases page and extract it into an empty folder.\n\nGAME FILES COME FROM STEAM, not from anywhere else. launcher.json pins the supported build (depot 3354751, manifest 4621099302092747785, build 25414733, Skate.exe sha256 fbce74d5...) and the launcher fetches it with DepotDownloader using the user's Steam login. So the folder has to be its own copy, not steamapps/common/skate.: when Steam updates the live game past the pinned build, the launcher would want to re-download over it. That's why detection matches a 'ReSkate' folder by name + ReSkateLauncher.exe, and why steam_appid is left unset (setting 3354750 would point detection at the Steam install).\n\nPROTON: Proton Experimental, per the r/SteamOS thread (2026-10, several users confirm offline and online both work, launcher-as-non-Steam-shortcut). The original post used Lutris with a pfx/ inside the game folder. That's unnecessary here, since GFM's shortcut gives it a normal compatdata prefix. UNTESTED by Tony on hardware at time of writing; if Experimental misbehaves, try GE-Proton10-34.\n\nAPPID: no gospel in prefix_registry.json (nothing backed up yet), so steam_shortcut derives crc32('gfm:reskate')|0x80000000. Once Tony has a working prefix, pin that appid in the registry so a reimage restores the prefix (and saves) to the same id.\n\nsave_paths from the upstream README's data table, not checked against a live prefix yet. profiles/ (not profiles/offline) is captured so any future non-offline profile comes along too. Mods/ lives beside Skate.exe = the game folder, so it's SD-resident anyway; listed so capture records it."
+}
