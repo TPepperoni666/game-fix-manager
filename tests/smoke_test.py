@@ -2823,10 +2823,106 @@ def main():
         check("importing twice does not destroy the live prefix", _survived)
 
         _rsrc = _i.getsource(gfm_mod.App._run_prefix_backups)
-        check("an all-failed prefix run raises so the step is recorded failed",
-              "every prefix backup failed" in _rsrc)
-        check("a prefix with failures is not counted as backed up",
-              "else:" in _rsrc and "done_n += 1" in _rsrc)
+        # (the raise itself is exercised below, by calling the method rather
+        # than grepping it — the grep version of this check went stale the
+        # moment the message was reworded, which is the warning sign)
+
+        # ---- regressions the fixes themselves introduced -----------------
+        # Found by a regression hunt over the fix commits. Both were real and
+        # both are now fixed; these checks are the A/B the hunters ran.
+
+        # (1) restore() parks the live file as <name>.gfm-savebak. A trailing
+        # glob - the-crew's "data.bin*", simpsons' "game/save*" - matched
+        # those leftovers, so capture picked them up and the next restore
+        # parked them all again. With recycled names that grew by one a
+        # cycle; once names stopped being recycled it DOUBLED (7 cycles took
+        # one file to 128). Run the cycle and assert it stays flat.
+        _cy_dir = sv_recipe_dir.parent / "cycletest"
+        _cy_dir.mkdir()
+        (_cy_dir / "manifest.json").write_text(json.dumps({
+            "id": "cycletest", "name": "Cycle Test",
+            "detect": {"marker_files": ["g.exe"]},
+            "save_paths": ["{game_dir}/data.bin*"], "steps": []}),
+            encoding="utf-8")
+        _cy_recipe = manifest.load_recipe(_cy_dir)
+        _cy_game = sv_root / "cyclegame"; _cy_game.mkdir()
+        (_cy_game / "data.bin").write_bytes(b"THE-ONE-REAL-SAVE")
+        _cy_snap = sv_root / "cyclesnap"
+        _counts = []
+        for _ in range(6):
+            saves_mod.capture(_cy_recipe, _cy_game, None, _cy_snap, log=quiet)
+            saves_mod.restore(_cy_recipe, _cy_game, None, _cy_snap, log=quiet)
+            _slotd = _cy_snap / saves_mod.slot_for("{game_dir}/data.bin*")
+            _counts.append(len(list(_slotd.iterdir())))
+        check("a glob save_path does not re-capture our own set-aside files",
+              _counts == [1] * 6)
+        check("the snapshot holds exactly the real save, not look-alikes",
+              set(p.name for p in
+                  (_cy_snap / saves_mod.slot_for("{game_dir}/data.bin*"))
+                  .iterdir()) == {"data.bin"})
+        # the real save must still be the one that comes back
+        check("the restored file is the real save",
+              (_cy_game / "data.bin").read_bytes() == b"THE-ONE-REAL-SAVE")
+        # an index polluted by an earlier version must heal, not replay
+        check("a stale set-aside name in an index is skipped on restore",
+              "skipping stale set-aside copy" in _i.getsource(saves_mod.restore))
+
+        # (2) done_n only incremented for a prefix with ZERO failed files, so
+        # one bad file out of thousands satisfied "failed and not done" and
+        # raised - and on the menu path that raise travelled uncaught out of
+        # main(), ending the session with a traceback. plan() enumerates
+        # minutes before the copy, so Steam removing one temp file mid-run is
+        # routine, not exceptional.
+        class _PbStub:
+            def __init__(self, results): self.results = list(results)
+            def __call__(self, info, dest, progress=None, log=None):
+                return self.results.pop(0)
+        _pf = gfm_mod.prefixbackup.backup
+        class _P:
+            def __init__(self, name): self.name = name
+
+        class _PbUI(_StubUI):
+            def progress(self, *a, **k): pass
+            def progress_done(self, *a, **k): pass
+
+        class _PbApp:
+            """Enough App for _run_prefix_backups: it formats sizes and
+            drives the progress line."""
+            def __init__(self):
+                self.ui = _PbUI()
+            _gb = staticmethod(gfm_mod.App._gb)
+            _eta = staticmethod(gfm_mod.App._eta)
+        try:
+            gfm_mod.prefixbackup.backup = _PbStub([
+                {"copied": 4999, "skipped": 0, "bytes": 1, "links": 0,
+                 "failed": 1, "dest": tmp}])
+            _raised = False
+            try:
+                _n = gfm_mod.App._run_prefix_backups(
+                    _PbApp(), [_P("The Crew")], tmp)
+            except OSError:
+                _raised = True
+            check("one failed file out of thousands is NOT a total failure",
+                  not _raised)
+            # and when genuinely nothing landed, it must still raise so the
+            # weekly step() records a failure
+            gfm_mod.prefixbackup.backup = _PbStub([
+                {"copied": 0, "skipped": 0, "bytes": 0, "links": 0,
+                 "failed": 7, "dest": tmp}])
+            _raised2 = False
+            try:
+                gfm_mod.App._run_prefix_backups(
+                    _PbApp(), [_P("The Crew")], tmp)
+            except OSError:
+                _raised2 = True
+            check("a run where nothing landed still raises", _raised2)
+        finally:
+            gfm_mod.prefixbackup.backup = _pf
+        check("the interactive picker cannot be killed by that raise",
+              "_safe_prefix_backups" in _i.getsource(
+                  gfm_mod.App.cmd_backup_prefixes)
+              and "except OSError" in _i.getsource(
+                  gfm_mod.App._safe_prefix_backups))
 
         _rsrc = _i.getsource(gfm_mod.App._repair_nas_mount)
         check("repair only uses non-interactive sudo",

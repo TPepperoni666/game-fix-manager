@@ -1688,7 +1688,7 @@ class App:
                                     ["✅ Yes, back up", "⬅️  Cancel"])
                 if not ok or not ok[0].startswith("✅"):
                     return
-            self._run_prefix_backups(chosen, dest)
+            self._safe_prefix_backups(chosen, dest)
             return
 
         show_cloud = False
@@ -1749,12 +1749,26 @@ class App:
                             ["✅ Yes, back up", "⬅️  Cancel"])
         if not ok or not ok[0].startswith("✅"):
             return
-        self._run_prefix_backups(chosen, dest)
+        self._safe_prefix_backups(chosen, dest)
+
+    def _safe_prefix_backups(self, chosen, dest) -> int:
+        """_run_prefix_backups for the INTERACTIVE picker.
+
+        _run_prefix_backups raises when nothing landed, so the weekly runner's
+        step() records a failure. On the menu path nothing caught that: it
+        travelled through cmd_backup_prefixes, menu_advanced and menu to
+        main(), which logs and re-raises — ending the session with a traceback
+        mid-reimage, and in Game Mode there is no stderr to read it in."""
+        try:
+            return self._run_prefix_backups(chosen, dest)
+        except OSError as e:
+            self.ui.msg(f"Prefix backup failed — {e}", "error")
+            return 0
 
     def _run_prefix_backups(self, chosen, dest) -> int:
         """Copy the chosen prefixes with progress. Shared by the interactive
         picker and the weekly --auto run."""
-        done_n = failed_n = 0
+        done_n = failed_n = produced_n = 0
         for p in chosen:
             started = time.monotonic()
 
@@ -1787,9 +1801,15 @@ class App:
                         + (f", {st['links']} symlink(s)" if st["links"] else "")
                         + (f", {bad} FAILED" if bad else ""),
                         "success" if not bad else "error")
-            if bad:
-                failed_n += bad
-            else:
+            failed_n += bad
+            # A prefix that copied SOMETHING is backed up, even if one file
+            # failed. plan() enumerates the tree minutes before the copy
+            # reaches it, so Steam removing a shader-cache or temp file in
+            # between is routine — counting that as "not backed up" made one
+            # bad file out of thousands look like a total failure.
+            if st["copied"] or st["skipped"]:
+                produced_n += 1
+            if not bad:
                 done_n += 1
         if failed_n:
             # The husk case: backup() pre-creates the whole tree before
@@ -1798,15 +1818,22 @@ class App:
             self.ui.msg(f"⚠ {failed_n} file(s) failed to copy — those "
                         "prefixes are INCOMPLETE. Check free space on the "
                         "destination and re-run.", "error")
-        if failed_n and not done_n:
-            # Nothing was backed up at all. Raise so the weekly runner's
-            # step() records a failure instead of printing "Backed up 0
-            # prefix(es)" and reporting the step OK.
-            raise OSError(f"every prefix backup failed ({failed_n} file(s))")
-        self.ui.msg(f"Backed up {done_n} prefix(es) to {dest}.", "success")
+        if failed_n and not produced_n:
+            # NOTHING landed anywhere — the husk case (a full card, an
+            # unwritable destination). Raise so the weekly runner's step()
+            # records a failure instead of printing "Backed up 0 prefix(es)"
+            # and reporting the step OK. Deliberately NOT "any file failed":
+            # that raise escaped the interactive picker all the way out of
+            # main() and ended the session with a traceback, where the old
+            # code simply returned to the menu.
+            raise OSError(
+                f"no prefix backup produced any files ({failed_n} failed)")
+        self.ui.msg(f"Backed up {produced_n} prefix(es) to {dest}"
+                    + (f" ({produced_n - done_n} with failures)"
+                       if produced_n > done_n else "") + ".", "success")
         self.ui.msg("📥 Import Prefix Backups restores these after a reimage.",
                     "dim")
-        return done_n
+        return produced_n
 
     def cmd_import_prefixes(self):
         """Restore prefixes backed up by the old Linux Prefix Manager into

@@ -82,10 +82,21 @@ def slot_for(template: str) -> str:
 
 
 def _matches(resolved: Path) -> list[Path]:
-    """What a resolved entry actually points at — glob-aware."""
+    """What a resolved entry actually points at — glob-aware.
+
+    Our OWN set-aside files are excluded. restore() parks the live file as
+    <name>.gfm-savebak, and a trailing-glob template like
+    "{game_dir}/the crew/data.bin*" or "{game_dir}/game/save*" matches those
+    too — so each capture picked up the previous restore's leftovers and each
+    restore then parked every one of them again. While the bak name was
+    recycled that grew by one per cycle; once names stopped being recycled it
+    DOUBLED per cycle (7 cycles took the-crew from 1 file to 128). Neither is
+    acceptable, and neither is the tool's own bookkeeping being mistaken for
+    the user's save."""
     if any(c in resolved.name for c in _GLOB_CHARS):
         try:
-            return sorted(resolved.parent.glob(resolved.name))
+            return sorted(q for q in resolved.parent.glob(resolved.name)
+                          if SAVE_BAK not in q.name)
         except OSError:
             return []
     try:
@@ -326,6 +337,12 @@ def restore(recipe, game_dir: Path, steam_root: Path | None, src: Path,
             log(f"      ? {template} — can't resolve here, skipped")
             continue
         for name in e.get("names", []):
+            if SAVE_BAK in name:
+                # A snapshot taken before _matches() filtered these can hold
+                # our own leftovers. Don't restore them: that is what put
+                # look-alike copies next to the real save in the first place.
+                log(f"      = skipping stale set-aside copy {name}")
+                continue
             stored = src / str(e.get("slot")) / name
             if not stored.exists():
                 log(f"      ? {name} — missing from the snapshot, skipped")
