@@ -2688,6 +2688,74 @@ def main():
         check("a throwing repair cannot abort the whole backup",
               "repair attempt itself failed" in _wsrc)
 
+        # ---- the exit code systemd actually sees --------------------------
+        # cmd_weekly_backup returns len(failed)+len(skipped) under a comment
+        # saying a run that backed up nothing must not report success. main()
+        # discarded it and never called sys.exit, so every run exited 0 and
+        # `systemctl show gfm-backup.service -p Result` said success for the
+        # exact failure being guarded against. The check written for this
+        # asserted the SOURCE contained "len(failed) + len(skipped)", which
+        # was true the whole time it was broken - so this one calls it.
+        check("a weekly backup with skips exits non-zero",
+              gfm_mod.exit_code_for("weekly-backup", 3) == 3)
+        check("a clean weekly backup exits zero",
+              gfm_mod.exit_code_for("weekly-backup", 0) == 0)
+        # The reason this is a whitelist and not a blanket propagation:
+        # sync-artwork returns how many files it synced, collect-logs how many
+        # it gathered. Non-zero there means SUCCESS.
+        check("a command that returns a COUNT is not treated as failing",
+              gfm_mod.exit_code_for("sync-artwork", 12) == 0
+              and gfm_mod.exit_code_for("collect-logs", 7) == 0)
+        check("a handler returning None exits zero",
+              gfm_mod.exit_code_for("weekly-backup", None) == 0)
+        check("main() actually propagates it",
+              "sys.exit(exit_code_for(" in _i.getsource(gfm_mod.main))
+
+        # ---- step 1 is not read-only, so it must honour the NAS gate ------
+        # _refresh_map calls _adopt_shortcuts, _sync_shortcut_state and
+        # _collect_proton_logs, all of which write under local_payloads. The
+        # weekly backup left step 1 ungated with the comment "the map refresh
+        # only reads", so with the share down step 1 recreated the shadowed
+        # mountpoint the gate exists to prevent.
+        class _MapStub:
+            def __init__(self):
+                self.called = []
+                self.recipes = []
+                self.steam_root = None
+                self.ui = _StubUI()
+            def _warn_duplicate_games(self, *a): pass
+            def _adopt_shortcuts(self, **k): self.called.append("adopt")
+            def _sync_shortcut_state(self): self.called.append("shortcuts")
+            def _collect_proton_logs(self): self.called.append("protonlogs")
+            def _inventory_prefix_backups(self, *a, **k): pass
+
+        _map_dest = tmp / "mapstub" / "sd_map.json"
+        _map_dest.parent.mkdir(parents=True, exist_ok=True)
+        _real_dwp = gfm_mod.sdmap.default_write_path
+        _real_fgd = gfm_mod.sdscan.find_games_dirs
+        try:
+            gfm_mod.sdmap.default_write_path = lambda *a, **k: _map_dest
+            gfm_mod.sdscan.find_games_dirs = lambda *a, **k: []
+            _gated = _MapStub()
+            try:
+                gfm_mod.App._refresh_map(_gated, skip_nas_writes=True)
+            except Exception:
+                pass
+            _ungated = _MapStub()
+            try:
+                gfm_mod.App._refresh_map(_ungated, skip_nas_writes=False)
+            except Exception:
+                pass
+        finally:
+            gfm_mod.sdmap.default_write_path = _real_dwp
+            gfm_mod.sdscan.find_games_dirs = _real_fgd
+        check("map refresh writes nothing to the NAS when it is gated",
+              _gated.called == [])
+        check("map refresh still does those writes when the NAS is up",
+              set(_ungated.called) == {"adopt", "shortcuts", "protonlogs"})
+        check("the weekly backup passes the gate into step 1",
+              "skip_nas_writes=nas_down" in _wsrc)
+
         _rsrc = _i.getsource(gfm_mod.App._repair_nas_mount)
         check("repair only uses non-interactive sudo",
               '"sudo", "-n"' in _rsrc and "askpass" not in _rsrc)

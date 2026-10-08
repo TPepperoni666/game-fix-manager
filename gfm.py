@@ -2097,10 +2097,17 @@ class App:
         self.ui.msg("", "dim")
         self.ui.msg("Scan complete.", "success")
 
-    def _refresh_map(self) -> bool:
+    def _refresh_map(self, skip_nas_writes: bool = False) -> bool:
         """Rewrite sd_map.json (SD games + Steam inventory) with NO prompts —
         so a weekly/background run keeps the map Tony (and Claude, via
-        Syncthing) can see current. Returns True if it wrote anything."""
+        Syncthing) can see current. Returns True if it wrote anything.
+
+        skip_nas_writes drops the three calls below that write to
+        local_payloads. The weekly backup gates its NAS steps on the share
+        actually being mounted, but left this one ungated with the comment
+        "the map refresh only reads" — which was false, and meant step 1
+        recreated the shadowed mountpoint that the gate exists to prevent,
+        while the log reported the later steps as SKIPPED."""
         dest = sdmap.default_write_path()
         if dest is None:
             self.ui.msg("No SD card mounted — can't refresh the map.", "warn")
@@ -2130,9 +2137,13 @@ class App:
         # the SAME complete map the menu Scan does — games + steam_games +
         # prefix_backups. (Runs last: each section write preserves the others,
         # so ordering only matters in that it must follow them.)
-        self._adopt_shortcuts(interactive=False)   # auto-pin new hand-adds
-        self._sync_shortcut_state()                # keep the reimage net complete
-        self._collect_proton_logs()                # gather PROTON_LOG output
+        # These three write under local_payloads, so they are NOT part of the
+        # "only reads" half of this method. With the share down they would
+        # mkdir _state/ on the bare mountpoint and shadow it.
+        if not skip_nas_writes:
+            self._adopt_shortcuts(interactive=False)   # auto-pin new hand-adds
+            self._sync_shortcut_state()            # keep the reimage net complete
+            self._collect_proton_logs()            # gather PROTON_LOG output
         try:
             self._scan_prefix_backups()
             wrote = True
@@ -2413,7 +2424,8 @@ class App:
         # needs_nas marks the steps whose OUTPUT lands on the share: adopted
         # pins and shortcut bodies go to _state/, capture to _recipes/. The
         # map refresh only reads, and the prefix backup writes to the SD card.
-        step("1/6 map refresh", self._refresh_map)
+        step("1/6 map refresh", lambda: self._refresh_map(
+            skip_nas_writes=nas_down))
         step("2/6 adopt new shortcuts",
              lambda: self._adopt_shortcuts(interactive=False), needs_nas=True)
         step("3/6 shortcut bodies", self._sync_shortcut_state, needs_nas=True)
@@ -4488,6 +4500,28 @@ COMMANDS = {
 }
 
 
+# Commands whose int return value IS a process exit code. Deliberately a
+# whitelist: cmd_sync_artwork returns how many art files it synced,
+# cmd_collect_logs how many logs it gathered and cmd_restore_shortcuts how
+# many it queued — for those, non-zero means SUCCESS, so propagating every
+# return value would mark good runs as failed.
+EXIT_CODE_COMMANDS = {"weekly-backup"}
+
+
+def exit_code_for(command, rc) -> int:
+    """Process exit code for a finished command.
+
+    cmd_weekly_backup ends with `return len(failed) + len(skipped)` under a
+    comment explaining that a run which backed up nothing must not report
+    success to systemd. main() threw that value away and never called
+    sys.exit, so every run exited 0 and `systemctl show gfm-backup.service
+    -p Result` said success for exactly the failure it was guarding against.
+    """
+    if command in EXIT_CODE_COMMANDS and isinstance(rc, int) and rc > 0:
+        return rc
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", nargs="?", choices=list(COMMANDS),
@@ -4542,8 +4576,9 @@ def main():
             pass
 
     handler = COMMANDS.get(args.command)
+    rc = None
     try:
-        app.menu() if handler is None else handler(app, args)
+        rc = app.menu() if handler is None else handler(app, args)
     except KeyboardInterrupt:
         app.log("interrupted by user")
     except Exception:
@@ -4552,6 +4587,7 @@ def main():
                    f"({sdmap.log_path()}).", "error")
         app.ui.msg(traceback.format_exc().splitlines()[-1], "dim")
         raise
+    sys.exit(exit_code_for(args.command, rc))
 
 
 if __name__ == "__main__":
