@@ -785,8 +785,9 @@ def main():
         (sv_game / "PROF_SAVE_header").write_bytes(b"HEADER")
         sv_snap = sv_root / "snap"
 
-        n_entries, n_files = saves_mod.capture(sv_recipe, sv_game, None, sv_snap,
-                                               log=quiet)
+        n_entries, n_files, n_failed = saves_mod.capture(
+            sv_recipe, sv_game, None, sv_snap, log=quiet)
+        check("a clean capture reports no failures", n_failed == 0)
         check("capture takes nested file + dir + glob, skips absent",
               n_entries == 3 and n_files == 4)
         check("capture writes a readable index",
@@ -822,12 +823,106 @@ def main():
         # reimage case exactly — deploy a fresh game folder, 🔍 Scan captures
         # every game, and a save you DID back up silently goes missing.
         shutil.rmtree(sv_game / "Save1")
-        fresh_n, _ = saves_mod.capture(sv_recipe, sv_game, None, sv_snap,
-                                       log=quiet)
+        fresh_n, _, _ = saves_mod.capture(sv_recipe, sv_game, None, sv_snap,
+                                          log=quiet)
         merged = saves_mod.read_index(sv_snap)
         check("re-capture keeps the backup of a now-missing save",
               any(e["template"] == "{game_dir}/Save1" for e in merged))
         check("re-capture reports only what it freshly captured", fresh_n == 2)
+
+        # ---- the three ways this used to destroy the only copy ------------
+        # Found by audit 2026-10-09. Every check here CALLS the code: the
+        # previous checks for this module all passed while these bugs were
+        # live, because they only exercised the happy path.
+
+        # (a) A failed copy must not take the existing snapshot with it.
+        # capture() used to _discard(slot_dir) before copying, so one dropped
+        # SMB handle left the only off-device copy gone AND the index still
+        # advertising it, while the caller printed "no saves found yet".
+        sv_fail_dir = sv_root / "failgame"
+        (sv_fail_dir / "nested").mkdir(parents=True)
+        (sv_fail_dir / "nested" / "data.bin").write_bytes(b"WEEK-ONE")
+        sv_fail_snap = sv_root / "failsnap"
+        saves_mod.capture(sv_recipe, sv_fail_dir, None, sv_fail_snap, log=quiet)
+        _slot = saves_mod.slot_for("{game_dir}/nested/data.bin")
+        check("baseline snapshot stored before the failure test",
+              (sv_fail_snap / _slot / "data.bin").read_bytes() == b"WEEK-ONE")
+        (sv_fail_dir / "nested" / "data.bin").write_bytes(b"WEEK-TWO")
+        _real_copy2 = shutil.copy2
+        try:
+            shutil.copy2 = lambda *a, **k: (_ for _ in ()).throw(
+                OSError(5, "Input/output error"))
+            _e, _f, _fail = saves_mod.capture(sv_recipe, sv_fail_dir, None,
+                                              sv_fail_snap, log=quiet)
+        finally:
+            shutil.copy2 = _real_copy2
+        check("a failed capture is COUNTED, not reported as empty", _fail >= 1)
+        check("a failed capture leaves the previous snapshot intact",
+              (sv_fail_snap / _slot / "data.bin").read_bytes() == b"WEEK-ONE")
+        check("a failed capture leaves no staging dir behind",
+              not any(p.name.endswith(saves_mod.STAGE_SUFFIX)
+                      for p in sv_fail_snap.iterdir()))
+        check("the index still resolves to a file that exists",
+              saves_mod.index_is_whole(sv_fail_snap))
+
+        # (b) Slots were the template's POSITION, so inserting an entry
+        # shifted every later one down and the new occupant wiped its
+        # predecessor's snapshot. Three real recipes were edited that way.
+        ins_dir = sv_recipe_dir.parent / "instest"
+        ins_dir.mkdir()
+        def _ins_recipe(paths):
+            (ins_dir / "manifest.json").write_text(json.dumps({
+                "id": "instest", "name": "Insert Test",
+                "detect": {"marker_files": ["g.exe"]},
+                "save_paths": paths, "steps": []}), encoding="utf-8")
+            return manifest.load_recipe(ins_dir)
+        ins_game = sv_root / "insgame"; ins_game.mkdir()
+        (ins_game / "keep.bin").write_bytes(b"MUST-SURVIVE")
+        ins_snap = sv_root / "inssnap"
+        saves_mod.capture(_ins_recipe(["{game_dir}/keep.bin"]), ins_game, None,
+                          ins_snap, log=quiet)
+        (ins_game / "added.bin").write_bytes(b"NEW-ENTRY")
+        # insert the new template FIRST, shifting keep.bin down a position
+        saves_mod.capture(_ins_recipe(["{game_dir}/added.bin",
+                                       "{game_dir}/keep.bin"]),
+                          ins_game, None, ins_snap, log=quiet)
+        _keep = saves_mod.slot_for("{game_dir}/keep.bin")
+        check("inserting a save_paths entry does not destroy its neighbour",
+              (ins_snap / _keep / "keep.bin").read_bytes() == b"MUST-SURVIVE")
+        check("both entries survive in the index",
+              {e["template"] for e in saves_mod.read_index(ins_snap)} ==
+              {"{game_dir}/added.bin", "{game_dir}/keep.bin"})
+        check("slots are stable, not positional",
+              saves_mod.slot_for("{game_dir}/keep.bin") == _keep)
+
+        # (c) Restoring TWICE used to delete the bak holding the real save:
+        # on the second run the live file is the snapshot the first run wrote,
+        # so the newer save was destroyed and replaced by the old one.
+        tw_game = sv_root / "twicegame"; tw_game.mkdir()
+        (tw_game / "p.sav").write_bytes(b"OLD-SNAPSHOT")
+        tw_snap = sv_root / "twicesnap"
+        saves_mod.capture(_ins_recipe(["{game_dir}/p.sav"]), tw_game, None,
+                          tw_snap, log=quiet)
+        tw_recipe = _ins_recipe(["{game_dir}/p.sav"])
+        (tw_game / "p.sav").write_bytes(b"LIVE-150-HOURS")
+        saves_mod.restore(tw_recipe, tw_game, None, tw_snap, log=quiet)
+        saves_mod.restore(tw_recipe, tw_game, None, tw_snap, log=quiet)
+        _live_found = any(
+            f.read_bytes() == b"LIVE-150-HOURS"
+            for f in tw_game.iterdir() if f.is_file())
+        check("restoring twice does not destroy the newer live save",
+              _live_found)
+
+        # index_is_whole is the guard reclaim leans on before deleting a game
+        # folder; "the index parses" was accepted as "the backup is there".
+        emptied = sv_root / "emptied"
+        (emptied).mkdir()
+        (emptied / "index.json").write_text(
+            '{"recipe":"x","entries":[{"slot":"abc","template":"t",'
+            '"names":["gone.bin"]}]}', encoding="utf-8")
+        check("an index naming a missing file is not whole",
+              saves_mod.read_index(emptied) and
+              not saves_mod.index_is_whole(emptied))
         (sv_game / "nested" / "data.bin").unlink()
         saves_mod.restore(sv_recipe, sv_game, None, sv_snap, log=quiet)
         check("the carried-forward backup still restores",

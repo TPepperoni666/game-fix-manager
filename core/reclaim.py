@@ -95,8 +95,12 @@ def _saves_safe(recipe, local_payloads: Path | None) -> bool:
     if local_payloads is None:
         return False
     from . import store
-    return bool(saves.read_index(
-        store.recipe_data_dir(local_payloads, recipe.id, "saves")))
+    # index_is_whole, not read_index: an index can list entries whose files
+    # are gone (an emptied slot still parsed as "captured"), and this guard is
+    # the last thing standing between a stale index and deleting the game
+    # folder that holds the only copy.
+    return saves.index_is_whole(
+        store.recipe_data_dir(local_payloads, recipe.id, "saves"))
 
 
 def scan(recipes, steam_root, deployed: dict, sd_games_dirs,

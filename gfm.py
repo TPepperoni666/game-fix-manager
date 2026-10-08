@@ -1866,10 +1866,17 @@ class App:
             return False
         dest = store.recipe_data_dir(self.local_payloads, recipe.id, "saves",
                                      for_write=True)
-        entries, files = saves.capture(
+        entries, files, failed = saves.capture(
             recipe, game_dir, self.steam_root, dest,
             log=(lambda m: self.ui.msg(m, "dim")) if interactive
             else (lambda _m: None))
+        # A failed capture is NOT an empty one. Saying "no saves found yet"
+        # for a path that exists but could not be copied is what hid a
+        # destroyed backup for months — always shout, interactive or not.
+        if failed:
+            self.ui.msg(f"  ✗ {recipe.name}: {failed} save path(s) FAILED to "
+                        "capture — the previous snapshot was left intact. "
+                        "Check the NAS is mounted and re-run.", "error")
         if files:
             self.ui.msg(f"  💾 {recipe.name}: {files} save file(s)/folder(s) "
                         f"across {entries} path(s)", "success")
