@@ -2756,6 +2756,78 @@ def main():
         check("the weekly backup passes the gate into step 1",
               "skip_nas_writes=nas_down" in _wsrc)
 
+        # ---- prefix backup/import: the husk chain -------------------------
+        # Found by the audit's completeness critic. Three separate guards
+        # asked is_dir() and so accepted a backup with nothing in it, because
+        # prefixbackup.backup() pre-creates the whole destination tree before
+        # copying a single file. A husk then passes the gate, gets restored
+        # OVER a live prefix, and the second run eats the set-aside copy.
+        from core import prefixbackup as _pb, prefiximport as _pi
+
+        _husk = tmp / "husk" / "The_Crew" / "123"
+        (_husk / "pfx" / "drive_c").mkdir(parents=True)
+        check("an empty prefix tree is NOT a whole backup",
+              not _pb.is_whole(_husk))
+        (_husk / "pfx" / "drive_c" / "save.dat").write_bytes(b"REAL")
+        check("a prefix tree with files IS a whole backup",
+              _pb.is_whole(_husk))
+        check("no pfx dir at all is not whole",
+              not _pb.is_whole(tmp / "husk" / "nothing"))
+
+        # backup() must report failures, not swallow them
+        _bi = _pb.PrefixInfo(appid="777", name="FailGame",
+                             path=tmp / "pfxsrc", is_steam=False,
+                             has_cloud=False)
+        (tmp / "pfxsrc" / "pfx").mkdir(parents=True)
+        (tmp / "pfxsrc" / "pfx" / "a.dat").write_bytes(b"X" * 64)
+        _real_cc = gfm_mod.deploy._copy_chunked
+        try:
+            gfm_mod.deploy._copy_chunked = lambda *a, **k: (
+                _ for _ in ()).throw(OSError(28, "No space left on device"))
+            _res = _pb.backup(_bi, tmp / "pfxdest", log=quiet)
+        finally:
+            gfm_mod.deploy._copy_chunked = _real_cc
+        check("backup() reports the files it could not copy",
+              _res.get("failed", 0) >= 1 and _res["copied"] == 0)
+        check("the husk it leaves behind is not mistaken for a backup",
+              not _pb.is_whole(tmp / "pfxdest" / _pb.safe_name("FailGame")
+                               / "777"))
+
+        # importing a husk must be refused BEFORE the live prefix is moved
+        _steam = tmp / "impsteam"
+        _live = _steam / "steamapps" / "compatdata" / "123"
+        (_live / "pfx").mkdir(parents=True)
+        (_live / "pfx" / "live.dat").write_bytes(b"LIVE-150-HOURS")
+        _huskbak = _pi.Backup(appid="123", safe_name="The_Crew",
+                              path=tmp / "husk2" / "The_Crew" / "123")
+        (_huskbak.path / "pfx").mkdir(parents=True)
+        _refused = False
+        try:
+            _pi.restore(_huskbak, _steam, log=quiet)
+        except OSError:
+            _refused = True
+        check("importing an empty backup is refused", _refused)
+        check("and the live prefix was never touched",
+              (_live / "pfx" / "live.dat").read_bytes() == b"LIVE-150-HOURS")
+
+        # importing TWICE must not destroy the prefix set aside the first time
+        _good = _pi.Backup(appid="123", safe_name="The_Crew",
+                           path=tmp / "goodbak" / "The_Crew" / "123")
+        (_good.path / "pfx").mkdir(parents=True)
+        (_good.path / "pfx" / "live.dat").write_bytes(b"JULY-SNAPSHOT")
+        _pi.restore(_good, _steam, log=quiet)
+        _pi.restore(_good, _steam, log=quiet)
+        _survived = any(
+            f.read_bytes() == b"LIVE-150-HOURS"
+            for f in (_steam / "steamapps" / "compatdata").rglob("live.dat"))
+        check("importing twice does not destroy the live prefix", _survived)
+
+        _rsrc = _i.getsource(gfm_mod.App._run_prefix_backups)
+        check("an all-failed prefix run raises so the step is recorded failed",
+              "every prefix backup failed" in _rsrc)
+        check("a prefix with failures is not counted as backed up",
+              "else:" in _rsrc and "done_n += 1" in _rsrc)
+
         _rsrc = _i.getsource(gfm_mod.App._repair_nas_mount)
         check("repair only uses non-interactive sudo",
               '"sudo", "-n"' in _rsrc and "askpass" not in _rsrc)

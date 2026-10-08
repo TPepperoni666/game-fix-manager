@@ -49,11 +49,16 @@ class Backup:
 
     @property
     def has_pfx(self) -> bool:
-        """A real prefix backup has a pfx/ inside; anything else is a husk."""
-        try:
-            return (self.path / "pfx").is_dir()
-        except OSError:
-            return False
+        """A real prefix backup has a pfx/ with FILES in it.
+
+        This used to be `(self.path / "pfx").is_dir()`, which a husk passes:
+        prefixbackup.backup() pre-creates the whole destination tree before
+        copying anything, so a run where every copy failed leaves the exact
+        shape of a backup with nothing inside. This is the only gate on
+        _import_one, and importing a husk moves the LIVE prefix aside and
+        replaces it with nothing."""
+        from . import prefixbackup      # deferred: avoid an import cycle
+        return prefixbackup.is_whole(self.path)
 
 
 def backup_roots(sd_roots: list[Path] | None = None) -> list[Path]:
@@ -112,16 +117,43 @@ def is_live(steam_root: Path, appid: str) -> bool:
         return False
 
 
+def _free_bak(dst: Path) -> Path:
+    """A set-aside name that is not already taken.
+
+    restore() used to rmtree an existing <appid>.gfm-prefixbak before moving
+    the live prefix into it. On a SECOND import the live prefix IS the one the
+    first import wrote, and the bak holds the user's real, current prefix —
+    so the current prefix was destroyed and replaced by another copy of the
+    backup, while the log said it had been kept safely. cmd_import_prefixes
+    is step 2/4 of the Save Restore bundle and its own warning tells the user
+    to re-run when the live prefix is newer, so a second run is the expected
+    thing to do, not an unlikely one. A prefix holds the saves of every game
+    that writes to Documents or AppData."""
+    bak = dst.with_name(dst.name + PREFIX_BAK)
+    if not bak.exists():
+        return bak
+    for n in range(2, 1000):
+        cand = dst.with_name(f"{dst.name}{PREFIX_BAK}.{n}")
+        if not cand.exists():
+            return cand
+    return dst.with_name(dst.name + PREFIX_BAK + ".last")
+
+
 def restore(backup: Backup, steam_root: Path,
             log: Callable[[str], None] = print) -> tuple[Path, int]:
     """Copy a backed-up prefix into compatdata. Any prefix already live at the
     target is moved aside to <appid>.gfm-prefixbak — an import must never be
     what destroys a current save. Returns (destination, files_copied)."""
+    # Check the SOURCE is real before touching the live prefix. Moving a
+    # working prefix aside and then discovering the backup is empty is not
+    # recoverable by a second attempt — the second attempt is what eats the
+    # set-aside copy.
+    if not backup.has_pfx:
+        raise OSError(f"{backup.path} holds no prefix files — refusing to "
+                      "import it over a live prefix")
     dst = target_dir(steam_root, backup.appid)
     if dst.exists():
-        bak = dst.with_name(dst.name + PREFIX_BAK)
-        if bak.exists():
-            shutil.rmtree(bak, ignore_errors=True)
+        bak = _free_bak(dst)
         shutil.move(str(dst), str(bak))
         log(f"      ~ existing prefix kept as {bak.name}")
     dst.parent.mkdir(parents=True, exist_ok=True)

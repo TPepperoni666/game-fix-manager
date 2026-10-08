@@ -1754,7 +1754,7 @@ class App:
     def _run_prefix_backups(self, chosen, dest) -> int:
         """Copy the chosen prefixes with progress. Shared by the interactive
         picker and the weekly --auto run."""
-        done_n = 0
+        done_n = failed_n = 0
         for p in chosen:
             started = time.monotonic()
 
@@ -1780,12 +1780,29 @@ class App:
                 self.ui.msg(f"{p.name}: cancelled (re-run to resume)", "warn")
                 break
             self.ui.progress_done()
-            self.ui.msg(f"  ✓ {p.name}: {st['copied']} file(s), "
-                        f"{self._gb(st['bytes'])}"
+            bad = st.get("failed", 0)
+            self.ui.msg(f"  {'✓' if not bad else '✗'} {p.name}: "
+                        f"{st['copied']} file(s), {self._gb(st['bytes'])}"
                         + (f", {st['skipped']} unchanged" if st["skipped"] else "")
-                        + (f", {st['links']} symlink(s)" if st["links"] else ""),
-                        "success")
-            done_n += 1
+                        + (f", {st['links']} symlink(s)" if st["links"] else "")
+                        + (f", {bad} FAILED" if bad else ""),
+                        "success" if not bad else "error")
+            if bad:
+                failed_n += bad
+            else:
+                done_n += 1
+        if failed_n:
+            # The husk case: backup() pre-creates the whole tree before
+            # copying, so an all-copies-failed run leaves directories that
+            # every downstream is_dir() check reads as a good backup.
+            self.ui.msg(f"⚠ {failed_n} file(s) failed to copy — those "
+                        "prefixes are INCOMPLETE. Check free space on the "
+                        "destination and re-run.", "error")
+        if failed_n and not done_n:
+            # Nothing was backed up at all. Raise so the weekly runner's
+            # step() records a failure instead of printing "Backed up 0
+            # prefix(es)" and reporting the step OK.
+            raise OSError(f"every prefix backup failed ({failed_n} file(s))")
         self.ui.msg(f"Backed up {done_n} prefix(es) to {dest}.", "success")
         self.ui.msg("📥 Import Prefix Backups restores these after a reimage.",
                     "dim")

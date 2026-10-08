@@ -176,12 +176,33 @@ def enumerate_prefixes(steam_root: Path, sd_root: Path | None = None,
             info.size = deploy.tree_stats(pfx)[1]
         if existing is not None:
             try:
-                info.backed_up = (existing / safe_name(name) / appid).is_dir()
+                info.backed_up = is_whole(existing / safe_name(name) / appid)
             except OSError:
                 info.backed_up = False
         out.append(info)
     out.sort(key=lambda p: p.name.lower())
     return out
+
+
+def is_whole(backup_dir: Path) -> bool:
+    """Does this backup actually hold a prefix, or just the shape of one?
+
+    backup() pre-creates the entire destination tree in its os.walk pass
+    BEFORE copying a single file, so a run where every copy failed leaves a
+    complete empty skeleton. Three separate guards accepted that skeleton as
+    a good backup because all three only asked is_dir(): the picker's
+    backed-up tick, prefiximport's has_pfx, and reclaim's staged check. The
+    last of those decides whether deleting a game folder is reversible."""
+    try:
+        pfx = backup_dir / "pfx"
+        if not pfx.is_dir():
+            return False
+        for _dirpath, _dirnames, names in os.walk(pfx):
+            if names:
+                return True
+        return False
+    except OSError:
+        return False
 
 
 def candidates(all_prefixes: list[PrefixInfo], opted_in: set[str],
@@ -308,7 +329,7 @@ def backup(info: PrefixInfo, dest_root: Path,
     filesystem into the backup."""
     dst_root = dest_root / safe_name(info.name) / info.appid
     todo, total, skipped = plan(info, dest_root)
-    done = copied = links = 0
+    done = copied = links = failed = 0
 
     def _relink(src: Path, dst: Path) -> None:
         """Recreate a symlink verbatim. NEVER follow it — a prefix has
@@ -351,7 +372,12 @@ def backup(info: PrefixInfo, dest_root: Path,
             copied += 1
         except OSError as e:
             log(f"      ! {src.name}: {e}")
+            failed += 1
     if progress:
         progress(done, total, "")
+    # "failed" is not decoration. Every per-file OSError used to be swallowed
+    # and the result dict had no way to say so, so a run where EVERY copy
+    # failed (a full SD card is enough) returned copied=0 and the caller
+    # printed "Backed up 5 prefix(es)" and reported the step OK.
     return {"copied": copied, "skipped": skipped, "bytes": done,
-            "links": links, "dest": dst_root}
+            "links": links, "failed": failed, "dest": dst_root}
