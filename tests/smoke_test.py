@@ -1231,7 +1231,15 @@ def main():
         _np_app.store_root = tmp
         _np_app.local_payloads = None
         _np_app.log = lambda *a, **k: None
+        # Pin the predicate too. Without this the test is platform-dependent
+        # in the other direction: on the Deck store.sd_card_roots() returns a
+        # REAL card, so cmd_backup_prefixes takes a different branch, never
+        # emits the no-card message, and could touch the actual card. Stubbed,
+        # both platforms walk the same no-card path - which is past the
+        # steam_root guard, which is the whole point.
+        _np_real_roots = _gfm.store.sd_card_roots
         _np_prompted = []
+        _gfm.store.sd_card_roots = lambda *a, **k: []
         for _fn, _call in (
                 ("cmd_reclaim", lambda: _gfm.App.cmd_reclaim(_np_app,
                                                              skip_map=True)),
@@ -1244,6 +1252,7 @@ def main():
                 _np_prompted.append(f"{_fn}: {e}")
             except Exception:
                 pass            # any other failure is a stub gap, not a prompt
+        _gfm.store.sd_card_roots = _np_real_roots
         if _np_prompted:
             print("      prompted:", "; ".join(_np_prompted))
         check("no unattended command prompts for input", not _np_prompted)
