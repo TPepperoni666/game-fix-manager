@@ -90,7 +90,16 @@ class SteamShortcut:
                 "appid": appid, "tool": self.proton, "priority": "250",
             })
         if self.restore_art and appid is not None and ctx.local_payloads_dir is not None:
-            art_src = ctx.local_payloads_dir / ctx.recipe.id / "artwork"
+            # store.recipe_data_dir, not a hardcoded flat path. Capture
+            # writes to _recipes/<id>/artwork and this was the one reader
+            # still looking at the legacy <id>/artwork, so on any NAS where
+            # capture had run the directory did not exist, has_art was False,
+            # and Apply Fixes never restored the art it had just captured.
+            # The resolver falls back to the legacy path for an un-migrated
+            # share.
+            from .. import store
+            art_src = store.recipe_data_dir(ctx.local_payloads_dir,
+                                            ctx.recipe.id, "artwork")
             try:
                 has_art = art_src.is_dir() and any(art_src.iterdir())
             except OSError:

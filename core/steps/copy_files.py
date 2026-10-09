@@ -14,7 +14,7 @@ import shutil
 from pathlib import Path
 
 from ..engine import (APPLIED, BACKUP_SUFFIX, NOT_APPLIED, PARTIAL, Ctx,
-                      register_step)
+                      StepError, register_step)
 from ..hashutil import file_hash, same_file
 
 # Backwards-friendly aliases (older imports used these names from here)
@@ -77,7 +77,19 @@ class CopyFiles:
         dst = ctx.resolve_target(self.dst)
         if self.rename and src.is_file():
             return [(src, dst / self.rename)]
-        return list(iter_pairs(src, dst))
+        pairs = list(iter_pairs(src, dst))
+        if not pairs:
+            # An EMPTY payload directory used to verify as APPLIED: done and
+            # len(pairs) were both 0, so `done == len(pairs)` held, and
+            # apply() copied nothing without complaining. That is the normal
+            # shape of a NAS-only payload gone missing - f1-manager-24 and
+            # the eclipse-* recipes are a single copy_files from a directory
+            # that exists only on the share, and payload_path() accepts the
+            # directory as soon as it exists, empty or not. Fail loudly; the
+            # engine already turns a StepError in an optional step into a
+            # skip.
+            raise StepError(f"copy_files: payload matched no files under {src}")
+        return pairs
 
     def apply(self, ctx: Ctx) -> None:
         import os

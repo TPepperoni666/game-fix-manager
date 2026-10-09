@@ -2443,10 +2443,33 @@ class App:
                         "disk and shadow the share. Prefix backups go to the "
                         "SD card, so those still run.", "error")
 
+        # The SD card needs the same treatment, and for the same reason. The
+        # health preamble already measures it and the comment above it names
+        # the hazard — "a run with the card missing produces a backup that
+        # looks fine and covers nothing" — but nothing acted on it. Both
+        # SD-dependent steps swallow a missing card as a SUCCESSFUL return:
+        # _refresh_map prints "No SD card mounted" and returns False, and
+        # cmd_backup_prefixes(use_saved=True) prints "no SD card mounted —
+        # skipped" and returns. step() ignores return values, so both were
+        # recorded OK and the run announced "all 6 steps OK" having backed up
+        # no prefixes at all.
+        sd_down = not store.sd_card_roots()
+        if sd_down:
+            self.ui.msg("⚠ NO SD CARD — the map refresh and the prefix "
+                        "backups have nowhere to go and are being SKIPPED. "
+                        "Prefix backups are written to the card, so this run "
+                        "would otherwise report success having copied "
+                        "nothing.", "error")
+
         results: list[tuple[str | None, bool | None, str]] = []
 
-        def step(label: str, fn, needs_nas: bool = False) -> None:
+        def step(label: str, fn, needs_nas: bool = False,
+                 needs_sd: bool = False) -> None:
             self.ui.msg(f"── {label} " + "─" * max(1, 34 - len(label)), "info")
+            if needs_sd and sd_down:
+                results.append((label, None, "skipped — no SD card"))
+                self.ui.msg("  ⏭  SKIPPED — no SD card mounted.", "warn")
+                return
             if needs_nas and nas_down:
                 # Skipped is its OWN outcome. Recording it as success would
                 # reproduce the original fault in the log; recording it as a
@@ -2468,14 +2491,16 @@ class App:
         # needs_nas marks the steps whose OUTPUT lands on the share: adopted
         # pins and shortcut bodies go to _state/, capture to _recipes/. The
         # map refresh only reads, and the prefix backup writes to the SD card.
+        # The map is written to the card, and the prefix backups land there
+        # too — neither can do anything without it.
         step("1/6 map refresh", lambda: self._refresh_map(
-            skip_nas_writes=nas_down))
+            skip_nas_writes=nas_down), needs_sd=True)
         step("2/6 adopt new shortcuts",
              lambda: self._adopt_shortcuts(interactive=False), needs_nas=True)
         step("3/6 shortcut bodies", self._sync_shortcut_state, needs_nas=True)
         step("4/6 art + saves + settings", self._capture_all, needs_nas=True)
         step("5/6 prefix backup",
-             lambda: self.cmd_backup_prefixes(use_saved=True))
+             lambda: self.cmd_backup_prefixes(use_saved=True), needs_sd=True)
         # Reclaim LAST and with the map already refreshed: it decides what to
         # delete from what the map says, so it must run after capture and the
         # prefix backup, never before them.
@@ -2500,8 +2525,14 @@ class App:
             for lbl, err in skipped:
                 self.ui.msg(f"  ⏭  {lbl}: {err}", "warn")
             if skipped:
-                self.ui.msg("Fix the NAS mount and re-run — this run did NOT "
-                            "back up art, saves or settings.", "error")
+                why = []
+                if nas_down:
+                    why.append("the NAS mount")
+                if sd_down:
+                    why.append("the SD card")
+                self.ui.msg(f"Fix {' and '.join(why) or 'the problem'} and "
+                            "re-run — this run did NOT back up everything it "
+                            "exists to back up.", "error")
         else:
             self.ui.msg(f"Weekly backup complete — all {len(results)} steps "
                         f"OK in {mins}m {secs}s.", "success")

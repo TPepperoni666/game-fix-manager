@@ -18,6 +18,7 @@ it was downloaded); a fresh download is always hash-checked before install.
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import urllib.request
@@ -42,14 +43,49 @@ def _extract(archive: Path, dest: Path, log: Callable[[str], None]) -> None:
     if tar is None:
         raise FetchError("no bsdtar/tar found to extract archives")
     log(f"      ⇲ extracting {archive.name} -> {dest}")
-    if dest.exists():
-        shutil.rmtree(dest)  # stale extraction from a previous version
-    dest.mkdir(parents=True, exist_ok=True)
-    result = subprocess.run([tar, "-xf", str(archive), "-C", str(dest)],
-                            capture_output=True, text=True)
-    if result.returncode != 0:
-        shutil.rmtree(dest, ignore_errors=True)
-        raise FetchError(f"extraction failed: {(result.stderr or '').strip()}")
+    # Unpack to a sibling and swap it in only on success. dest used to be
+    # rmtree'd and recreated BEFORE bsdtar ran, with cleanup only on a
+    # non-zero exit - so anything that was not a tar error (Ctrl-C through a
+    # multi-minute 7z, a SIGKILL, the card pulled, the Deck losing power)
+    # left dest present and half-populated. The caller then skipped
+    # re-extraction because dest.is_dir() was True and the archive was still
+    # at its declared size, so the partial tree became the payload
+    # permanently. The sha256 gate never covers it: that only checks a
+    # freshly downloaded archive, never the extracted tree the steps consume.
+    staging = dest.with_name(dest.name + ".gfm-extracting")
+    shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(parents=True, exist_ok=True)
+    try:
+        result = subprocess.run([tar, "-xf", str(archive), "-C", str(staging)],
+                                capture_output=True, text=True)
+        if result.returncode != 0:
+            raise FetchError(
+                f"extraction failed: {(result.stderr or '').strip()}")
+        if dest.exists():
+            shutil.rmtree(dest, ignore_errors=True)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        staging.replace(dest)
+    except BaseException:
+        # BaseException, not Exception: KeyboardInterrupt and SystemExit are
+        # precisely the interruptions that left the half-extracted tree there.
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+
+
+def _extracted_ok(dest: Path) -> bool:
+    """Is there a real extraction here, or only a directory?
+
+    dest.is_dir() was the whole check, so an empty or abandoned directory
+    counted as done forever."""
+    try:
+        if not dest.is_dir():
+            return False
+        for _dirpath, _dirnames, names in os.walk(dest):
+            if names:
+                return True
+        return False
+    except OSError:
+        return False
 
 
 def _download(url: str, dest: Path, size: int | None, log: Callable[[str], None]) -> None:
@@ -98,5 +134,6 @@ def ensure_remote_payloads(recipe: Recipe, log: Callable[[str], None]) -> None:
             fresh = True
         if item.get("extract_to"):
             dest = recipe.dir / item["extract_to"]
-            if fresh or not dest.is_dir():
+            # Not just is_dir(): an empty directory is not an extraction.
+            if fresh or not _extracted_ok(dest):
                 _extract(target, dest, log)

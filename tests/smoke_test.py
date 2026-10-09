@@ -569,12 +569,25 @@ def main():
                             local_payloads_dir=local_dir)
         check("local-only payload resolves (not in git at all)",
               ctx_lo.payload_path("payload/crack.exe").read_bytes() == b"CRACK")
-        # override path escape is refused
+        # Escape must be refused BECAUSE it escapes. The old version of this
+        # check caught bare Exception and asserted the literal True, and its
+        # probe path ("../../../etc/passwd") did not exist in the fixture — so
+        # it passed on "payload missing" whether or not the containment guard
+        # was there at all. Point it at a file that DOES exist outside the
+        # recipe dir, and assert on the message.
+        _outside = tmp / "outside.dat"
+        _outside.write_bytes(b"NOT-YOURS")
+        _esc_msg = ""
         try:
-            ctx_ov.payload_path("../../../etc/passwd")
-            check("override path escape refused", False)
-        except (engine.StepError, Exception):
-            check("override path escape refused", True)
+            ctx_ov.payload_path("../" * 8 + "outside.dat")
+        except engine.StepError as e:
+            _esc_msg = str(e)
+        if "escapes recipe dir" not in _esc_msg:
+            print("      raised instead:", _esc_msg or "(nothing)")
+        check("payload path escape is refused as an ESCAPE, not as missing",
+              "escapes recipe dir" in _esc_msg)
+        check("the file it was pointed at really did exist",
+              _outside.is_file())
 
         print("== {prefix} target template ==")
         pt_recipe = tmp / "store" / "games" / "pt-game"
@@ -1110,17 +1123,77 @@ def main():
         # the job forever waiting on stdin that never comes.
         for _fn in ("cmd_reclaim", "cmd_backup_prefixes"):
             _s = _insp.getsource(getattr(_gfm.App, _fn))
-            # the unattended guard is named `auto` in one, `unattended` in the
-            # other — take whichever appears first
             _guards = [_s.index(g) for g in ("if auto:", "if unattended:")
                        if g in _s]
             check(f"{_fn} has an unattended guard", bool(_guards))
-            _ia = min(_guards)
-            _prompts = [c for c in ("self.ui.input(", "self.ui.choose(",
-                                    "self.ui.confirm(", "_pick_reclaim(")
-                        if c in _s]
-            check(f"{_fn}: every prompt is after the auto guard",
-                  all(_s.index(c) > _ia for c in _prompts))
+        # The check that used to live here compared CHARACTER OFFSETS: every
+        # prompt token had to appear later in the source than the first
+        # unattended guard. Two reasons it could never fail — "textually
+        # after the guard" is not "guarded by it" (in cmd_backup_prefixes the
+        # guard is on line 18 of 152, so everything after it passes by
+        # construction), and the token list was filtered to tokens that are
+        # present, so all([]) would have been True if they were all renamed.
+        # So call the thing instead, with a UI that refuses to be prompted.
+        class _NoPromptUI:
+            """Self-contained on purpose: _StubUI is defined further down
+            this same function, so referring to it here is an
+            UnboundLocalError."""
+            def __init__(self):
+                self.msgs = []
+
+            def msg(self, text, kind="dim"):
+                self.msgs.append((kind, str(text)))
+
+            def header(self, *a, **k):
+                pass
+
+            def progress(self, *a, **k):
+                pass
+
+            def progress_done(self, *a, **k):
+                pass
+
+            def input(self, *a, **k):
+                raise AssertionError("prompted for input unattended")
+
+            def choose(self, *a, **k):
+                raise AssertionError("prompted to choose unattended")
+
+            def confirm(self, *a, **k):
+                raise AssertionError("prompted to confirm unattended")
+
+        _np_ui = _NoPromptUI()
+        class _NpArgs:
+            auto = True
+            command = "weekly-backup"
+            force = False
+            dry_run = False
+        _np_args = _NpArgs()
+        _np_app = object.__new__(_gfm.App)
+        _np_app.ui = _np_ui
+        _np_app.args = _np_args
+        _np_app.cfg = {}
+        _np_app.recipes = []
+        _np_app.steam_root = None
+        _np_app.store_root = tmp
+        _np_app.local_payloads = None
+        _np_app.log = lambda *a, **k: None
+        _np_prompted = []
+        for _fn, _call in (
+                ("cmd_reclaim", lambda: _gfm.App.cmd_reclaim(_np_app,
+                                                             skip_map=True)),
+                ("cmd_backup_prefixes",
+                 lambda: _gfm.App.cmd_backup_prefixes(_np_app,
+                                                      use_saved=True))):
+            try:
+                _call()
+            except AssertionError as e:
+                _np_prompted.append(f"{_fn}: {e}")
+            except Exception:
+                pass            # any other failure is a stub gap, not a prompt
+        if _np_prompted:
+            print("      prompted:", "; ".join(_np_prompted))
+        check("no unattended command prompts for input", not _np_prompted)
         # The unattended refresh must write the SAME map sections the menu
         # Scan does — games + steam_games + prefix_backups — or the weekly run
         # silently leaves part of the map stale.
@@ -2923,6 +2996,140 @@ def main():
                   gfm_mod.App.cmd_backup_prefixes)
               and "except OSError" in _i.getsource(
                   gfm_mod.App._safe_prefix_backups))
+
+        # ---- the remaining audit findings --------------------------------
+
+        # (a) copy_files verified as APPLIED when the payload directory was
+        # EMPTY: done and len(pairs) were both 0, so done == len(pairs) held
+        # and apply() copied nothing silently. That is the normal shape of a
+        # NAS-only payload gone missing, which is what f1-manager-24 and the
+        # eclipse-* recipes are.
+        from core.steps.copy_files import CopyFiles as _CF
+        _cf_dir = sv_recipe_dir.parent / "cftest"
+        (_cf_dir / "payload" / "mod").mkdir(parents=True)   # exists, EMPTY
+        (_cf_dir / "manifest.json").write_text(json.dumps({
+            "id": "cftest", "name": "CF Test",
+            "detect": {"marker_files": ["g.exe"]},
+            "steps": [{"type": "copy_files", "from": "payload/mod",
+                       "to": "{game_dir}"}]}), encoding="utf-8")
+        _cf_recipe = manifest.load_recipe(_cf_dir)
+        _cf_game = sv_root / "cfgame"; _cf_game.mkdir()
+        _cf_ctx = _e3.Ctx(_cf_recipe, _cf_game, log=quiet)
+        _cf_step = _CF(_cf_recipe.steps[0])
+        _cf_raised = ""
+        try:
+            _cf_step.verify(_cf_ctx)
+        except _e3.StepError as e:
+            _cf_raised = str(e)
+        check("an EMPTY payload directory is not reported as applied",
+              "matched no files" in _cf_raised)
+        _cf_applied = ""
+        try:
+            _cf_step.apply(_cf_ctx)
+        except _e3.StepError as e:
+            _cf_applied = str(e)
+        check("and applying it fails loudly instead of copying nothing",
+              "matched no files" in _cf_applied)
+        # a payload that DOES have a file still works
+        (_cf_dir / "payload" / "mod" / "thing.dll").write_bytes(b"M")
+        check("a payload with files still verifies normally",
+              _cf_step.verify(_cf_ctx) in ("applied", "not_applied",
+                                           "partial"))
+
+        # (b) An interrupted extraction became the payload forever, because
+        # the only guard was dest.is_dir(). Ctrl-C through a long 7z, a
+        # SIGKILL or the card being pulled left a half-populated directory
+        # that was never re-extracted; the sha256 gate only ever covers the
+        # downloaded ARCHIVE, never the tree the steps consume.
+        from core import fetch as _ft
+        _ex = tmp / "extracted"
+        _ex.mkdir()
+        check("an empty extraction directory is not accepted as done",
+              not _ft._extracted_ok(_ex))
+        (_ex / "f.bin").write_bytes(b"X")
+        check("a populated extraction directory is accepted",
+              _ft._extracted_ok(_ex))
+        check("a missing extraction directory is not accepted",
+              not _ft._extracted_ok(tmp / "never-extracted"))
+        # an interruption must leave no staging directory behind
+        _arc = tmp / "fake.tar"
+        _arc.write_bytes(b"not a real tar")
+        _ex2 = tmp / "extracted2"
+        try:
+            _ft._extract(_arc, _ex2, quiet)
+        except Exception:
+            pass
+        check("a failed extraction leaves no staging dir and no dest",
+              not (tmp / "extracted2.gfm-extracting").exists()
+              and not _ex2.exists())
+
+        # (c) revert_recipe called revert() bare, so one optional step whose
+        # revert resolves a {prefix} template killed every remaining revert.
+        # reversed() puts the LAST step first, so a trailing optional step
+        # blocked the whole thing - driver-san-francisco is that shape.
+        _rv_dir = sv_recipe_dir.parent / "rvtest"
+        (_rv_dir / "payload").mkdir(parents=True)
+        (_rv_dir / "payload" / "dropped.dll").write_bytes(b"D")
+        (_rv_dir / "manifest.json").write_text(json.dumps({
+            "id": "rvtest", "name": "RV Test",
+            "detect": {"marker_files": ["g.exe"]},
+            "steps": [
+                {"type": "copy_files", "from": "payload/dropped.dll",
+                 "to": "{game_dir}"},
+                {"type": "ini_edit", "optional": True,
+                 "target": "{prefix}/drive_c/users/steamuser/x.ini",
+                 "values": {"S": {"k": 1}}},
+            ]}), encoding="utf-8")
+        _rv_recipe = manifest.load_recipe(_rv_dir)
+        _rv_game = sv_root / "rvgame"; _rv_game.mkdir()
+        _rv_ctx = _e3.Ctx(_rv_recipe, _rv_game, steam_root=None, log=quiet)
+        _e3.apply_recipe(_rv_recipe, _rv_ctx)
+        check("the non-optional step applied", (_rv_game / "dropped.dll").is_file())
+        _rv_err = ""
+        try:
+            _e3.revert_recipe(_rv_recipe, _rv_ctx)
+        except Exception as e:                          # noqa: BLE001
+            _rv_err = f"{type(e).__name__}: {e}"
+        check("an unresolvable OPTIONAL step does not abort the revert",
+              not _rv_err)
+        check("and the earlier step really was reverted",
+              not (_rv_game / "dropped.dll").exists())
+
+        # (d) The SD card had no equivalent of the nas_down gate, even though
+        # the preamble measured it. Both SD-dependent steps swallow a missing
+        # card as a SUCCESSFUL return, so the run announced "all 6 steps OK"
+        # having backed up no prefixes at all.
+        check("the weekly backup computes an SD gate",
+              "sd_down = not store.sd_card_roots()" in _wsrc)
+        check("step() can skip on a missing card",
+              "needs_sd" in _wsrc and "skipped — no SD card" in _wsrc)
+        check("both SD-dependent steps are marked",
+              _wsrc.count("needs_sd=True") == 2)
+        # Which steps are marked matters: marking the NAS-only ones would
+        # skip them for the wrong reason, and marking none is the old bug.
+        # Split the source into step(...) call blocks so a marker on a
+        # continuation line still counts.
+        _blocks = _wsrc.split('step("')[1:]
+        _marked = {b.split('"')[0] for b in _blocks if "needs_sd=True" in b}
+        check("exactly the map refresh and the prefix backup need the card",
+              _marked == {"1/6 map refresh", "5/6 prefix backup"})
+
+        # (e) restore_art read the LEGACY flat artwork path while capture
+        # writes to _recipes/<id>/artwork, so on any NAS where capture had run
+        # the directory did not exist and the art was never restored.
+        _art_nas = tmp / "artnas"
+        (_art_nas / "_recipes" / "the-crew" / "artwork").mkdir(parents=True)
+        (_art_nas / "_recipes" / "the-crew" / "artwork" / "hero.png"
+         ).write_bytes(b"ART")
+        _resolved_art = gfm_mod.store.recipe_data_dir(_art_nas, "the-crew",
+                                                      "artwork")
+        check("the shared resolver finds art under _recipes/",
+              (_resolved_art / "hero.png").is_file())
+        check("the legacy flat path is NOT where capture writes",
+              not (_art_nas / "the-crew" / "artwork" / "hero.png").is_file())
+        check("the shortcut step uses the resolver, not a hardcoded path",
+              "store.recipe_data_dir(ctx.local_payloads_dir" in
+              _i.getsource(gfm_mod.engine._REGISTRY["steam_shortcut"]))
 
         _rsrc = _i.getsource(gfm_mod.App._repair_nas_mount)
         check("repair only uses non-interactive sudo",

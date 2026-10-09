@@ -274,7 +274,19 @@ def revert_recipe(recipe: Recipe, ctx: Ctx) -> None:
     for i, step in enumerate(reversed(recipe.steps), 1):
         impl = _step_impl(step)
         ctx.log(f"  [{i}/{len(recipe.steps)}] revert {step['type']}")
-        impl.revert(ctx)
+        # Same contract as apply_recipe and verify_recipe, which both honour
+        # "optional". This called revert() bare, so any step whose revert
+        # resolves a {prefix} template raised StepError on a machine with no
+        # prefix (before first launch, after a prefix wipe, on Windows) and
+        # killed every remaining revert. reversed() puts the LAST step first,
+        # so a single optional trailing step could block the whole revert -
+        # driver-san-francisco is exactly that shape.
+        try:
+            impl.revert(ctx)
+        except StepError as e:
+            if not step.get("optional"):
+                raise
+            ctx.log(f"      ! optional step skipped: {e}")
 
 
 # Import step modules for their registration side effects.
