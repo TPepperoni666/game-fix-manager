@@ -2555,15 +2555,28 @@ def main():
         _units.mkdir()
         _fstab = tmp / "sd_fstab"
         _fstab.write_text("# nothing here\n", encoding="utf-8")
-        _card = Path("/run/media/deck/SD_Card")
+        # A path that is under /run/media (so sdcard_rows treats it as
+        # removable) but can never actually BE mounted. It used to be the real
+        # "/run/media/deck/SD_Card", which is mounted on the Deck - so every
+        # "nothing is mounted there" assertion below passed on Windows and
+        # failed on the machine the tool runs on. The unit-name check keeps
+        # the real name as a literal, since that is what it is testing.
+        _card = Path("/run/media/deck/GFM_NO_SUCH_CARD")   # underscores:
+        # a hyphen escapes to - in the unit name, and Windows reads
+        # the backslash as a path separator, so the fixture file cannot
+        # be written. unit_name_for keeps _ and alphanumerics verbatim.
 
         check("boot_plan reports nothing when no unit and no fstab entry",
               _sc.boot_plan(_card.as_posix(),_units, _fstab) == ("", ""))
-        (_units / "run-media-deck-SD_Card.mount").write_text("[Mount]\n",
-                                                             encoding="utf-8")
+        # Derive the unit filename from the fixture path rather than
+        # hardcoding it, so changing that path cannot silently decouple
+        # the file written from the one looked up.
+        _card_unit = _sc.unit_name_for(_card.as_posix()) + ".mount"
+        _MOUNT_STUB = "[Mount]" + chr(10)
+        (_units / _card_unit).write_text(_MOUNT_STUB, encoding="utf-8")
         check("boot_plan finds the .mount unit that covers the path",
               _sc.boot_plan(_card.as_posix(),_units, _fstab)
-              == ("mount", "run-media-deck-SD_Card.mount"))
+              == ("mount", _card_unit))
         _fstab.write_text(f"# c\nUUID=abc {_card.as_posix()} btrfs "
                           "defaults 0 2\n", encoding="utf-8")
         check("boot_plan falls back to an fstab entry for the same path",
