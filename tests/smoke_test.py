@@ -237,15 +237,61 @@ def main():
         svc_recipe = [r for r in manifest.load_all(tmp / "store")
                       if r.id == "svc-game"][0]
         svc_ctx = engine.Ctx(svc_recipe, game_dir, dry_run=False, log=quiet)
-        check("verify before: not applied",
-              engine.verify_recipe(svc_recipe, svc_ctx) == engine.NOT_APPLIED)
-        engine.apply_recipe(svc_recipe, svc_ctx)
-        installed = unit_dir / "test.service"
-        check("unit file installed", installed.read_text(encoding="utf-8").startswith("[Unit]"))
-        status = engine.verify_recipe(svc_recipe, svc_ctx)
-        check("verify after install", status in (engine.APPLIED, engine.PARTIAL))
-        engine.revert_recipe(svc_recipe, svc_ctx)
-        check("unit file removed on revert", not installed.exists())
+        # This block used to depend on systemctl being ABSENT, which is only
+        # true on Windows. On Linux apply() shelled out to the real
+        # `systemctl --user enable test.service` against a unit written to a
+        # REDIRECTED directory that systemd knows nothing about, so it raised
+        # StepError and the suite died here - meaning it had never run to
+        # completion on the Deck, the machine the tool actually runs on.
+        # Neutralise the probe instead of depending on the platform.
+        from core.steps import systemd_unit as _su
+        _su_real_have = _su._have_systemctl
+        _su_real_run = _su._run
+        try:
+            _su._have_systemctl = lambda: False
+            check("verify before: not applied",
+                  engine.verify_recipe(svc_recipe, svc_ctx)
+                  == engine.NOT_APPLIED)
+            engine.apply_recipe(svc_recipe, svc_ctx)
+            installed = unit_dir / "test.service"
+            check("unit file installed",
+                  installed.read_text(encoding="utf-8").startswith("[Unit]"))
+            status = engine.verify_recipe(svc_recipe, svc_ctx)
+            check("verify after install",
+                  status in (engine.APPLIED, engine.PARTIAL))
+            engine.revert_recipe(svc_recipe, svc_ctx)
+            check("unit file removed on revert", not installed.exists())
+
+            # And now the half that was never tested ANYWHERE: with systemctl
+            # "present", which commands does it actually issue? On Windows
+            # this path was unreachable, and on Linux it ran against real
+            # systemd, so nothing ever asserted the argv.
+            _su_cmds = []
+
+            def _su_spy(argv, ctx):
+                _su_cmds.append(list(argv))
+                return None
+
+            _su._have_systemctl = lambda: True
+            _su._run = _su_spy
+            engine.apply_recipe(svc_recipe, svc_ctx)
+            _joined = [" ".join(c) for c in _su_cmds]
+            check("install issues a daemon-reload",
+                  any("daemon-reload" in c for c in _joined))
+            check("enable:true issues enable for the right unit",
+                  any("enable" in c and "test.service" in c
+                      for c in _joined))
+            check("it targets the USER scope, not the system one",
+                  all("--user" in c for c in _joined))
+            _su_cmds.clear()
+            engine.revert_recipe(svc_recipe, svc_ctx)
+            _joined_rev = [" ".join(c) for c in _su_cmds]
+            check("revert disables the unit it enabled",
+                  any("disable" in c and "test.service" in c
+                      for c in _joined_rev))
+        finally:
+            _su._have_systemctl = _su_real_have
+            _su._run = _su_real_run
         del _os.environ["GFM_SYSTEMD_USER_DIR"]
 
         print("== launch_options + VDF roundtrip ==")
