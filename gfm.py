@@ -2453,7 +2453,12 @@ class App:
         # skipped" and returns. step() ignores return values, so both were
         # recorded OK and the run announced "all 6 steps OK" having backed up
         # no prefixes at all.
-        sd_down = not store.sd_card_roots()
+        # Prefix backups are written to an SD card and sd_card_roots()
+        # probes /run/media only, so on Windows there is nothing to miss.
+        # Distinguish "this box cannot do it" from "the card is missing":
+        # only the latter is a fault worth an exit code.
+        sd_supported = os.name != "nt"
+        sd_down = sd_supported and not store.sd_card_roots()
         if sd_down:
             self.ui.msg("⚠ NO SD CARD — the map refresh and the prefix "
                         "backups have nowhere to go and are being SKIPPED. "
@@ -2466,6 +2471,12 @@ class App:
         def step(label: str, fn, needs_nas: bool = False,
                  needs_sd: bool = False) -> None:
             self.ui.msg(f"── {label} " + "─" * max(1, 34 - len(label)), "info")
+            if needs_sd and not sd_supported:
+                # Not applicable, not skipped: nothing is wrong and nothing
+                # needs fixing, so this must not reach the exit code.
+                results.append((label, "n/a", "not applicable on this platform"))
+                self.ui.msg("  ·  n/a — prefix backups need an SD card.", "dim")
+                return
             if needs_sd and sd_down:
                 results.append((label, None, "skipped — no SD card"))
                 self.ui.msg("  ⏭  SKIPPED — no SD card mounted.", "warn")
@@ -2511,6 +2522,9 @@ class App:
         # miscounted as one that failed.
         failed = [(lbl, err) for lbl, ok, err in results if ok is False]
         skipped = [(lbl, err) for lbl, ok, err in results if ok is None]
+        # n/a is neither: it never counts toward the exit code.
+        not_applicable = [(lbl, err) for lbl, ok, err in results
+                          if ok == "n/a"]
         self.ui.msg("", "dim")
         if failed or skipped:
             parts = []
@@ -2535,7 +2549,9 @@ class App:
                             "exists to back up.", "error")
         else:
             self.ui.msg(f"Weekly backup complete — all {len(results)} steps "
-                        f"OK in {mins}m {secs}s.", "success")
+                        f"OK in {mins}m {secs}s."
+                        + (f" ({len(not_applicable)} n/a on this platform)"
+                           if not_applicable else ""), "success")
         # Skips count toward the exit code too: a run that backed up none of
         # the things it exists to back up must not report success to systemd,
         # or `systemctl show gfm-backup.service -p Result` says "success" for

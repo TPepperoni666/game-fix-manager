@@ -14,13 +14,22 @@ store/games/the-crew/capture/post-update-tcu-files/
 
 # Downloaded/extracted at apply time — never committed (some contain
 # copyrighted game executables that must stay out of the public repo).
+#
+# Matched by extract_to NAME, not per recipe. The old per-recipe list had
+# already missed two of them — git check-ignore showed
+# gta-iv/payload/fusionfix/FusionFix.asi and
+# heroes-of-the-pacific/payload/asiloader/dinput8.dll as NOT ignored, so
+# `git add -A` after an apply would have committed them. A pattern cannot be
+# out of date the next time a recipe reuses one of these names.
 store/games/*/payload/downloads/
-store/games/the-crew/payload/patch/
-store/games/force-unleashed-1/payload/fix/
-store/games/force-unleashed-2/payload/fix/
-store/games/barnyard/payload/asiloader/
-store/games/driver-san-francisco/payload/downloads/
-store/games/driver-san-francisco/payload/dxvk/
+store/games/*/payload/fix/
+store/games/*/payload/fusionfix/
+store/games/*/payload/asiloader/
+store/games/*/payload/dxvk/
+store/games/*/payload/patch/
+# Transient: an interrupted extraction unpacks here and is cleaned up on the
+# next apply, but it must never be committable in the meantime.
+store/games/*/payload/*.gfm-extracting/
 
 # Eclipse perf mods — modified copyrighted game exes, local-payloads only,
 # never committed. Recipes are manifest-only; files live off git.

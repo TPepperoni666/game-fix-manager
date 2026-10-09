@@ -1169,12 +1169,19 @@ def main():
             force = False
             dry_run = False
         _np_args = _NpArgs()
+        # steam_root MUST be set. With it None both methods return at their
+        # `if self.steam_root is None` guard having executed 4 and 7 lines -
+        # a trace proved it - so no prompt site was ever reached and the
+        # check could not fail. That is the same defect as the positional
+        # version it replaced, in a new costume.
+        _np_steam = tmp / "npsteam" / "steamapps"
+        _np_steam.mkdir(parents=True, exist_ok=True)
         _np_app = object.__new__(_gfm.App)
         _np_app.ui = _np_ui
         _np_app.args = _np_args
         _np_app.cfg = {}
         _np_app.recipes = []
-        _np_app.steam_root = None
+        _np_app.steam_root = _np_steam.parent
         _np_app.store_root = tmp
         _np_app.local_payloads = None
         _np_app.log = lambda *a, **k: None
@@ -1194,6 +1201,14 @@ def main():
         if _np_prompted:
             print("      prompted:", "; ".join(_np_prompted))
         check("no unattended command prompts for input", not _np_prompted)
+        # ...and prove the calls actually got INTO the body, so "no prompt"
+        # means "walked the unattended path without prompting" rather than
+        # "returned before it could". Both methods emit on that path: the
+        # prefix picker reports the missing card, reclaim reports its scan.
+        check("the unattended path was really walked, not short-circuited",
+              len(_np_ui.msgs) >= 2
+              and any("SD card" in m or "sd card" in m.lower()
+                      for _k, m in _np_ui.msgs))
         # The unattended refresh must write the SAME map sections the menu
         # Scan does — games + steam_games + prefix_backups — or the weekly run
         # silently leaves part of the map stale.
@@ -3099,8 +3114,18 @@ def main():
         # the preamble measured it. Both SD-dependent steps swallow a missing
         # card as a SUCCESSFUL return, so the run announced "all 6 steps OK"
         # having backed up no prefixes at all.
-        check("the weekly backup computes an SD gate",
-              "sd_down = not store.sd_card_roots()" in _wsrc)
+        # Wiring check, and phrased not to break on a reword — the previous
+        # version pinned the exact expression and went stale the moment
+        # sd_supported was added. (Third time today a grep-the-source check
+        # broke on a rename rather than on a behaviour change.)
+        check("the weekly backup gates on the SD card predicate",
+              "store.sd_card_roots()" in _wsrc and "sd_down" in _wsrc)
+        # "this platform has no SD card" is a permanent fact, not a weekly
+        # fault: it must not reach the exit code, or the exit code stops
+        # meaning anything on the Windows box.
+        check("an unsupported platform is n/a, not skipped",
+              "sd_supported" in _wsrc and '"n/a"' in _wsrc
+              and 'ok == "n/a"' in _wsrc)
         check("step() can skip on a missing card",
               "needs_sd" in _wsrc and "skipped — no SD card" in _wsrc)
         check("both SD-dependent steps are marked",
