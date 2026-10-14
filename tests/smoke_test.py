@@ -63,7 +63,28 @@ def build_fixture(root: Path):
     return steam, root / "store", game_dir
 
 
+def _sweep_stale_tmp():
+    """Remove fixture trees abandoned by a KILLED earlier run.
+
+    main() has a try/finally, so a failed check cleans up after itself - but
+    a killed process (Ctrl-C, a tool timeout) runs neither finally nor
+    atexit, and the trees used to be 125 GB each. They are kilobytes now;
+    this stops them accumulating anyway.
+    """
+    parent = Path(tempfile.gettempdir())
+    try:
+        stale = [d for d in parent.glob("gfm_smoke_*") if d.is_dir()]
+    except OSError:
+        return
+    for d in stale:
+        shutil.rmtree(d, ignore_errors=True)
+    if stale:
+        print(f"(swept {len(stale)} abandoned fixture tree(s) from "
+              f"{parent})")
+
+
 def main():
+    _sweep_stale_tmp()
     tmp = Path(tempfile.mkdtemp(prefix="gfm_smoke_"))
     try:
         steam, store_root, game_dir = build_fixture(tmp)
@@ -1316,11 +1337,18 @@ def main():
                 post_apply_message="", remote_payloads=[], requires_game=True,
                 save_paths=sp or [], dir=rc_root)
 
-        def rc_game(name, gb, on_nas=True):
+        # KILOBYTES, with the floor scaled by the same factor. These used
+        # to be GB: seek-then-write is sparse and free on the Deck's btrfs,
+        # but NTFS allocates the full extent, so the suite wrote 125 GB of
+        # real disk per run on the workstation. The relationships under test
+        # are unchanged - 40 is over the floor, 5 is under it.
+        RC_FLOOR = 34 * 1024                 # mirrors the real 34 GB floor
+
+        def rc_game(name, kb, on_nas=True):
             d = rc_sd / name
             d.mkdir(parents=True)
             with open(d / "data.bin", "wb") as f:
-                f.seek(int(gb * (1 << 30)) - 1)
+                f.seek(int(kb * 1024) - 1)
                 f.write(b"\0")
             if on_nas:
                 (dep.staged_root(rc_nas) / name).mkdir(parents=True)
@@ -1334,8 +1362,11 @@ def main():
                 f.write_bytes(sv.dumps({"shortcuts": (sv.TYPE_MAP, {})}))
 
         def rc_scan(recipes, deployed):
-            return rc.scan(recipes, rc_steam, deployed, [rc_sd], rc_nas)
+            return rc.scan(recipes, rc_steam, deployed, [rc_sd], rc_nas,
+                           min_bytes=RC_FLOOR)
 
+        check("the production reclaim floor is still 34 GB",
+              rc.DEFAULT_MIN_BYTES == 34 * (1 << 30))
         big = rc_recipe("big", "Big"); rc_game("Big", 40); rc_add_sc("Big")
         r = rc_scan([big], {"Big": {}})
         check("reclaim: shortcut present -> latch shortcut_seen, no candidate",
@@ -1366,7 +1397,7 @@ def main():
                   .candidates) == 1)
         check("reclaim: no Steam root -> blocked, nothing reclaimed",
               rc.scan([big], None, {"Big": {"shortcut_seen": True}}, [rc_sd],
-                      rc_nas).blocked)
+                      rc_nas, min_bytes=RC_FLOOR).blocked)
         # A deployed game with NO recipe (a generic shortcut made on deploy) is
         # still tracked — by its folder name, which is the shortcut's AppName.
         rc_game("NoRecipe", 40)
@@ -1374,12 +1405,12 @@ def main():
                            str(rc_sd / "NoRecipe" / "g.exe"),
                            str(rc_sd / "NoRecipe"), "", 2000000002, [])
         r = rc.scan([], rc_steam, {"NoRecipe": {"shortcut_seen": True}},
-                    [rc_sd], rc_nas)
+                    [rc_sd], rc_nas, min_bytes=RC_FLOOR)
         check("reclaim: recipe-less game with a shortcut -> kept (tracked)",
               not r.candidates and "still in Steam" in r.considered[0][1])
         rc_clear()
         r = rc.scan([], rc_steam, {"NoRecipe": {"shortcut_seen": True}},
-                    [rc_sd], rc_nas)
+                    [rc_sd], rc_nas, min_bytes=RC_FLOOR)
         check("reclaim: recipe-less game, shortcut deleted -> removable",
               len(r.candidates) == 1 and r.candidates[0].name == "NoRecipe")
         rc_clear()
