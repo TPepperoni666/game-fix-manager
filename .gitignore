@@ -27,6 +27,15 @@ store/games/*/payload/fusionfix/
 store/games/*/payload/asiloader/
 store/games/*/payload/dxvk/
 store/games/*/payload/patch/
+# payload/private/ is the agreed home for anything that must NEVER be
+# published: licensed vendor binaries a user supplied from their own machine,
+# keys, anything we have no right to redistribute. The Forza Motorsport recipe
+# puts Tony's licensed Microsoft xgameruntime.dll there. Ignored by PATTERN,
+# because the whole point is that the next recipe to need it is also covered.
+store/games/*/payload/private/
+# payload/bundle/ is an extracted third-party bundle - large, and the upstream
+# release is the source of truth, not us.
+store/games/*/payload/bundle/
 # Transient: an interrupted extraction unpacks here and is cleaned up on the
 # next apply, but it must never be committable in the meantime.
 store/games/*/payload/*.gfm-extracting/
