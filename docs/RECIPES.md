@@ -53,6 +53,27 @@ exists, so detection, the map and prefix backups know about it.
 | `notes` | | for humans; never shown in the UI |
 | `requires_game` | | `false` for tool recipes with no install dir |
 | `remote_payloads` | | files fetched on demand instead of committed |
+| `platforms` | | `["linux"]` or `["windows"]`; absent = anywhere |
+
+### `platforms` — use it for anything OS-specific
+
+Detection resolves `steam_appid` through the appmanifest on **any** OS, so a
+recipe for a game you own on both machines looks applicable on both. If the
+recipe does something OS-specific — a Linux launcher, a systemd unit, a Proton
+compat mapping — applying it on the wrong one can leave the game unable to
+start.
+
+```json
+"platforms": ["linux"]
+```
+
+`apply` then refuses before locating the game, before fetching payloads and
+before any step runs, and `mirror` stops pre-fetching that recipe's payloads.
+Matching is case- and whitespace-insensitive, and "linux" covers SteamOS and
+any other Linux.
+
+Do **not** rely on `post_apply_message` for this. It prints *after* Apply has
+run, so it documents the damage rather than preventing it.
 
 ### Detection
 
