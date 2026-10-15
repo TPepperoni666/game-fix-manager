@@ -112,6 +112,21 @@ afterwards.
   that rule is now deliberate, not a bug.
 - Order is **copy → verify → delete**, always. Never delete before the
   replacement is confirmed readable.
+- **The weekly backup deletes without asking.** `cmd_weekly_backup` does
+  `setattr(self.args, "auto", True)` and its step 6/6 calls `cmd_reclaim`,
+  which then takes the `if auto:` branch and removes up to
+  `MAX_AUTO_BATCH` (3) candidates with no prompt. The unit file carries no
+  `--auto`, so reading only the ExecStart line says the opposite — do not
+  conclude the unattended job is safe from the command line alone.
+- **Reclaim's identity check is name-based, and names drift.** The deployed
+  record is keyed by the SD *folder* name while a recipe has its own name;
+  `_norm` strips non-alphanumerics and the comparison is exact, so
+  `forzahorizon2 != forzahorizon2azimuth`. Anything that renames a shortcut
+  — `steam_shortcut` on Apply does — can therefore make a tracked game look
+  un-shortcutted. Worse, a failed recipe lookup also disarms the save guard,
+  because `_saves_safe(recipe=None)` returns True before reading
+  `save_paths`. `by_name` is keyed on `all_names` for this reason; keep it
+  that way.
 
 ## Working on the Legion
 
