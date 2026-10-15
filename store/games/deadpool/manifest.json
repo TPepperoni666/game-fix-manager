@@ -16,6 +16,9 @@
   "save_paths": [
     "{documents}/My Games/Deadpool/SaveData"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "steam_shortcut",

@@ -18,6 +18,9 @@
   "save_paths": [
     "{game_dir}/Saves"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

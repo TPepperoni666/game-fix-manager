@@ -18,6 +18,9 @@
   "save_paths": [
     "{documents}/My Games/FUEL"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

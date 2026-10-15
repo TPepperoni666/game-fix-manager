@@ -18,6 +18,9 @@
   "save_paths": [
     "{documents}/TCNYC/Saved Games"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

@@ -18,6 +18,9 @@
   "save_paths": [
     "{documents}/Disney Interactive Studios/Split Second"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

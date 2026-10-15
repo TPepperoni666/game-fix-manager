@@ -15,6 +15,9 @@
   "save_paths": [
     "{appdata}/bizarre creations/blur/save"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

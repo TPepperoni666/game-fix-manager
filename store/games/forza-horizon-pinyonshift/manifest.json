@@ -20,6 +20,9 @@
     "{game_dir}/data/source/0.1.1/.local/preview",
     "{game_dir}/data/source/0.1.2/.local/preview"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

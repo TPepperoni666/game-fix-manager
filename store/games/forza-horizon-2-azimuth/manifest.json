@@ -22,6 +22,9 @@
     "{game_dir}/data/bin/FH2_ExtraOptions.dat",
     "{game_dir}/data/bin/Gamerpic.png"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "copy_files",

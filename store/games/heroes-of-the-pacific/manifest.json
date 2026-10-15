@@ -1,10 +1,18 @@
 {
   "id": "heroes-of-the-pacific",
   "name": "Heroes of the Pacific",
-  "aliases": ["Heroes of the Pacific (2005)", "HeroesOfThePacific", "HOTP"],
+  "aliases": [
+    "Heroes of the Pacific (2005)",
+    "HeroesOfThePacific",
+    "HOTP"
+  ],
   "detect": {
-    "install_dir_names": ["Heroes of the Pacific"],
-    "marker_files": ["Heroes.exe"]
+    "install_dir_names": [
+      "Heroes of the Pacific"
+    ],
+    "marker_files": [
+      "Heroes.exe"
+    ]
   },
   "remote_payloads": [
     {
@@ -18,6 +26,9 @@
   "save_paths": [
     "{game_dir}/save",
     "{game_dir}/Save"
+  ],
+  "platforms": [
+    "linux"
   ],
   "steps": [
     {

@@ -17,6 +17,9 @@
   "save_paths": [
     "{documents}/Battlefield 3/settings"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

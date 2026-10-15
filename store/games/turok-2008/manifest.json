@@ -16,6 +16,9 @@
   "save_paths": [
     "{appdata}/Touchstone/Turok"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

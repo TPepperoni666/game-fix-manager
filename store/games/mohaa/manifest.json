@@ -22,6 +22,9 @@
     "{game_dir}/maintt/save",
     "{game_dir}/mainta/save"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

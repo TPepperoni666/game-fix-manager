@@ -29,6 +29,9 @@
     "{documents}/Rockstar Games/GTA IV/Profiles",
     "{localappdata}/Rockstar Games/GTA IV/savegames"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

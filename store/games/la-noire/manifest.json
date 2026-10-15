@@ -19,6 +19,9 @@
   "save_paths": [
     "{documents}/Rockstar Games/L.A. Noire/Profiles"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "copy_files",

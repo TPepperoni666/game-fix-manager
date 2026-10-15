@@ -18,6 +18,9 @@
   "save_paths": [
     "{documents}/My Games/Activision/Transformers"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

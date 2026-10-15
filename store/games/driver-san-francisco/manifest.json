@@ -26,6 +26,9 @@
   "save_paths": [
     "{documents}/Ubisoft/Driver San Francisco"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "remove_files",

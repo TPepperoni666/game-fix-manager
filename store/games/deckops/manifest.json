@@ -1,8 +1,15 @@
 {
   "id": "deckops",
   "name": "DeckOps (Call of Duty setup)",
-  "aliases": ["DeckOps", "COD Setup", "Call of Duty"],
+  "aliases": [
+    "DeckOps",
+    "COD Setup",
+    "Call of Duty"
+  ],
   "requires_game": false,
+  "platforms": [
+    "linux"
+  ],
   "detect": {},
   "steps": [
     {

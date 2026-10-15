@@ -20,6 +20,9 @@
   "save_paths": [
     "{appdata}/Disney Interactive Studios/Pure"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

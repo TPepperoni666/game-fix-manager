@@ -19,6 +19,9 @@
   "save_paths": [
     "{documents}/EA Games/Medal of Honor Pacific Assault(tm)"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

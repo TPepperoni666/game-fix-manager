@@ -21,6 +21,9 @@
   "save_paths": [
     "{savedgames}/Tom Clancy's H.A.W.X 2/Profiles"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

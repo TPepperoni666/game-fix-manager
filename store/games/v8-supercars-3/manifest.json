@@ -22,6 +22,9 @@
   "save_paths": [
     "{game_dir}/savedata/Profile*.sav"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "wine_registry",

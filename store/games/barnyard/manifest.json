@@ -16,6 +16,9 @@
   "save_paths": [
     "{game_dir}/Save"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "copy_files",

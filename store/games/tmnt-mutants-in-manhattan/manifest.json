@@ -18,6 +18,9 @@
   "save_paths": [
     "{documents}/TMNT_MiM"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

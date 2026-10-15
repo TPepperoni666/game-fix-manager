@@ -20,6 +20,9 @@
     "{game_dir}/Player*.chp",
     "{game_dir}/Data/Replays"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

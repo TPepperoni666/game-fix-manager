@@ -20,6 +20,9 @@
   "save_paths": [
     "{documents}/Activision/Transfomers2/Saved Games"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

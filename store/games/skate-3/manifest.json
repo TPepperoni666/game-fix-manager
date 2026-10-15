@@ -7,12 +7,21 @@
     "Skate3Recomp"
   ],
   "detect": {
-    "install_dir_names": ["Skate 3", "Skate3", "Skate 3 Recomp"],
-    "marker_files": ["Skate3Recomp-Windows/skate3.exe"]
+    "install_dir_names": [
+      "Skate 3",
+      "Skate3",
+      "Skate 3 Recomp"
+    ],
+    "marker_files": [
+      "Skate3Recomp-Windows/skate3.exe"
+    ]
   },
   "save_paths": [
     "{game_dir}/Skate3Recomp-Windows/B13E07DFF9AB6772",
     "{game_dir}/Skate3Recomp-Windows/settings.toml"
+  ],
+  "platforms": [
+    "linux"
   ],
   "steps": [
     {

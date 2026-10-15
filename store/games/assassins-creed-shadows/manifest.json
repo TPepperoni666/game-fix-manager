@@ -19,6 +19,9 @@
   "save_paths": [
     "{programfilesx86}/Ubisoft/Ubisoft Game Launcher/savegames"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "install_runner",

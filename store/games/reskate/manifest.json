@@ -24,6 +24,9 @@
     "{game_dir}/ReSkateLauncher.settings.json",
     "{game_dir}/Mods"
   ],
+  "platforms": [
+    "linux"
+  ],
   "steps": [
     {
       "type": "steam_shortcut",
