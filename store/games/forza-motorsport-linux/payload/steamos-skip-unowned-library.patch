@@ -1,0 +1,26 @@
+From b50c2dfbf2b1418404e4d069d5b0f88edebe28ff Mon Sep 17 00:00:00 2001
+From: local <local@localhost>
+Date: Thu, 15 Oct 2026 21:53:10 +1100
+Subject: [PATCH] local: skip root-owned additional Steam libraries (SteamOS
+ microSD mountpoint)
+
+---
+ forza_bootstrap/platform_check.py | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/forza_bootstrap/platform_check.py b/forza_bootstrap/platform_check.py
+index bf4e478..5d630f4 100644
+--- a/forza_bootstrap/platform_check.py
++++ b/forza_bootstrap/platform_check.py
+@@ -145,6 +145,8 @@ def discover_steam(env: Mapping[str, str]) -> SteamLayout:
+             library = _directory(candidate)
+         except FileNotFoundError:
+             continue  # A detached microSD entry is not an installed game.
++        except BootstrapError:
++            continue  # LOCAL (SteamOS): root-owned microSD mountpoint; Forza is on the primary library.
+         if library not in libraries:
+             libraries.append(library)
+     installations: list[tuple[Path, Path]] = []
+-- 
+2.55.0
+

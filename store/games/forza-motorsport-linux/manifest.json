@@ -1,0 +1,85 @@
+{
+  "id": "forza-motorsport-linux",
+  "name": "Forza Motorsport (Linux preview)",
+  "aliases": [
+    "Forza Motorsport",
+    "Forza Motorsport 2023",
+    "FM2023"
+  ],
+  "steam_appid": 2440510,
+  "platforms": [
+    "linux"
+  ],
+  "detect": {
+    "install_dir_names": [
+      "Forza Motorsport"
+    ],
+    "marker_files": [
+      "forza_steamworks_release_final.exe"
+    ]
+  },
+  "steps": [
+    {
+      "type": "copy_files",
+      "from": "payload/steamos-skip-unowned-library.patch",
+      "to": "~/forza-gfm"
+    },
+    {
+      "type": "copy_files",
+      "optional": true,
+      "from": "payload/private/xgameruntime.dll",
+      "to": "~"
+    },
+    {
+      "type": "ini_edit",
+      "optional": true,
+      "target": "{xdg_config}/kwalletrc",
+      "values": {
+        "Wallet": {
+          "Enabled": "true"
+        },
+        "org.freedesktop.secrets": {
+          "apiEnabled": "true"
+        }
+      }
+    },
+    {
+      "type": "systemd_unit",
+      "unit": "payload/ksecretd-gamemode.service",
+      "scope": "user",
+      "enable": true,
+      "start": false
+    },
+    {
+      "type": "proton_version",
+      "tool": "GE-Proton11-3-FM"
+    },
+    {
+      "type": "launch_options",
+      "value": "WINEDLLOVERRIDES=xgameruntime=b PROTON_VKD3D_HEAP=1 VKD3D_CONFIG=skip_application_workarounds,descriptor_heap,avoid_image_buffer_aliasing PRESSURE_VESSEL_FILESYSTEMS_RW=/run/user/1000/xodus.sock {home}/.local/bin/forza-linux %command%"
+    }
+  ],
+  "remote_payloads": [
+    {
+      "path": "payload/downloads/GE-Proton11-3-FM-composed-preview.tar.gz",
+      "url": "https://github.com/volcmen/forza-motorsport-linux/releases/download/v0.3.0-preview.1/GE-Proton11-3-FM-composed-preview.tar.gz",
+      "sha256": "59792b23cfc40474764c379c4c91c255781afe8fc949f5aa614b012034784b76",
+      "size": 535060917
+    },
+    {
+      "path": "payload/downloads/forza-composed-user-bundle-v1.tar.zst",
+      "url": "https://github.com/volcmen/forza-motorsport-linux/releases/download/v0.3.0-preview.1/forza-composed-user-bundle-v1.tar.zst",
+      "sha256": "54a74fb48fccb3e6eb16cb83ff79962068f8a47cec95b9ccad8f26955a596f73",
+      "size": 11201923,
+      "extract_to": "payload/bundle"
+    },
+    {
+      "path": "payload/downloads/forza-xodus-preview.flatpak",
+      "url": "https://github.com/volcmen/forza-motorsport-linux/releases/download/v0.3.0-preview.1/forza-xodus-preview.flatpak",
+      "sha256": "a6c6257f4334ae65425371427f71141d46d4e13a2315e1337d0671fb67aaca61",
+      "size": 4809632
+    }
+  ],
+  "post_apply_message": "LEGION / STEAMOS ONLY. This recipe declares platforms=[linux], so Apply refuses on Windows. Forza is installed on the Windows desktop too, and applying it there would replace that copy's launch options with a Linux launcher and the game would not start.\n\nAPPLY IN DESKTOP MODE. In Game Mode, Steam respawns the instant GFM closes it and silently overwrites both the compat tool and the launch options on its next exit. If you are in Game Mode, answer No to \"Steam must close briefly\", switch to Desktop Mode and re-apply.\n\nApply has done: the SteamOS patch copied to ~/forza-gfm, the licensed xgameruntime.dll copied to ~ (from the NAS only), [Wallet] Enabled and [org.freedesktop.secrets] apiEnabled set in ~/.config/kwalletrc, ksecretd-gamemode.service installed and enabled, Forza's compat tool set to GE-Proton11-3-FM, and Forza's launch options set. Everything below is the part no recipe can do.\n\nFRAME GENERATION: these launch options do NOT include your lsfg wrapper. The wrapper is ~/.lsfg, which belongs to lsfg-vk and not to this recipe, and a reimage removes it. Once lsfg-vk is set up again, put it back by hand: Steam > Forza Motorsport > Properties > Launch Options, insert  ~/.lsfg  immediately before %command%.\n\nAll of the following in DESKTOP MODE, in Konsole, as deck:\n\n0. Forza Motorsport (~136 GB) must be installed in the INTERNAL library, never the microSD card: the preview skips the root-owned SD library and reports \"not installed\" after the whole download. Do not launch the game yet.\n\n1. If GFM said the xgameruntime.dll step was SKIPPED, ignore the store path in the skip message - that is the wrong place to put the file. It lives on the NAS at <share>/_recipes/forza-motorsport-linux/payload/private/xgameruntime.dll. Connect the share (Settings > Connect NAS Payloads) and re-apply. The NAS copy is the proven build: 4,594,120 bytes, sha256 f759a19e089fef3eb272cfc43b13651deb0692bf5043ade96dd90566b18114e3. Do NOT substitute the Windows PC's current System32 copy - it is a newer, untested build and nothing here checks the hash.\n\n2. P=$(realpath ~/game-fix-manager/store/games/forza-motorsport-linux/payload)\n   PIN CHECK FIRST:\n     curl -s https://dl.flathub.org/repo/refs/heads/runtime/org.gnome.Platform/x86_64/50\n   must print 0bd5091046708e64bc882e8349877cfbae713f6a1e2d0487a5f10af820a2d792.\n   If it prints anything else, STOP: Finish will refuse until upstream ships a requalified preview, and going on strands you at AWAITING_STEAM_PREFIX with a published tool only a rollback removes. Never downgrade a runtime or edit trust hashes.\n   Then, user scope (flathub on SteamOS is system-only until you add it with --user):\n     flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo\n     flatpak install --user flathub org.gnome.Platform/x86_64/50\n     flatpak install --user \"$P/downloads/forza-xodus-preview.flatpak\"\n   Confirm both commits:\n     flatpak info --user --show-commit org.gnome.Platform/x86_64/50\n       = 0bd5091046708e64bc882e8349877cfbae713f6a1e2d0487a5f10af820a2d792\n     flatpak info --user --show-commit io.github.volcmen.ForzaXodus//preview\n       = 3be904e7171998b0a30b8c54d820c96ff0c3c3dba914824418d403f72c48b49c\n   And all four of these must print NOTHING:\n     flatpak override --user --show\n     flatpak override --system --show\n     flatpak override --user --show io.github.volcmen.ForzaXodus\n     flatpak override --system --show io.github.volcmen.ForzaXodus\n   Overrides belonging to other apps are fine. If one of these four prints something, stop and ask - never delete an override to get past the check.\n\n3. git clone --branch v0.3.0-preview.1 --depth 1 https://github.com/volcmen/forza-motorsport-linux.git ~/forza-motorsport-linux-v0.3.0-preview.1\n   cd ~/forza-motorsport-linux-v0.3.0-preview.1\n   git apply ~/forza-gfm/steamos-skip-unowned-library.patch\n   Never git pull or switch tags in this checkout afterwards: every composed command compares it against recorded state.\n\n4. ./setup composed plan --tool-archive \"$P/downloads/GE-Proton11-3-FM-composed-preview.tar.gz\" --bundle-root \"$P/bundle/forza-composed-user-bundle-v1\"\n   then the SAME command with prepare in place of plan, and type the printed PLAN_SHA256 when it asks. Absolute paths, no .. and no symlinks (run them through realpath). Never extract the Proton archive yourself. Ends at PHASE=AWAITING_STEAM_PREFIX.\n\n5. ONLY AFTER STEP 4. The launch options this recipe set call ~/.local/bin/forza-linux, which does not exist yet, so make a temporary pass-through:\n     printf '#!/bin/sh\\nexec \"$@\"\\n' > ~/.local/bin/forza-linux && chmod 755 ~/.local/bin/forza-linux\n   Check that ~/.local/share/Steam/steamapps/compatdata/2440510 does NOT exist (if it does, move it aside - never delete). Restart Steam and confirm Forza > Properties > Compatibility = GE-Proton11-3-FM; if Steam dropped the mapping because the tool did not exist when Apply ran, pick it now or just re-apply this recipe. Press Play ONCE, let it crash, close it. Then:\n     rm ~/.local/bin/forza-linux\n   The next step refuses while that stub is there.\n\n6. ./setup composed plan --threading-dll /home/deck/xgameruntime.dll\n   then the same with finish, typing the sha. Expect PHASE=READY_TO_ATTEMPT; ./setup composed status repeats it.\n\n7. flatpak run io.github.volcmen.ForzaXodus login - unlock the wallet and sign in to Microsoft. Request signing was historically unimplemented in this runtime work and one developer reported a softban in another game: use an account you are willing to risk.\n\n8. For GAME MODE the wallet password must be EMPTY (the headless Game Mode wallet service is already installed and enabled by this recipe; Game Mode's user manager has no DISPLAY, so plain ksecretd dies there and Xodus panics with \"Failed to init keychain\"):\n     busctl --user --expect-reply=false call org.kde.ksecretd /ksecretd org.kde.KWallet changePassword sxs kdewallet 0 \"Forza\"\n   Enter the old password, leave the new one blank. Use ksecretd, NOT kwalletd6: both serve the same kdewallet.kwl and kwalletd6 can re-save it under the old password.\n   If GFM said the kwalletrc step was skipped (no ~/.config/kwalletrc yet), create it with exactly:\n     [Wallet]\n     Enabled=true\n\n     [org.freedesktop.secrets]\n     apiEnabled=true\n\n9. NEVER restore Forza's Proton prefix from a backup, and never move, clean, chmod or restore anything under ~/.local/state/forza-motorsport-linux or inside the checkout: the launcher re-hashes the plans, journals and its 8 user files on every launch and refuses to start if anything changed. Forza keeps no local saves (progression is online), so leave it out of prefix restores. Full undo: ./setup composed rollback in the checkout (type ROLLBACK).\n\n10. Never add WINEGDK_FORZA_QUIRKS=0 to the launch options - the v0.3 runtime reads it and it disables the Forza fixes.\n\n11. Check after one Game Mode launch: ./setup composed status = READY_TO_ATTEMPT, and journalctl --user -u xodus-forza.service shows \"Started Xodus service\" with no \"Failed to init keychain\".",
+  "notes": "LEGION / SteamOS ONLY - platforms=[linux]. Forza Motorsport is installed on Tony's Windows desktop as well (F:\\SteamLibrary, appid 2440510), and detection resolves steam_appid through the appmanifest on any OS, so without the platform gate this recipe would read as applicable there; an Apply would replace the Windows launch options with a Linux launcher, write a nonsense compat mapping and download 551 MB. The gate refuses before locating the game, before fetching and before any step, and mirror skips the payloads.\n\nWORKING on the Legion Go 2 2026-10-16, Desktop AND Game Mode (Tony: \"worked perfectly fine\"), built with volcmen/forza-motorsport-linux v0.3.0-preview.1 (tag commit 5d0dbacad609cc6274b8d4588266d2d9e84c5d62) plus the local SteamOS fix shipped here as payload/steamos-skip-unowned-library.patch. The full build log and runbook are in forza-motorsport-linux/GFM-RECIPE-HANDOFF.md (Windows workstation, NOT on the Legion) - everything a reimage needs is in post_apply_message instead.\n\nWHAT THE RECIPE OWNS: the patch file, the licensed DLL (NAS only), kwalletrc, the Game Mode wallet unit, the compat mapping and the launch options. Everything else is an interactive third-party installer (plan/prepare/finish with sha prompts and a mandatory Steam launch in the middle), two user-scope Flatpaks at pinned commits, the Microsoft sign-in and an empty wallet password - all in post_apply_message.\n\nVERIFIED 2026-10-16 on the Legion: exe forza_steamworks_release_final.exe (lowercase, internal library ~/.local/share/Steam/steamapps/common/Forza Motorsport); uid 1000, so /run/user/1000/xodus.sock is right; GE-Proton11-3-FM present in compatibilitytools.d and mapped to 2440510; ~/xgameruntime.dll = 4,594,120 B sha256 f759a19e... identical to the NAS copy; kwalletrc already holds both keys; ksecretd-gamemode.service is enabled with the gamescope-session.target.wants link; the local patch is commit b50c2df on top of the tag and git format-patch reproduces exactly the hunk shipped here; none of the 48 non-Steam shortcuts normalises to forzamotorsport / forzamotorsport2023 / fm2023 / forzamotorsportlinuxpreview, so launch_options and proton_version target appid 2440510 and not a shortcut. NAS archive verified from Windows: the three release assets at their declared sizes with SHA256SUMS matching this manifest, plus payload/private/xgameruntime.dll at the proven hash.\n\nLAUNCH OPTIONS deliberately omit Tony's lsfg wrapper. The live Legion line ends \"... forza-linux ~/.lsfg %command%\"; ~/.lsfg is a 3,979-byte lsfg-vk wrapper Tony generated, nothing restores it after a reimage, and launch_options expands {home} but not ~, so baking in {home}/.lsfg would hard-code /home/deck/.lsfg and Forza would fail to launch on exactly the reimaged machine this recipe exists for. The step writes its value wholesale (no merge), so an Apply on the live device drops the wrapper until it is re-added by hand - post_apply_message says how.\n\nPREFIX AND STATE: Finish records the prefix's device/inode, and the launcher re-hashes its state files on every launch - restoring either breaks status and the Doctor. Forza has no local saves, so save_paths is deliberately absent (the prefix's AppData/Local/Microsoft.ForzaMotorsport held only crash reports and a thumbnail cache) - do not invent one. Keep Forza out of prefix restores even though GFM offers Steam games with no cloud folder by default. A prefix snapshot from the working install is archived at <share>/_state/forza-2440510-prefix-20261016-085341/ and is labelled DO NOT RESTORE over a live install.\n\nPRERELEASE ASSETS: remote_payloads are v0.3.0-preview.1 release assets and upstream may replace or delete them. ensure_remote_payloads runs before any step and a FetchError is not optional, so a dead URL means Apply installs NOTHING - not the unit, not kwalletrc, not the compat mapping - although none of those steps uses the assets. Rescue: copy the archived files from <share>/_recipes/forza-motorsport-linux/payload/downloads/ into store/games/forza-motorsport-linux/payload/downloads/ at their exact sizes before Apply (fetch trusts a present file of the declared size and still extracts the bundle), or drop the remote_payloads block. Run gfm.py mirror after the first successful Apply so the SD restore tree carries them too. Only the user bundle is extracted - the Proton archive must stay one file for --tool-archive and the flatpak must stay a file for flatpak install.\n\nTwo steps are optional on purpose. The DLL copy, because payload/private is NAS-only and gitignored, so it is absent in a fresh checkout. The kwalletrc ini_edit, because ini_edit raises when the target file is missing and whether a fresh SteamOS writes ~/.config/kwalletrc is unverified - without optional, a missing file would abort the Apply before the unit, the compat mapping and the launch options. proton_version runs before Prepare has published GE-Proton11-3-FM, and whether Steam keeps a mapping to a missing tool is unverified; post_apply_message has Tony confirm it before the checkpoint launch, and a re-Apply rewrites it.\n\nDry-run proves nothing here: with remote_payloads, apply prints the would-fetch lines and returns before any step is evaluated. To rehearse the steps, dry-run a scratch copy of this manifest without remote_payloads via --store."
+}
