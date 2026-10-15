@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -22,6 +23,13 @@ class ManifestError(Exception):
     pass
 
 
+def current_platform() -> str:
+    """'windows' or 'linux' - what a manifest's "platforms" is matched
+    against. Deliberately coarse: SteamOS and any other Linux are the same
+    thing as far as a recipe is concerned."""
+    return "windows" if os.name == "nt" else "linux"
+
+
 @dataclass
 class Recipe:
     id: str
@@ -38,6 +46,12 @@ class Recipe:
     # which prefix backups don't cover. Captured/restored by core/saves.py.
     save_paths: list[str]
     dir: Path  # recipe folder (contains manifest.json and payload/)
+    # Which OSes this recipe may run on: ["linux"], ["windows"], or empty for
+    # "anywhere". Defaulted and last so existing callers are unaffected.
+    # Detection resolves steam_appid through the appmanifest on ANY OS, so a
+    # SteamOS-only recipe would otherwise look applicable on Windows, and an
+    # Apply there can break a working install of the same game.
+    platforms: list[str] = field(default_factory=list)
 
     @property
     def payload_dir(self) -> Path:
@@ -46,6 +60,12 @@ class Recipe:
     @property
     def all_names(self) -> list[str]:
         return [self.name, *self.aliases]
+
+    @property
+    def runs_here(self) -> bool:
+        """False when this recipe declares platforms and the current one
+        is not among them. An empty list means 'anywhere'."""
+        return not self.platforms or current_platform() in self.platforms
 
 
 def _require(data: dict, key: str, path: Path):
@@ -84,6 +104,8 @@ def load_recipe(recipe_dir: Path) -> Recipe:
         remote_payloads=data.get("remote_payloads", []),
         requires_game=data.get("requires_game", True),
         save_paths=data.get("save_paths", []),
+        platforms=[str(p).strip().lower()
+                   for p in data.get("platforms", []) if str(p).strip()],
         dir=recipe_dir,
     )
 

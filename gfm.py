@@ -3535,6 +3535,20 @@ class App:
 
     def _apply_one(self, recipe) -> None:
         self.log(f"apply {recipe.id}")
+        # The gate goes FIRST: before locating the game, before fetching
+        # payloads, before any step. post_apply_message cannot help here
+        # because it only prints once the damage is done.
+        if not recipe.runs_here:
+            self.ui.msg(
+                f"{recipe.name}: this recipe is for "
+                f"{'/'.join(recipe.platforms)} only and this is "
+                f"{manifest.current_platform()} — refusing to apply it.",
+                "error")
+            self.ui.msg("  Applying a Linux-only recipe on Windows (or vice "
+                        "versa) can break a working install of the same "
+                        "game on this machine.", "dim")
+            self.log(f"apply {recipe.id}: REFUSED, wrong platform")
+            return
         game_dir = self.game_dir_for(recipe, interactive=True)
         if game_dir is None:
             self.ui.msg(f"Skipping {recipe.name} — not located.", "warn")
@@ -4172,6 +4186,12 @@ class App:
         self.ui.header("💾 MIRROR STORE")
         self.ui.msg("Fetching any missing payloads so the mirror is complete...", "dim")
         for recipe in self.recipes:
+            # No point pulling (or re-pulling on every run) a payload for
+            # a recipe this machine must never apply.
+            if recipe.remote_payloads and not recipe.runs_here:
+                self.ui.msg(f"{recipe.name}: skipped — "
+                            f"{'/'.join(recipe.platforms)}-only", "dim")
+                continue
             if recipe.remote_payloads:
                 try:
                     fetch.ensure_remote_payloads(

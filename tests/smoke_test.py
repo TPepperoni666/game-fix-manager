@@ -1478,6 +1478,97 @@ def main():
               and r_coll.candidates[0].name == "Aliasy"
               and r_coll.candidates[0].recipe is other)
 
+        # ---- platform gate -------------------------------------------
+        # Detection resolves steam_appid through the appmanifest on ANY OS, so
+        # a SteamOS-only recipe shows as applicable on the Windows desktop
+        # where the same game is installed. An Apply there rewrites the game's
+        # launch options to a Linux launcher and it stops starting. A warning
+        # in post_apply_message cannot help: it prints after the damage.
+        import gfm as _pg_gfm
+        _plat = manifest.current_platform()
+        check("current_platform() is one of the two we gate on",
+              _plat in ("windows", "linux"))
+        _other = "linux" if _plat == "windows" else "windows"
+
+        def _plat_recipe(plats):
+            return manifest.Recipe(
+                id="platty", name="Platty", aliases=[], steam_appid=None,
+                detect={}, steps=[{"type": "steam_shortcut", "exe": "g.exe"}],
+                notes="", post_apply_message="", remote_payloads=[],
+                requires_game=True, save_paths=[], platforms=plats, dir=tmp)
+
+        check("no platforms declared -> runs anywhere",
+              _plat_recipe([]).runs_here)
+        check("this platform declared -> runs here",
+              _plat_recipe([_plat]).runs_here)
+        check("only the OTHER platform declared -> does not run here",
+              not _plat_recipe([_other]).runs_here)
+
+        # parsed from a real manifest, case/space tolerant
+        _pdir = tmp / "platcase"
+        _pdir.mkdir(parents=True, exist_ok=True)
+        (_pdir / "manifest.json").write_text(json.dumps({
+            "id": "platcase", "name": "PlatCase",
+            "platforms": ["  " + _plat.upper() + "  "],
+            "steps": [{"type": "steam_shortcut", "exe": "g.exe"}],
+        }), encoding="utf-8")
+        check("platforms is parsed case- and space-insensitively",
+              manifest.load_recipe(_pdir).runs_here)
+
+        # THE ONE THAT MATTERS: does _apply_one actually refuse?
+        _reached = {"game_dir": False, "engine": False}
+
+        class _GateUI:
+            def __init__(self):
+                self.msgs = []
+
+            def msg(self, text, kind="dim"):
+                self.msgs.append((kind, str(text)))
+
+            def header(self, *a, **k):
+                pass
+
+            def input(self, *a, **k):
+                raise AssertionError("the gate must not prompt")
+
+        class _GateArgs:
+            dry_run = False
+
+        class _GateApp(_pg_gfm.App):
+            def __init__(self):            # deliberately skip the real init
+                self.recipes = []
+                self.ui = _GateUI()
+                self.args = _GateArgs()
+                self.steam_root = None
+                self.local_payloads = None
+
+            def log(self, *a, **k):
+                pass
+
+            def game_dir_for(self, *a, **k):
+                _reached["game_dir"] = True
+                return tmp
+
+            def run_engine(self, *a, **k):
+                _reached["engine"] = True
+                return True
+
+        _ga = _GateApp()
+        _ga._apply_one(_plat_recipe([_other]))
+        check("_apply_one REFUSES an off-platform recipe before locating the "
+              "game", not _reached["game_dir"])
+        check("_apply_one never reaches the engine for an off-platform recipe",
+              not _reached["engine"])
+        check("the refusal says so out loud",
+              any(k == "error" and "refusing" in m.lower()
+                  for k, m in _ga.ui.msgs))
+        # The same stub MUST proceed for an on-platform recipe, or the two
+        # checks above would pass just because the stub is inert.
+        _reached["game_dir"] = _reached["engine"] = False
+        _ga._apply_one(_plat_recipe([_plat]))
+        check("_apply_one proceeds normally for an on-platform recipe",
+              _reached["game_dir"] and _reached["engine"])
+
         # ---- per-game settings capture/restore (Gamescope block) ----------
         # localconfig.vdf keeps the Deck's per-game framerate/tearing/frame-
         # limit under "Gamescope", keyed by appid. Restore must be SURGICAL:
