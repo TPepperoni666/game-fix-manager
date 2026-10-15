@@ -120,7 +120,22 @@ def scan(recipes, steam_root, deployed: dict, sd_games_dirs,
         out.blocked = True
         return out
 
-    by_name = {r.name: r for r in recipes}
+    # Keyed on EVERY name a recipe answers to, not just recipe.name. The
+    # deployed record is keyed by the SD FOLDER name, which is whatever the
+    # folder happened to be called — for Forza Horizon 2 the folder is
+    # "Forza Horizon 2" while the recipe is named "Forza Horizon 2 (Azimuth)".
+    # With recipe.name alone that lookup returned None, and the consequences
+    # compounded: match_names fell back to the bare folder name, so renaming
+    # the shortcut (which Apply does) made has_shortcut False against a
+    # latched shortcut_seen, AND _saves_safe(recipe=None) returned True
+    # without ever reading save_paths. A 42 GB deploy with a real save in its
+    # game folder was one Apply away from an unprompted weekly-backup delete.
+    # Primary names win; an alias only fills a gap, so a broad alias can
+    # never steal another recipe's entry.
+    by_name: dict[str, "Recipe"] = {r.name: r for r in recipes}
+    for r in recipes:
+        for alias in r.all_names:
+            by_name.setdefault(alias, r)
 
     def sd_dir_for(name: str, rec: dict | None = None):
         """Where this game actually is. Prefer the path the tool RECORDED at

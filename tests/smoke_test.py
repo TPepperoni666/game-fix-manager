@@ -1421,6 +1421,63 @@ def main():
               and (dep.staged_root(rc_nas) / "Big").is_dir()
               and "Big" not in r.deployed)
 
+        # ---- the deployed record is keyed by FOLDER name, the recipe by
+        # its own name, and for Forza Horizon 2 those differ ("Forza
+        # Horizon 2" vs "Forza Horizon 2 (Azimuth)"). reclaim used to key
+        # by_name on recipe.name alone, so the lookup missed and TWO guards
+        # came off at once: match_names fell back to the folder name, and
+        # _saves_safe(recipe=None) returned True without reading save_paths.
+        # A renamed shortcut then made a 42 GB deploy an auto-delete
+        # candidate. These execute the scan, they do not grep it.
+        rc_clear()
+        alias_rec = manifest.Recipe(
+            id="aliasy", name="Aliasy (Variant)", aliases=["Aliasy"],
+            steam_appid=None, detect={},
+            steps=[{"type": "steam_shortcut", "exe": "g.exe"}], notes="",
+            post_apply_message="", remote_payloads=[], requires_game=True,
+            save_paths=["{game_dir}/data.bin"], dir=rc_root)
+        rc_game("Aliasy", 40)
+        # the shortcut carries the RECIPE name, the deployed record the FOLDER
+        sv.ensure_shortcut(rc_steam, "Aliasy (Variant)",
+                           str(rc_sd / "Aliasy" / "g.exe"),
+                           str(rc_sd / "Aliasy"), "", 999123, [])
+        r_alias = rc.scan([alias_rec], rc_steam,
+                          {"Aliasy": {"shortcut_seen": True}},
+                          [rc_sd], rc_nas, min_bytes=RC_FLOOR)
+        check("reclaim: folder-name record resolves via the recipe's ALIASES",
+              not r_alias.candidates
+              and any("still in Steam" in why
+                      for _, why in r_alias.considered))
+        # and with the shortcut gone the save guard must now actually engage,
+        # because the recipe (and so its save_paths) is found at all
+        rc_clear()
+        r_alias2 = rc.scan([alias_rec], rc_steam,
+                           {"Aliasy": {"shortcut_seen": True}},
+                           [rc_sd], rc_nas, min_bytes=RC_FLOOR)
+        check("reclaim: alias match makes the SAVE GUARD apply to a "
+              "folder-named record",
+              not r_alias2.candidates
+              and any("saves aren't captured" in why
+                      for _, why in r_alias2.considered))
+        # a broad alias must never hijack another recipe's own name
+        other = manifest.Recipe(
+            id="other", name="Aliasy", aliases=[], steam_appid=None,
+            detect={}, steps=[{"type": "steam_shortcut", "exe": "g.exe"}],
+            notes="", post_apply_message="", remote_payloads=[],
+            requires_game=True, save_paths=[], dir=rc_root)
+        r_coll = rc.scan([alias_rec, other], rc_steam,
+                         {"Aliasy": {"shortcut_seen": True}},
+                         [rc_sd], rc_nas, min_bytes=RC_FLOOR)
+        # Precedence is observable through the two recipes' save_paths:
+        # 'other' OWNS the name "Aliasy" and declares none, so the record
+        # resolves to it and the folder is removable. If the alias had won
+        # instead we would get alias_rec, whose uncaptured save_paths would
+        # have kept it. So one candidate here IS the primary-name win.
+        check("reclaim: a primary name beats another recipe's alias",
+              not r_coll.blocked and len(r_coll.candidates) == 1
+              and r_coll.candidates[0].name == "Aliasy"
+              and r_coll.candidates[0].recipe is other)
+
         # ---- per-game settings capture/restore (Gamescope block) ----------
         # localconfig.vdf keeps the Deck's per-game framerate/tearing/frame-
         # limit under "Gamescope", keyed by appid. Restore must be SURGICAL:
