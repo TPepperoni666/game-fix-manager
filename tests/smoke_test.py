@@ -1750,6 +1750,56 @@ def main():
               _sc.describe(sroot, ["FUEL"])["launch_options"]
               == "PROTON_LOG=1 %command%")
 
+        # ---- launch options must survive a recipe that does not manage
+        # them. 30 recipes have a steam_shortcut step and only 8 declare
+        # launch_options, so the old `launch_options: str = ""` default wrote
+        # "" over the user's own value for the other 22. On the Legion that
+        # was one Apply away from erasing Tony's Lossless Scaling wrapper
+        # from Forza Horizon 2. These CALL ensure_shortcut and re-read the
+        # vdf; they do not inspect the source.
+        _sc.ensure_shortcut(sroot, "FUEL", "/games/FUEL/SecuLauncher.exe",
+                            "/games/FUEL",
+                            launch_options="~/.lsfg %command%", appid=1234)
+        check("precondition: the user's launch options are set",
+              _sc.describe(sroot, ["FUEL"])["launch_options"]
+              == "~/.lsfg %command%")
+        # A recipe that declares no launch_options -> None -> leave alone.
+        _sc.ensure_shortcut(sroot, "FUEL", "/games/FUEL/SecuLauncher.exe",
+                            "/games/FUEL", appid=1234)
+        check("a recipe that declares no launch options PRESERVES the user's",
+              _sc.describe(sroot, ["FUEL"])["launch_options"]
+              == "~/.lsfg %command%")
+        # Explicitly declaring a value still replaces it.
+        _sc.ensure_shortcut(sroot, "FUEL", "/games/FUEL/SecuLauncher.exe",
+                            "/games/FUEL",
+                            launch_options="PROTON_LOG=1 %command%",
+                            appid=1234)
+        check("a declared value still overwrites",
+              _sc.describe(sroot, ["FUEL"])["launch_options"]
+              == "PROTON_LOG=1 %command%")
+        # Declaring "" is the deliberate way to clear them.
+        _sc.ensure_shortcut(sroot, "FUEL", "/games/FUEL/SecuLauncher.exe",
+                            "/games/FUEL", launch_options="", appid=1234)
+        check('declaring "" still clears them on purpose',
+              _sc.describe(sroot, ["FUEL"])["launch_options"] == "")
+        # A brand-new entry has nothing to preserve: None means no options.
+        _sc.ensure_shortcut(sroot, "BrandNew", "/games/BN/bn.exe",
+                            "/games/BN", appid=4321)
+        check("a NEW shortcut with no declared options gets an empty string",
+              _sc.describe(sroot, ["BrandNew"])["launch_options"] == "")
+        # And the step itself must record the absence as None, not "" -
+        # that is what carries the distinction into the deferred vdf write.
+        from core.steps.steam_shortcut import SteamShortcut as _SS
+        check("SteamShortcut records an undeclared value as None",
+              _SS({"type": "steam_shortcut", "exe": "g.exe"})
+              .launch_options is None)
+        check("SteamShortcut records a declared value verbatim",
+              _SS({"type": "steam_shortcut", "exe": "g.exe",
+                   "launch_options": "%command% -x"}).launch_options
+              == "%command% -x")
+        # restore FUEL for the checks that follow
+        _sc.set_launch_options(sroot, ["FUEL"], "PROTON_LOG=1 %command%")
+
         from core import sdmap as _sd
         class _R:
             id, name, steam_appid = "fuel", "FUEL", None

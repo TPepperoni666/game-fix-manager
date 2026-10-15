@@ -339,15 +339,24 @@ def _new_entry(appname: str, exe: str, start_dir: str,
 
 
 def ensure_shortcut(steam_root: Path, appname: str, exe: str, start_dir: str,
-                    launch_options: str = "", appid: int | None = None,
+                    launch_options: str | None = None,
+                    appid: int | None = None,
                     aliases: list[str] | None = None) -> int:
     """Create (or update) a non-Steam shortcut in every user's shortcuts.vdf.
     Steam must be closed. Idempotent: an existing entry whose AppName matches
-    appname/aliases is updated in place (Exe/StartDir/LaunchOptions/appid);
+    appname/aliases is updated in place (Exe/StartDir/appid, and
+    LaunchOptions ONLY when the caller passed a value - see below);
     otherwise a new entry is appended. Forcing `appid` to a gospel value makes
     Steam use that same id for the game's compatdata prefix, so a restored
     prefix lines up. Backs up each file to *.vdf.gfm-bak first. Returns files
-    written."""
+    written.
+
+    launch_options None means the caller is NOT managing launch options, so
+    an existing entry's value is left exactly as the user set it. Passing a
+    string (including "") writes it. This matters because most recipes do
+    not declare launch options, and writing a default of "" for them
+    silently destroyed whatever the user had - a wrapper script, a
+    WINEDLLOVERRIDES line, a frame-generation shim."""
     names_norm = {_norm(appname)} | {_norm(a) for a in (aliases or [])}
     dirs = _user_config_dirs(steam_root)
     if not dirs:
@@ -371,14 +380,18 @@ def ensure_shortcut(steam_root: Path, appname: str, exe: str, start_dir: str,
             _set_field(existing, "AppName", TYPE_STR, appname)
             _set_field(existing, "Exe", TYPE_STR, f'"{exe}"')
             _set_field(existing, "StartDir", TYPE_STR, f'"{start_dir}"')
-            _set_field(existing, "LaunchOptions", TYPE_STR, launch_options)
+            if launch_options is not None:
+                _set_field(existing, "LaunchOptions", TYPE_STR,
+                           launch_options)
             if appid is not None:
                 _set_field(existing, "appid", TYPE_INT, int(appid) & 0xFFFFFFFF)
         else:
             idxs = [int(k) for k in shortcuts if str(k).isdigit()]
             nkey = str(max(idxs) + 1 if idxs else 0)
+            # A brand-new entry has nothing to preserve, so None is
+            # simply "no options".
             shortcuts[nkey] = (TYPE_MAP, _new_entry(
-                appname, exe, start_dir, launch_options, appid))
+                appname, exe, start_dir, launch_options or "", appid))
         cfg.mkdir(parents=True, exist_ok=True)
         if f.is_file():
             shutil.copy2(f, f.with_suffix(".vdf.gfm-bak"))

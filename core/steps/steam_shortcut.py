@@ -34,7 +34,9 @@ class SteamShortcut:
     def __init__(self, step: dict):
         self.exe = step.get("exe")
         self.start_dir = step.get("start_dir", "{game_dir}")
-        self.launch_options = step.get("launch_options", "")
+        # None = not declared = DO NOT TOUCH an existing shortcut's
+        # options. "" = declared empty = clear them on purpose.
+        self.launch_options = step.get("launch_options")
         self.proton = step.get("proton")
         self.appid = step.get("appid")
         # Restore captured custom shortcut art (from `gfm capture`) if any
