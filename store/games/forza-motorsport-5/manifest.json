@@ -1,0 +1,49 @@
+{
+  "id": "forza-motorsport-5",
+  "name": "Forza Motorsport 5 (RaceOne5)",
+  "aliases": [
+    "Forza Motorsport 5",
+    "FM5",
+    "RaceOne5",
+    "ForzaMastro"
+  ],
+  "steam_appid": null,
+  "detect": {
+    "install_dir_names": [
+      "Forza Motorsport 5"
+    ],
+    "marker_files": [
+      "RaceOne5.exe"
+    ]
+  },
+  "requires_game": true,
+  "platforms": [
+    "linux"
+  ],
+  "save_paths": [
+    "{game_dir}/data/titles/7B35D917/saves",
+    "{game_dir}/data/RaceOneEngine.ini"
+  ],
+  "steps": [
+    {
+      "type": "ini_edit",
+      "target": "{game_dir}/data/RaceOneEngine.ini",
+      "values": {
+        "launcher": {
+          "game_folder": "Forza_1.0.0.20_x64__8wekyb3d8bbwe"
+        },
+        "title-7b35d917": {
+          "folder": "Forza_1.0.0.20_x64__8wekyb3d8bbwe"
+        }
+      }
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "RaceOne5.exe",
+      "start_dir": "{game_dir}",
+      "proton": "proton_experimental"
+    }
+  ],
+  "post_apply_message": "Forza Motorsport 5 (RaceOne5) added to Steam on Proton Experimental.\n\nUNPROVEN UNDER PROTON. The engine is Azimuth 0.9.9 rebranded and Azimuth itself runs on this handheld, but nobody has confirmed THIS title under Proton. If it fails, that is the likely reason - it is not a bad dump.\n\nThe game folder is kept RELATIVE on purpose. data/RaceOneEngine.ini must say, in both places:\n    [launcher]        game_folder=Forza_1.0.0.20_x64__8wekyb3d8bbwe\n    [title-7b35d917]  folder=Forza_1.0.0.20_x64__8wekyb3d8bbwe\nand NOT an absolute path. The ForzaMastro builder writes the absolute path of whatever machine built the bundle, so if you ever rebuild it, re-run this recipe to repair those two lines - otherwise the game will not be found. Applying this recipe fixes them automatically.\n\nSettings live in that same ini and are read at startup, so change them there and relaunch. The staged build is 1080p, 60 fps, 2x AA, graphics high, en-US, stereo. 120 fps is flagged experimental by the bundle's own README.\n\nRaceOne5.exe accepts --skip-launcher (start straight into the game with the current settings), --game=DIR, --msaa and --speech. The shortcut does not use them; add them in Steam's launch options if you want to skip the launcher window.\n\nFirst launch on this device will compile its own shader cache into data/cache, so expect it to take noticeably longer than later runs. The staged cache is from an NVIDIA desktop card and is ignored here.\n\nKnown issue, from the bundle's README: colours can wash out in Career after a race. Press B to return to mode selection, then enter Career again.",
+  "notes": "RaceOne5 / ForzaMastro is AZIMUTH REBRANDED. RaceOne5.exe reports itself as \"RaceOneEngine 0.9.9\" - the same release number as the Azimuth 0.9.9 that runs Forza Horizon 2 - and still contains Azimuth's own UI strings (\"Azimuth game folder check\", \"Azimuth folder dialog\"). data/bin holds the IDENTICAL stock azimuth-tls.dll (sha256 ffa229b6c62228bf6126de6f140c6a70326c536524bec00f9304ac6591805bb7, 4608 bytes) plus the same msvcp110/msvcr110 and FFmpeg DLLs, and the package is the same ERA/XVD layout: era.vbi + Mount/ + EmbeddedXvd/. So everything learned on [[forza-horizon-2-azimuth]] carries over, with the differences below.\n\nTHE ONE THING THIS RECIPE REALLY OWNS: KEEPING THE GAME FOLDER RELATIVE. The ForzaMastro builder writes ABSOLUTE paths. As built, data/RaceOneEngine.ini contained, twice, the machine the bundle was made on:\n  game_folder=C:\\Users\\<user>\\...\\Forza_1.0.0.20_x64__8wekyb3d8bbwe\n  [title-7b35d917] folder=  (same)\nand its README says \"Keep that folder available at the same path.\" That is the opposite of Azimuth's FH2 bundle, which stores a bare relative folder name and is why FH2 survives being moved. An absolute path cannot work for both machines: the NAS path is meaningless on the Deck, and the Deck's own Wine drive letter is a dosdevices symlink, not a promise (FH2 happened to get D:). So the ini_edit step forces both keys back to the bare folder name on every Apply - which is also the repair if the bundle is ever rebuilt, because a rebuild bakes the absolute path in again.\n\nVERIFIED that the relative form works, from the engine's own log on 2026-10-16:\n  \"game folder X:\\_games\\Forza Motorsport 5\\Forza_1.0.0.20_x64__8wekyb3d8bbwe, from its title's section in X:\\_games\\Forza Motorsport 5\\data\\RaceOneEngine.ini\"\nIt resolved the bare name against the directory holding the ini, exactly as Azimuth does for FH2.\n\nini_edit IS SAFE HERE, unlike on azimuth.ini. data/RaceOneEngine.ini is plain UTF-8 with LF endings and no BOM, which is what ini_edit writes. azimuth.ini is UTF-16LE with a BOM and CRLF, and ini_edit destroys that silently (it reads and writes encoding=\"utf-8\", errors=\"surrogateescape\", so nothing raises while a raw \\n byte misaligns every following code unit). Do not copy an ini_edit step from this recipe to an Azimuth one without checking the encoding first.\n\nini_edit's LINE ENDINGS FOLLOW THE HOST, NOT THE FILE. It writes with Path.write_text(..., encoding=\"utf-8\"), which leaves newline translation at its default, so \"\n\".join(...) becomes CRLF on Windows and stays LF on Linux. Measured 2026-10-16 on the same input: applying this step on Windows turned 27 bare LFs into 27 CRLFs, while on the Legion os.linesep is \"\n\" and the file keeps its LF. That is harmless HERE because the recipe is platforms: [\"linux\"] and only ever applies on the Deck, where LF matches what the builder wrote - but do not assume \"ini_edit always writes LF\". A note elsewhere in the store says exactly that, and it is only half true.\n\nCASE MATTERS ON THE DECK. The folder name is checked byte-for-byte against a case-sensitive filesystem. Verified matching on 2026-10-16: the ini value and the directory are both Forza_1.0.0.20_x64__8wekyb3d8bbwe. This is the Halo MCC trap - a recipe that quietly did nothing for months over wrong case.\n\nPACKAGE IDENTITY: Name \"Forza\", Version 1.0.0.20, x64, title id 7b35d917. The game exe the launcher gates on hashes to 94dad21851d335e9a33231dc2a1de2ecd4b93eefdf5f6772085bf6886bf47db7. The staged package is 40.01 GiB in 3295 files, matching the builder's own recorded source_bytes and file count.\n\nWHAT IS NEW VERSUS THE FH2 BUNDLE: an xg-host/ folder holding kernelx.dll (an Xbox kernel shim, PE timestamp 2012, imports ONLY KERNEL32, 13 named exports) plus xg.dll and xg_x.dll copied out of the game package. There is no shipped pipeline cache - the log says \"graphics pipeline file: none at data\\bin\\RaceOneEngine.pipelines\" - so the first run on any GPU compiles its own into data/cache (pipelines-<vendor>-<device>-*.bin, translated-*.pack, xg-layouts.bin). The staged cache is 10de/2684, an NVIDIA desktop card, and is useless on the Deck's RADV, which will build its own. Harmless, left alone.\n\nPROTON IS NOT PROVEN FOR THIS TITLE. RaceOne5.exe has an identical Wine/Proton/vkd3d string profile to azimuth.exe (Wine x1, Proton x2, vkd3d x1 ascii + x1 wide, and no Linux or SteamOS literals in either), and azimuth.exe with that profile demonstrably runs on the Legion under Wine 11.0 / Proton Experimental. That is encouraging, not evidence. The builder's own build-profile.json says scope \"Local Windows PC build using files supplied by the user\" and private_local_test_bundle true. Tony reports having seen others run it under Proton; a web search on 2026-10-16 found nothing about ForzaMastro or RaceOne5 and returned results for the DIFFERENT Forza Motorsport (2023, Steam appid 2440510, the Xodus/WineGDK game) instead. Do not conflate the two - this project has a separate recipe, forza-motorsport-linux.\n\nsave_paths: data/titles/7B35D917 is the per-title state directory, created on first run and confirmed on disk. The saves/ subfolder underneath is INFERRED from how FH2 lays its saves out (titles/<id>/saves/player-N/...); the game had only been run for 430 frames when this recipe was written, so no save existed yet to confirm against. It is narrowed to saves/ on purpose: the whole-folder form would also drag in tmp/Turn10Temp.scratch and pipeline-log.bin, which is the mistake the FH2 recipe had to correct. If a capture of this recipe comes back empty, that path is wrong, and an empty capture is the only symptom you get.\n\nKnown issue from the bundle's own README: colours can look washed out in Career after a race. Press B to return to mode selection, then enter Career again. Not a bad dump.\n\nStaged 2026-10-16 to <NAS>/_games/Forza Motorsport 5. The 40 GB package and the launcher bundle are separate concerns: a rebuild of the bundle changes only RaceOne5.exe's sibling files, and on 2026-10-16 a 120fps/it-IT build and a 60fps/en-US rebuild differed in exactly two files, build-profile.json and data/RaceOneEngine.ini. Never re-copy the package for a settings change."
+}
