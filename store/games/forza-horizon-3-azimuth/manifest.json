@@ -1,0 +1,68 @@
+{
+  "id": "forza-horizon-3-azimuth",
+  "name": "Forza Horizon 3",
+  "aliases": [
+    "Forza Horizon 3 (Azimuth)",
+    "FH3"
+  ],
+  "steam_appid": null,
+  "detect": {
+    "install_dir_names": [
+      "Forza Horizon 3"
+    ],
+    "marker_files": [
+      "azimuth.exe"
+    ]
+  },
+  "save_paths": [
+    "{game_dir}/data/titles/4CE1DFAB/saves",
+    "{game_dir}/data/titles/4CE1DFAB/saves.before_store_import_20261027_195257",
+    "{game_dir}/data/titles/1A96545B/saves",
+    "{game_dir}/data/azimuth.ini",
+    "{game_dir}/FH3_ExtraOptions.ini",
+    "{game_dir}/mods/FreeFastTravel/FreeFastTravel.ini",
+    "{game_dir}/mods/GrooveMusicRadio/GrooveMusicRadio.ini",
+    "{game_dir}/mods/NoPause/NoPause.ini"
+  ],
+  "platforms": [
+    "linux"
+  ],
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton11-1"
+    },
+    {
+      "type": "copy_files",
+      "from": "payload/mod/winmm.dll",
+      "to": "{game_dir}",
+      "backup_originals": true
+    },
+    {
+      "type": "copy_files",
+      "from": "payload/mod/mods",
+      "to": "{game_dir}/mods",
+      "backup_originals": true
+    },
+    {
+      "type": "wine_registry",
+      "optional": true,
+      "hive": "user",
+      "key": "Software\\Wine\\AppDefaults\\azimuth.exe\\DllOverrides",
+      "values": {
+        "winmm": "native,builtin"
+      }
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "azimuth.exe",
+      "start_dir": "{game_dir}",
+      "launch_options": "--game=\"Forza Horizon 3\" --skip-launcher",
+      "proton": "GE-Proton11-1",
+      "appid": 3684037968
+    }
+  ],
+  "post_apply_message": "Forza Horizon 3 added to Steam on GE-Proton11-1 with its pinned appid, launching azimuth.exe with --game=\"Forza Horizon 3\" --skip-launcher. If Azimuth's launcher opens anyway, pick Forza Horizon 3 there.\n\nThe Extra Options mod (winmm.dll plus the mods folder) is copied into the game folder. It is switched on by a registry value inside the game's Proton prefix, not by launch options. That prefix only exists after the first launch through Steam, so if Apply reports the registry step as skipped, launch the game once and Apply again.\n\nSettings are not installed by this recipe: they are saved and restored with the game's saves. That covers data/azimuth.ini, FH3_ExtraOptions.ini and the INI file of each plugin. Restore them after Apply if this is a fresh install.\n\nExtra Options keys: Autodrive is F2 on a keyboard or L3+R3 on a controller. The ANNA menu (D-Pad Down) has a Car page. Most options are also in the game's Settings, under HUD and Gameplay and under Video.",
+  "notes": "FORZA HORIZON 3 ON AZIMUTH. Title id 4CE1DFAB, game version 1.0.125.0 (from the mod's own log). Recorded from the handheld as it stood on 6 Nov 2026: Azimuth 1.0.4 (azimuth.exe is the same 8,613,376-byte file, sha256 56d2c9cb6ccf3ae1836dee9676b64285f3a247efa2d12cf02c6c742696b3b092, in all four Azimuth game folders: Forza Horizon 2, Forza Horizon 3, Forza Motorsport 5 and Forza Motorsport 6), running on Wine 11.0 Staging under GE-Proton11-1 (both read from data/logs/azimuth.log). data/bin is byte-identical to the Forza Motorsport 5 and 6 folders, so nothing in the Azimuth files themselves is modified. The package is the usual three pieces: era.vbi, Mount/ and EmbeddedXvd/ (the game exe is Mount/forza_durango_release_final.exe).\n\nDETECTION. azimuth.exe is the launcher in four game folders, so it cannot identify a game on its own. detect uses install_dir_names (the folder is named Forza Horizon 3) and the marker only as a second pass.\n\nAPPID. The main account's shortcut is 3684037968, which is not what crc32('gfm:forza-horizon-3-azimuth') gives. It is pinned on the steam_shortcut step; without the pin Apply would rewrite the existing entry's appid to the derived one on every account, which leaves the live prefix behind and starts an empty one. steam_appid stays null (it is for real Steam installs). That id matches neither GFM formula (the recipe one gives 3670556660, the generic deploy one 2376726842), so GFM did not create the entry, and its name is plain 'Forza Horizon 3'. A second Steam account on the same machine has its own entry called 'Forza Horizon 3 (Azimuth)'; that name is an alias so Apply updates that entry instead of adding a duplicate. Apply writes to every account.\n\nLAUNCH OPTIONS ARE EXACTLY AS STEAM HOLDS THEM: --game=\"Forza Horizon 3\" --skip-launcher. They do not skip the launcher today: data/logs/azimuth.log has \"no game of that name is added; the launcher opens\" for 16 sessions, even though data/azimuth.ini has name=Forza Horizon 3. Mirrored as they are. There is no WINEDLLOVERRIDES (the Forza Horizon 2 shortcut does carry one). Checked, not assumed: the mod is loaded because the prefix registry has [Software\\Wine\\AppDefaults\\azimuth.exe\\DllOverrides] winmm=native,builtin. That value is absent from the prefix backup taken just before the mod went on (user.reg in the pre-mod backup folder) and present now, and Azimuth's own log lists 'module WINMM.dll' from the game folder in the sessions that followed. The wine_registry step reproduces it and is optional because the prefix does not exist before the first launch.\n\nEXTRA OPTIONS (FH3 build). The game folder holds winmm.dll (135,168 bytes, sha256 93a6bad81716c8becd3ce45e258315993e74c5abb5f424578a3c29b2ceb56519), FH3_ExtraOptions.ini and three plugins under mods/<Name>/plugins/: FreeFastTravel.dll (4,608 bytes, aa41f1d84726f16bf8128e7fc587ab761b4d9368bebf796503faef0d46b5558d), GrooveMusicRadio.dll (1,662,976 bytes, 8e84c492b8975b52885e06521d1efb2abfedd20ec335800830e8d2415a71ce64) and NoPause.dll (54,784 bytes, 08e400d4c98316fab317fe148eb4b2663479e968409fe0171f73133f75fb91db). The mod logs 'Forza Horizon 3 Extra Options 0.4.4' to FH3_ExtraOptions.log. Its public home is github.com/RokkuDayo/ForzaHorizon2_ExtraOptions, whose README documents an FH3 build and whose source tree has an fh3 folder. NO PUBLISHED RELEASE CARRIES AN FH3 ZIP (checked on 6 Nov 2026: all five releases hold only FH2 zips; the latest, v0.4.4 tagged Azimuth_v1.0.0, has the FH2 Azimuth and Mezcal builds), so there is no URL and sha256 to put in remote_payloads. The four files come from the NAS instead, at _recipes/forza-horizon-3-azimuth/payload/mod/, copied byte for byte from the handheld and hash-checked at both ends. The installed build is older than the project's current source: the current default INI has keys such as ReturnToGarage and UnlockHornAccelerator that the installed INI lacks, so do not swap in a fresh build without testing. FreeFastTravel is not in the project's source tree or releases, and its origin is not recorded here. GrooveMusicRadio.dll is installed but switched off by GrooveMusicRadio=0 under [Mods] in FH3_ExtraOptions.ini; it is mirrored as it is. Mount/mods holds a generated 'Extra Options mirror' text file, which the mod recreates; it is not captured.\n\nWHY THE INI FILES ARE save_paths AND NOT copy_files. The mod writes FH3_ExtraOptions.ini itself when a setting is changed in the game's menus (WritePrivateProfileStringW in the project's fh3/fh3.c), and its README tells people to keep their own INIs when updating. A copy_files step would show partial as soon as anyone changed a setting and would overwrite the change on the next Apply. The one customisation today is GrooveMusicRadio=0, but the file belongs to the owner either way. The three plugin INIs are listed for the same reason (GrooveMusicRadio.ini has a field for a Spotify API key). After a reimage the order is Apply (mod files, registry, shortcut), then restore the saved settings.\n\nSAVES. The career is data/titles/4CE1DFAB/saves: 191 files, 8.1 MB, Azimuth's player-1/User_<id>/revisions/<n> layout plus liveries and thumbnails dated 2016 to 2021 (an imported Store save, brought in on 27 Oct 2026). The game folder keeps only the newest two revisions of the profile (revisions 30 and 31 were the only ones present), so capture early. saves.before_store_import_20261027_195257 sits beside it: 6 files, 170 KB, two earlier revisions of User_9000000000000 with a real ProfileData (74,484 and 97,716 bytes), i.e. the profile the game made before the import replaced it. It is listed because it is the rollback point for that import and it costs almost nothing. The narrow saves path is used on purpose: the wider title folder also holds tmp/ (scratch files) and pipeline-log.bin. data/titles/1A96545B/saves is a snapshot of a Forza Horizon 2 save (26 files, 13.7 MB) that the Store-save import put there on purpose, so that this game can see earlier-game history. Whether that has any effect in game is untested. It is captured because it is part of the setup. The 64F9397E and 7B35D917 title folders hold only generated art and are not captured. ISOLATION.txt in the game folder says no Store saves were imported; that is out of date.\n\nazimuth.ini holds the per-game settings and is a plain byte-for-byte copy. It is UTF-16LE with a BOM and CRLF line endings: never use ini_edit on it, which would corrupt it without raising an error. Its launcher paths are absolute (folder=D:\\Games\\Forza Horizon 3) and are left alone on purpose: Wine creates the D: drive itself for the mounted SD card.\n\nNOT YET EXERCISED: Apply from this recipe has not been run on the handheld; the acceptance check only verifies each step against the live install and simulates the shortcut write on copies of both accounts' shortcuts.vdf. The registry step has never been applied by GFM (the value on the handheld was set outside GFM)."
+}

@@ -1,0 +1,42 @@
+{
+  "id": "forza-motorsport-6-azimuth",
+  "name": "Forza Motorsport 6",
+  "aliases": [
+    "Forza Motorsport 6 (Azimuth)",
+    "FM6"
+  ],
+  "steam_appid": null,
+  "detect": {
+    "install_dir_names": [
+      "Forza Motorsport 6"
+    ],
+    "marker_files": [
+      "azimuth.exe"
+    ]
+  },
+  "requires_game": true,
+  "platforms": [
+    "linux"
+  ],
+  "save_paths": [
+    "{game_dir}/data/titles/64F9397E/saves",
+    "{game_dir}/data/azimuth.ini"
+  ],
+  "steps": [
+    {
+      "type": "install_runner",
+      "optional": true,
+      "name": "GE-Proton11-1"
+    },
+    {
+      "type": "steam_shortcut",
+      "exe": "azimuth.exe",
+      "start_dir": "{game_dir}",
+      "launch_options": "--game=\"Forza Motorsport 6\" --skip-launcher",
+      "proton": "GE-Proton11-1",
+      "appid": 3559399554
+    }
+  ],
+  "post_apply_message": "Forza Motorsport 6 (Xbox One build, run through Azimuth) is in Steam on GE-Proton 11-1. Apply keeps the shortcut's existing Steam ID, so its prefix stays attached.\n\nThe shortcut starts azimuth.exe with --game=\"Forza Motorsport 6\" --skip-launcher. If Azimuth's launcher window opens anyway, pick Forza Motorsport 6 there.\n\nSettings live in data/azimuth.ini inside the game folder. Change them in Azimuth's launcher: the file is UTF-16, and a text tool that rewrites it as UTF-8 breaks it.\n\nIf a capture comes back empty after a real session, the saves path in this recipe is wrong: it has not been confirmed against a real save yet.",
+  "notes": "Mirrors the handheld as it stood on 2026-11-06. Forza Motorsport 6 (the Xbox One build) runs through Azimuth, the Xbox-to-PC wrapper, under GE-Proton 11-1. The folder holds azimuth.exe (8,613,376 bytes, sha256 56d2c9cb6ccf3ae1836dee9676b64285f3a247efa2d12cf02c6c742696b3b092), byte-identical to the one in the Forza Horizon 2, Forza Horizon 3 and Forza Motorsport 5 folders. That same exe logged itself as Azimuth 1.0.4 in the Forza Horizon 3 folder on 4-5 Nov 2026 (data/logs/azimuth.log), which is where the version comes from. New recipe; there was none before.\n\nWHAT THE RECIPE DOES: an install_runner for GE-Proton11-1 and a steam_shortcut that writes exactly what the main account holds today - appid 3559399554, exe azimuth.exe in the game folder, start dir the game folder, launch options --game=\"Forza Motorsport 6\" --skip-launcher, compat tool GE-Proton11-1. Nothing is shipped, because there is nothing non-stock in the folder (see below).\n\nTHE APPID IS PINNED, NOT DERIVED. The live shortcut and its prefix use 3559399554. The recipe formula crc32(\"gfm:forza-motorsport-6-azimuth\") would give 4207483415 and the generic deploy formula crc32(\"gfm:deploy:Forza Motorsport 6\") 3773073711, so neither matches. Without the pin, Apply would rewrite the existing entry's appid to the derived one on every account, which leaves the live prefix behind and starts an empty one. steam_appid stays null: it is for real Steam installs, and detection would go looking for an appmanifest.\n\nTWO STEAM ACCOUNTS. The shortcut exists in both accounts' shortcuts.vdf under the same appid. The main account calls it \"Forza Motorsport 6\" and the second account \"Forza Motorsport 6 (Azimuth)\". Apply writes to every account and renames the entry to the recipe name, so the second account's name is kept as an alias and its entry is matched rather than duplicated.\n\nLAYOUT (verified on disk). Unlike Forza Motorsport 5, the game package is at the root of the folder: era.vbi, Mount/ and EmbeddedXvd/ sit beside azimuth.exe and data/ (2728 files in Mount/ and EmbeddedXvd/). Package identity from Mount/AppxManifest.xml: Name \"Monument\" (the package's internal name), Version 1.0.0.44, x64, DisplayName \"Forza Motorsport 6\", TitleId 64F9397E. The game exe is Mount/forza_durango_release_final.exe, lowercase on disk although the manifest spells it mixed-case, sha256 01ee5446d7d5afa655daf87751e63f9c2bff1e713236037ca2a9b6300642dbcf. That hash appears as a 64-hex string inside azimuth.exe (checked 2026-11-06), so Azimuth pins this exact exe and a differently packaged dump may be refused.\n\nazimuth.ini IS UTF-16LE + BOM + CRLF. NEVER point ini_edit at it: ini_edit reads and writes UTF-8 and raises nothing while it misaligns every following code unit. Its launcher paths are absolute and are left exactly as they are: [launcher] game=64f9397e, and [title-64f9397e] folder=D:\\Games\\Forza Motorsport 6 (the game folder itself, because the package is at its root). D: is the Wine drive letter for the mounted SD card (the prefix's dosdevices/d: points at the card); Wine creates it itself, so no step is needed. The file is listed in save_paths because it holds the per-game settings, and it is a plain byte-for-byte copy.\n\nNOTHING NON-STOCK IN THE FOLDER. Compared with the Forza Motorsport 5 and Forza Horizon 3 folders on 2026-11-06: azimuth.exe, data/licenses.txt and all 22 files under data/bin hash identically, including the stock 4608-byte azimuth-tls.dll (sha256 ffa229b6c62228bf6126de6f140c6a70326c536524bec00f9304ac6591805bb7). There is no winmm.dll, DWrite.dll or Extra Options file here, unlike the Forza Horizon 2 and 3 folders. The only extra file is ISOLATION.txt (also in the Forza Motorsport 5 and Forza Horizon 3 folders): one line saying the folder has its own executable, settings and runtime, that the existing Steam app id and prefix were kept, and that no Store saves were imported. Nothing reads it, so it is not shipped.\n\nSAVES - UNVERIFIED. {game_dir}/data/titles/64F9397E/saves does not exist yet: the title folder holds only art/ and tmp/. The path is inferred from how the Forza Horizon 2 and 3 folders lay out their saves (titles/<TITLEID>/saves/player-N/...), with the title id taken from the package manifest and written uppercase as on disk. It is the narrow form on purpose: the whole title folder would also sweep in art/ and tmp/. Capture skips a missing path silently, so an empty capture after a real session means this path is wrong - check it against the first save that appears. Azimuth keeps only the latest two save revisions on Forza Horizon 2 (not yet seen for this game), so capture early.\n\nNOT YET CONFIRMED IN PLAY. The only session in data/logs/azimuth.log (27 Oct 2026, Azimuth 1.0.1) opened the launcher and quit. It reports \"--game=Forza Motorsport 6: no game of that name is added; the launcher opens\", so --game/--skip-launcher did not skip the launcher in that run, and nothing has been logged since. Mirrored as it is; not re-tested on 1.0.4.\n\nDo not confuse this with forza-motorsport-linux, which is the 2023 Forza Motorsport."
+}
