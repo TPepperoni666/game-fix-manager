@@ -108,6 +108,27 @@ afterwards.
 - **Test the mount with `ismount`, not "are there files here".** A shadowed
   mountpoint reads as a perfectly good directory — that is the entire
   mechanism by which a week of saves landed on the internal disk.
+- **The log is not a way of telling anyone.** In October an OS update removed
+  the automount unit, and two runs skipped the NAS and said so correctly in a
+  log nobody opened. Each run now leaves a record (`core/weeklyhealth.py`, in
+  the config dir, because the NAS and the SD card are what can go missing).
+  The menu banner, Self-Check, the desktop notification and the Desktop Mode
+  login retry all read that one record. A new way for the job to fall short
+  belongs in `summarise()`, or nobody hears about it.
+- **No route into Game Mode is known, and that is untested on hardware.**
+  Steam's toasts live inside its UI process, where Decky reaches them through a
+  plugin and a Python process can't. So a device that stays in Game Mode and
+  never opens GFM may still hear nothing. `notify()` returning a tool name means
+  the message was accepted, not that it was seen.
+- **`runs_from_log` parses the job's own messages.** Rewording `NAS STILL DOWN`,
+  `NO SD CARD`, `Weekly backup complete` or `Weekly backup finished with`
+  breaks the backfill. The suite feeds real job output through it to catch that.
+- **A repair may diagnose; it must not get cleverer.** `_repair_nas_mount` gives
+  up when the automount is gone, and that stays. Starting the surviving `.mount`
+  would bring the share back from a timer, and the share being down is
+  currently all that stops reclaim acting on games that lost their shortcut.
+  The owner decides when it comes back, so the warning names the cost beside
+  the repair step, and every reconnect flow calls `_warn_before_reconnect`.
 
 ## Destructive operations
 

@@ -309,3 +309,14 @@ Everything below is written, unit-tested (159 smoke checks) and pushed, but
   Windows** (GNU tar reads `C:\...` as a hostname). Pre-existing, environment
   only — passes under PowerShell/bsdtar and on the Deck.
 - Deck-verified already (don't re-test): **L.A. Noire, The Crew, Simpsons**.
+- **Reclaim's "still on the NAS" guard only checks that `_games/<name>/`
+  exists, not that it is current.** An old or differently built copy still
+  counts as reversible, so reclaim can delete a modded game whose only NAS copy
+  won't bring it back. Needs its own look; deliberately not changed yet.
+- **A read-only share still reports "all 6 steps OK".** `_capture_all` prints
+  the problem and returns, so `step()` records success. On one real run capture
+  did nothing and only the prefix count fell. `weeklyhealth` catches it that
+  way, but the job should count it as skipped.
+- **The weekly prefix set shrinks while the NAS is down**, because the managed
+  half of the list is read from it. `weeklyhealth` reports this; a local copy
+  of the list would stop it happening.

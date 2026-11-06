@@ -4050,9 +4050,694 @@ def main():
         finally:
             _os.stat = _real_stat
 
+        weekly_health_checks(tmp, gfm_mod)
+
         print(f"\nAll {PASS} checks passed.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def weekly_health_checks(tmp: Path, gfm_mod) -> None:
+    """The October outage. The weekly job skipped the NAS for two weeks, said
+    so in a log nobody read, and systemd was the only other witness. Everything
+    here CALLS the code: the real job and the real menu on a stub, the real
+    reclaim scan, and a real `python -m core.weeklyhealth` process. Nothing
+    touches a real mount, unit, notification or home directory, so this is safe
+    to run on the Deck itself."""
+    import os
+    import subprocess
+    import types
+    from datetime import datetime, timedelta
+    from core import prefixbackup, sdmap, shortcutstate
+    from core import selfcheck as sc
+    from core import shortcutsvdf as sv
+    from core import store
+    from core import weeklyhealth as wh
+    from ui.textwidth import display_width
+
+    print("== weekly health (nobody reads the log) ==")
+    root = tmp / "weekly"
+    root.mkdir()
+    real_notify = wh.notify
+    saved = {
+        "cfg": store.CONFIG_DIR, "etc": sc.SYSTEMD_ETC,
+        "prev": sc.ETC_PREVIOUS, "unit": sc.unit_name_for,
+        "log": sdmap.log_path, "cards": store.sd_card_roots,
+        "seed": wh.load_or_seed, "rec": wh.record_run, "begin": wh.begin_run,
+        "run": subprocess.run, "xdg": os.environ.get("XDG_CONFIG_HOME"),
+        "enum": prefixbackup.enumerate_prefixes,
+        "state": shortcutstate.load,
+    }
+    store.CONFIG_DIR = root / "cfg"
+    sc.SYSTEMD_ETC = root / "etc"
+    sc.ETC_PREVIOUS = root / "prev"
+    sc.SYSTEMD_ETC.mkdir()
+    sc.ETC_PREVIOUS.mkdir()
+    # A backslash in the real escaped name is a separator on Windows.
+    sc.unit_name_for = lambda path: "mnt-gamefixes"
+    job_log = root / "job.log"
+    job_log.write_text("", encoding="utf-8")
+    sdmap.log_path = lambda: job_log
+    store.sd_card_roots = lambda: [root]
+    os.environ["XDG_CONFIG_HOME"] = str(root / "xdg")
+    sent = []
+    wh.notify = lambda title, body, **k: sent.append((title, body)) or "fake"
+
+    try:
+        # --- the record ---------------------------------------------------
+        empty = root / "empty.log"
+        empty.write_text("", encoding="utf-8")
+        hp = root / "a.json"
+
+        def good(at, prefixes=11):
+            return wh.new_run(prefixes=prefixes, at=at, os_build="100")
+
+        def nas_skip(at, prefixes=1):
+            return wh.new_run(skipped=["2/6", "3/6", "4/6"], nas_skipped=True,
+                              prefixes=prefixes, at=at)
+
+        def record(run, path=hp):
+            return wh.record_run(run, path=path, log_file=empty)
+
+        record(good("2026-10-18T19:02:49"))
+        record(nas_skip("2026-10-25T19:01:14"))
+        rec = record(nas_skip("2026-11-01T19:01:12"))
+        check("two skipped runs count as two",
+              rec["streaks"]["nas"]["count"] == 2)
+        check("the streak keeps the date it began",
+              rec["streaks"]["nas"]["since"] == "2026-10-25T19:01:14")
+        check("a skipped run is never the last complete one",
+              rec["last_ok"]["at"] == "2026-10-18T19:02:49")
+        rec = record(good("2026-11-08T19:02:00"))
+        check("one complete run ends the streak",
+              "nas" not in rec["streaks"]
+              and rec["last_ok"]["at"] == "2026-11-08T19:02:00")
+        check("a run writes no leftover temp file",
+              not hp.with_name(hp.name + ".tmp").exists())
+        rec = record(wh.new_run(skipped=["1/6", "5/6"], sd_skipped=True,
+                                at="2026-11-09T19:00:00"))
+        check("an SD skip is counted apart from a NAS skip",
+              rec["streaks"]["sd"]["count"] == 1
+              and "nas" not in rec["streaks"])
+        hp.write_text('{"seeded": tr', encoding="utf-8")
+        check("a truncated record reads as empty, not a crash",
+              wh.load(hp) == {})
+        hp.write_text("[1, 2]", encoding="utf-8")
+        check("a record of the wrong shape reads as empty", wh.load(hp) == {})
+
+        # --- backfilling from gfm.log ------------------------------------
+        # In the real format, including the two traps: the health preamble
+        # prints a cross just like a failed step, and the run still going at
+        # the end of the file has no outcome yet.
+        log_text = (
+            "2026-10-18 19:00:03 " + "=" * 60 + "\n"
+            "2026-10-18 19:00:03 start: cmd=weekly-backup store=/s recipes=54\n"
+            "2026-10-18 19:02:41 [info] Backing up 11 remembered prefix(es) "
+            "(21 no longer in compatdata).\n"
+            "2026-10-18 19:02:49 [success] Weekly backup complete \u2014 all 6 "
+            "steps OK in 2m 46s.\n"
+            "2026-10-20 10:00:00 start: cmd=None store=/s recipes=54\n"
+            "2026-10-20 10:00:01 [dim] \U0001F4E6 Store : /s\n"
+            "2026-10-25 19:00:19 start: cmd=weekly-backup store=/s recipes=54\n"
+            "2026-10-25 19:00:44 [warn]   \u2717 NAS mounted                NO\n"
+            "2026-10-25 19:00:44 [error] \u26A0 NAS STILL DOWN \u2014 every step"
+            " that writes to it is being SKIPPED.\n"
+            "2026-10-25 19:01:13 [info] Backing up 1 remembered prefix(es).\n"
+            "2026-10-25 19:01:14 [error] Weekly backup finished with 3 skipped "
+            "step(s) in 0m 30s:\n"
+            "2026-10-25 19:01:14 [warn]   \u23ed  2/6 adopt new shortcuts: "
+            "skipped \u2014 NAS not mounted\n"
+            "2026-11-01 19:00:15 start: cmd=weekly-backup store=/s recipes=54\n"
+            "2026-11-01 19:00:41 [error] \u26A0 NAS STILL DOWN \u2014 skipped\n"
+            "2026-11-01 19:01:11 [info] Backing up 1 remembered prefix(es).\n"
+            "2026-11-01 19:01:12 [error] Weekly backup finished with 3 skipped "
+            "step(s) in 0m 31s:\n"
+            "2026-11-08 19:00:15 start: cmd=weekly-backup store=/s recipes=54\n"
+            "2026-11-08 19:00:41 [error] \u26A0 NAS STILL DOWN \u2014 skipped\n")
+        outage = root / "outage.log"
+        outage.write_text(log_text, encoding="utf-8")
+        seeded_path = root / "seeded.json"
+        rec = wh.load_or_seed(seeded_path, outage)
+        check("the log backfills an outage already under way",
+              rec["streaks"]["nas"]["count"] == 2
+              and rec["streaks"]["nas"]["since"] == "2026-10-25T19:01:14")
+        check("the backfill finds the last complete run",
+              rec["last_ok"]["at"] == "2026-10-18T19:02:49")
+        check("the backfill keeps the prefix count from before the drop",
+              rec["prefix_baseline"] == 11
+              and rec["last_run"]["prefixes"] == 1)
+        check("the health preamble is not mistaken for a failed step",
+              "failed" not in rec["streaks"]
+              and rec["last_run"]["failed"] == [])
+        check("a skipped step is read from below the summary line",
+              wh.runs_from_log(log_text)[1]["skipped"]
+              == ["2/6 adopt new shortcuts"])
+        check("a run with no summary line is not counted",
+              len(wh.runs_from_log(log_text)) == 3)
+        again = wh.load_or_seed(seeded_path, outage)
+        check("the log is only counted once",
+              again["streaks"]["nas"]["count"] == 2)
+        wh.begin_run(seeded_path, outage)
+        check("a run in progress is marked",
+              "running_since" in wh.load(seeded_path))
+        rec = wh.record_run(nas_skip("2026-11-08T19:01:00"), path=seeded_path,
+                            log_file=outage)
+        check("the next real run adds to the backfilled streak",
+              rec["streaks"]["nas"]["count"] == 3
+              and "running_since" not in rec)
+        waiting = root / "waiting.json"
+        check("no log yet leaves the record unseeded, to try again",
+              not wh.load_or_seed(waiting, root / "no.log").get("seeded"))
+        check("and the backfill happens once the log is back",
+              wh.load_or_seed(waiting, outage)["streaks"]["nas"]["count"] == 2)
+
+        # --- what a person is told ---------------------------------------
+        when = datetime(2026, 11, 6, 12, 0)
+        rec = wh.load(waiting)
+        lines = wh.summarise(rec, now=when, nas_mounted=False, held_back=4,
+                             expect_timer=True).banner()
+        text = "\n".join(t for _s, t in lines)
+        check("the warning says how many runs and since when",
+              "2 weekly runs skipped the NAS steps, since 25 Oct 2026" in text)
+        check("the warning says when a run last completed",
+              "Last complete run: 18 Oct 2026" in text)
+        check("the warning says the prefix set shrank",
+              "Prefixes backed up: 1, was 11" in text)
+        check("the warning names the exact repair step",
+              "Settings > \U0001F50C Connect NAS Payloads" in text)
+        check("and warns what the repair costs before anyone does it",
+              "reconnecting puts up to 4 game(s) at risk" in text
+              and text.index("Connect NAS") < text.index("reconnecting"))
+        check("and is no taller than the menu lines it replaces plus the spare",
+              len(lines) <= 6)
+        worst = dict(rec, prefix_baseline=120, streaks={
+            "nas": {"count": 52, "since": "2026-09-28T19:00:00"}})
+        too_wide = [t for _s, t in wh.summarise(
+            worst, now=when, nas_mounted=False, held_back=120,
+            expect_timer=True).banner() if display_width(t) + 2 > 80]
+        check("every banner line fits 80 columns with gum's indent",
+              too_wide == [])
+        back = wh.summarise(rec, now=when, nas_mounted=True, held_back=4,
+                            expect_timer=True)
+        back_text = back.body()
+        check("once the share is back it stops sending people to repair it",
+              "Connect NAS" not in back_text and "is back" in back_text)
+        check("and stops warning about a reconnect that already happened",
+              "reconnecting" not in back_text)
+        check("with nothing held back there is nothing to warn about",
+              "reconnecting" not in wh.summarise(
+                  rec, now=when, nas_mounted=False, held_back=0,
+                  expect_timer=True).body())
+        check("a healthy record says nothing",
+              wh.summarise({"last_run": good(wh._stamp(when)),
+                            "last_ok": good(wh._stamp(when))},
+                           now=when, nas_mounted=True) is None)
+        check("a device with no runs says nothing",
+              wh.summarise({}, now=when, nas_mounted=False) is None)
+        late = {"last_run": good("2026-10-18T19:00:00"),
+                "last_ok": good("2026-10-18T19:00:00")}
+        check("a timer that stopped firing is caught",
+              "No weekly run for 18 days" in wh.summarise(
+                  late, now=when, expect_timer=True).body())
+        check("but not on a platform with no timer",
+              wh.summarise(late, now=when, expect_timer=False) is None)
+        check("a run that died is not mistaken for one still going",
+              "never finished" in wh.summarise(
+                  dict(late, running_since="2026-11-01T19:00:00"), now=when,
+                  expect_timer=False).body())
+        check("a run that started minutes ago is left alone",
+              wh.summarise(dict(late, running_since=wh._stamp(
+                  when - timedelta(minutes=10))), now=when,
+                  expect_timer=False) is None)
+        check("a NAS gone since the last run is reported before it costs one",
+              "not mounted right now" in wh.summarise(
+                  {"last_run": good(wh._stamp(when)),
+                   "last_ok": good(wh._stamp(when))}, now=when,
+                  nas_mounted=False, expect_timer=True).body())
+
+        # The 4 Oct run: a read-only share, capture did nothing, and it still
+        # reported all 6 steps OK. Only the prefix count gave it away.
+        pp = root / "prefix.json"
+        record(good("2026-09-27T19:00:00", 10), pp)
+        rec = record(good("2026-10-04T19:00:00", 1), pp)
+        check("a 'complete' run whose prefix set collapsed is still flagged",
+              "backed up 1 prefix(es), down from 10" in wh.summarise(
+                  rec, now=datetime(2026, 10, 5), expect_timer=False).body())
+        rec = record(good("2026-10-11T19:00:00", 11), pp)
+        check("and that clears when the set comes back",
+              wh.summarise(rec, now=datetime(2026, 10, 12),
+                           expect_timer=False) is None)
+        record(good("2026-10-18T19:00:00", 4), pp)
+        rec = record(good("2026-10-25T19:00:00", 4), pp)
+        check("the same low count twice with the NAS up is the new normal",
+              wh.summarise(rec, now=datetime(2026, 10, 26),
+                           expect_timer=False) is None)
+        record(good("2026-11-01T19:00:00", 10), pp)
+        record(nas_skip("2026-11-08T19:00:00", 1), pp)
+        rec = record(nas_skip("2026-11-15T19:00:00", 1), pp)
+        check("a low count during an outage never becomes the new normal",
+              rec["prefix_baseline"] == 10)
+
+        # --- notifications -----------------------------------------------
+        def runner(*results):
+            calls = []
+
+            def run(argv, **kw):
+                calls.append((argv, kw))
+                r = results[len(calls) - 1]
+                if isinstance(r, Exception):
+                    raise r
+                return types.SimpleNamespace(returncode=r)
+            run.calls = calls
+            return run
+
+        def having(*names):
+            return lambda name: name if name in names else None
+
+        bus = {"DBUS_SESSION_BUS_ADDRESS": "unix:path=/nowhere"}
+        both = having("notify-send", "gdbus")
+        run = runner(0)
+        check("notify-send is used when it answers",
+              real_notify("t", "b", run=run, which=both, env=bus)
+              == "notify-send" and len(run.calls) == 1)
+        check("the notification is critical, so Plasma keeps it on screen",
+              "--urgency=critical" in run.calls[0][0])
+        check("a call can never hold up the job",
+              run.calls[0][1].get("timeout", 0) > 0)
+        check("gdbus is the fallback",
+              real_notify("t", "b", run=runner(1, 0), which=both, env=bus)
+              == "gdbus")
+        check("no notification service reads as not delivered",
+              real_notify("t", "b", run=runner(1, 1), which=both, env=bus)
+              is None)
+        check("a hung D-Bus activation is not a crash",
+              real_notify("t", "b", which=both, env=bus, run=runner(
+                  subprocess.TimeoutExpired("x", 15), OSError("gone")))
+              is None)
+        run = runner()
+        check("with neither tool installed nothing is run",
+              real_notify("t", "b", run=run, which=having(), env=bus) is None
+              and run.calls == [])
+        runtime = root / "runtime"
+        runtime.mkdir()
+        check("no session bus reads as nothing to talk to",
+              wh._bus_env({"XDG_RUNTIME_DIR": str(runtime)}) is None)
+        (runtime / "bus").write_text("", encoding="utf-8")
+        check("the bus is found when a unit did not inherit its address",
+              "bus" in wh._bus_env({"XDG_RUNTIME_DIR": str(runtime)})
+              ["DBUS_SESSION_BUS_ADDRESS"])
+
+        # --- the Desktop Mode retry --------------------------------------
+        auto = root / "autostart"
+        entry = auto / wh.AUTOSTART_NAME
+        wh.sync_autostart(True, directory=auto, python="/usr/bin/python3",
+                          app_dir="/home/deck/game fix manager")
+        body = entry.read_text(encoding="utf-8")
+        check("the login retry runs the module, not gfm.py",
+              'Exec="/usr/bin/python3" -m core.weeklyhealth' in body)
+        check("and runs it from the checkout",
+              "Path=/home/deck/game fix manager\n" in body)
+        wh.sync_autostart(False, directory=auto)
+        check("the login retry goes away when the alert does",
+              not entry.exists())
+        wh.sync_autostart(False, directory=auto)
+        check("removing it twice is harmless", not entry.exists())
+        check("a relative XDG_CONFIG_HOME is ignored, not obeyed",
+              wh.autostart_dir({"XDG_CONFIG_HOME": "relative/nope"})
+              == Path.home() / ".config" / "autostart")
+
+        cfg_main = wh.health_path()
+        wh.save(wh.load(waiting), cfg_main)
+        entry.parent.mkdir(exist_ok=True)
+        wh.sync_autostart(True, directory=auto)
+        tries, waits = [], []
+
+        def flaky(title, body, **k):
+            tries.append(body)
+            return "fake" if len(tries) == 2 else None
+        wh.notify = flaky
+        rc = wh.main(tries=3, wait=7, sleep=waits.append, directory=auto)
+        check("the login retry waits for Plasma, then stops once delivered",
+              rc == 0 and len(tries) == 2 and waits == [7])
+        check("and keeps its entry while there is still a problem",
+              entry.is_file())
+        wh.save({"seeded": True}, cfg_main)
+        tries.clear()
+        wh.main(directory=auto)
+        check("with nothing wrong it says nothing and removes itself",
+              tries == [] and not entry.exists())
+
+        # A real process: this is the import path the desktop entry uses. The
+        # record is already seeded so it can't read a real gfm.log, and it is
+        # healthy so nothing is sent.
+        cfg2 = root / "cfg2"
+        wh.save({"seeded": True}, cfg2 / "weekly_health.json")
+        proc = subprocess.run(
+            [sys.executable, "-m", "core.weeklyhealth"],
+            cwd=str(Path(__file__).resolve().parent.parent),
+            env=dict(os.environ, GFM_CONFIG_DIR=str(cfg2)),
+            capture_output=True, text=True, timeout=60)
+        check("python -m core.weeklyhealth really runs",
+              proc.returncode == 0 and proc.stderr == "")
+        wh.notify = lambda title, body, **k: sent.append((title, body)) or "fake"
+
+        # --- the real job, on a stub --------------------------------------
+        class UI:
+            def __init__(self):
+                self.msgs = []
+                self.picks = []
+
+            def header(self, title):
+                pass
+
+            def msg(self, text, style="info"):
+                self.msgs.append((style, str(text)))
+
+            def choose(self, header, options, multi=False):
+                self.msgs.append(("choose", header))
+                return [self.picks.pop(0)] if self.picks else ["\u274C Exit"]
+
+            def input(self, prompt, default="", password=False):
+                return ""
+
+        class Job:
+            """Just enough App to run the real methods."""
+            cmd_weekly_backup = gfm_mod.App.cmd_weekly_backup
+            cmd_backup_prefixes = gfm_mod.App.cmd_backup_prefixes
+            _repair_nas_mount = gfm_mod.App._repair_nas_mount
+            _reclaim_held_back = gfm_mod.App._reclaim_held_back
+            _warn_before_reconnect = gfm_mod.App._warn_before_reconnect
+            _weekly_state = gfm_mod.App._weekly_state
+            _weekly_mark_started = gfm_mod.App._weekly_mark_started
+            _weekly_record_outcome = gfm_mod.App._weekly_record_outcome
+            _gb = staticmethod(gfm_mod.App._gb)
+            menu = gfm_mod.App.menu
+
+            def __init__(self, mounted=False, prefixes=None):
+                self.ui = UI()
+                self.args = types.SimpleNamespace()
+                self.cfg = {}
+                self.recipes = []
+                self.store_root = root
+                self.steam_root = None
+                self.local_payloads = root / "mnt"
+                self.mounted = mounted
+                if prefixes is not None:
+                    self._weekly_prefix_count = prefixes
+                self.opened_list = 0
+
+            def text(self):
+                return "\n".join(t for _s, t in self.ui.msgs)
+
+            def log(self, text):
+                pass
+
+            def cmd_list(self):
+                self.opened_list += 1
+
+            def _nas_ok(self):
+                return self.mounted
+
+            def _refresh_map(self, skip_nas_writes=False):
+                pass
+
+            def _adopt_shortcuts(self, interactive=True):
+                pass
+
+            def _sync_shortcut_state(self):
+                pass
+
+            def _capture_all(self):
+                pass
+
+            def cmd_reclaim(self, skip_map=False):
+                pass
+
+        wh.save({"seeded": True}, cfg_main)
+        job = Job(mounted=False, prefixes=1)
+        rc = job.cmd_weekly_backup()
+        rec = wh.load()
+        check("a NAS-down run still exits non-zero for systemd", rc == 3)
+        check("the real job leaves a record of the skip",
+              rec["streaks"]["nas"]["count"] == 1
+              and rec["last_run"]["nas_skipped"] is True
+              and rec["last_run"]["complete"] is False)
+        check("and clears its started marker", "running_since" not in rec)
+        check("the unattended run raises a notification",
+              len(sent) == 1 and sent[0][0] == wh.TITLE)
+        check("and the notification names the repair step",
+              "Connect NAS Payloads" in sent[0][1])
+        check("the warning reaches the log as well",
+              "BACKUP INCOMPLETE" in job.text())
+
+        # The parser reads lines this job writes, so check it against what
+        # the job really writes. A reworded message fails here, not in the
+        # field, where it would silently stop counting.
+        def as_log(ran, day):
+            return (f"{day} 19:00:00 start: cmd=weekly-backup store=/s\n"
+                    + "".join(f"{day} 19:00:30 [{s}] {t}\n"
+                              for s, t in ran.ui.msgs))
+        parsed = wh.runs_from_log(as_log(job, "2026-11-08"))
+        check("the log parser understands the job's own skip output",
+              len(parsed) == 1 and parsed[0]["nas_skipped"] is True
+              and parsed[0]["skipped"] == rec["last_run"]["skipped"]
+              and parsed[0]["complete"] is False)
+
+        job = Job(mounted=False, prefixes=1)
+        job.cmd_weekly_backup()
+        check("a second skipped run makes two",
+              wh.load()["streaks"]["nas"]["count"] == 2)
+
+        job = Job(mounted=True, prefixes=11)
+        sent.clear()
+        rc = job.cmd_weekly_backup()
+        rec = wh.load()
+        check("a complete run exits zero and ends the streak",
+              rc == 0 and "nas" not in rec["streaks"]
+              and rec["last_ok"]["at"] == rec["last_run"]["at"])
+        check("a complete run sends nothing", sent == [])
+        check("the log parser understands the job's own success output",
+              wh.runs_from_log(as_log(job, "2026-11-08"))[0]["complete"])
+
+        class FailingJob(Job):
+            def _capture_all(self):
+                raise OSError("disk went away")
+
+        job = FailingJob(mounted=True, prefixes=11)
+        rc = job.cmd_weekly_backup()
+        rec = wh.load()
+        check("a failed step reaches the record too",
+              rc == 1 and rec["streaks"]["failed"]["count"] == 1)
+        check("and is named in what the person is told",
+              "4/6 art + saves + settings" in sent[-1][1])
+        parsed = wh.runs_from_log(as_log(job, "2026-11-08"))
+        check("the log parser understands the job's own failure output",
+              parsed[0]["failed"] == ["4/6 art + saves + settings"])
+
+        # Nothing outside step()'s try/except: a raw call in the preamble
+        # took a whole backup down once.
+        def boom(*a, **k):
+            raise RuntimeError("the reporting broke")
+        wh.record_run = boom
+        wh.begin_run = boom
+        job = Job(mounted=False, prefixes=1)
+        rc = job.cmd_weekly_backup()
+        wh.record_run = saved["rec"]
+        wh.begin_run = saved["begin"]
+        check("broken reporting cannot abort the backup or lose its exit code",
+              rc == 3 and "could not record" in job.text())
+
+        # The prefix count, through the real cmd_backup_prefixes. The NAS half
+        # of the managed list raising is what happens with the share gone.
+        prefix = types.SimpleNamespace
+        prefixbackup.enumerate_prefixes = lambda *a, **k: [
+            prefix(appid=n, name=f"p{n}", size=0, has_cloud=False)
+            for n in (1, 2, 3)]
+        shortcutstate.load = boom
+        job = Job()
+        job.args = types.SimpleNamespace(auto=True)
+        job.cfg = {"prefix_backup_selection": [2]}
+        job.steam_root = root
+        job._safe_prefix_backups = lambda chosen, dest: None
+        job.cmd_backup_prefixes(use_saved=True)
+        check("the real prefix backup reports how many it covered",
+              job._weekly_prefix_count == 1)
+        prefixbackup.enumerate_prefixes = saved["enum"]
+        shortcutstate.load = saved["state"]
+
+        # --- the real menu ------------------------------------------------
+        wh.save({"seeded": True}, cfg_main)
+        Job(mounted=False, prefixes=1).cmd_weekly_backup()
+        job = Job(mounted=False)
+        job.ui.picks = ["\U0001F4CB Status"]
+        job.menu()
+        styles = [s for s, _t in job.ui.msgs]
+        check("the real menu shows the warning",
+              "BACKUP INCOMPLETE" in job.text()
+              and "Connect NAS Payloads" in job.text())
+        check("and shows it above the choices, not after them",
+              styles.index("error") < styles.index("choose"))
+        check("it comes back on every redraw, so it can't be dismissed",
+              job.opened_list == 1
+              and job.text().count("BACKUP INCOMPLETE") == 2)
+        check("it replaces the status lines rather than adding rows",
+              "Store :" not in job.text())
+        wh.save({"seeded": True}, cfg_main)
+        job = Job(mounted=True)
+        job.menu()
+        check("a healthy menu is the normal menu",
+              "BACKUP INCOMPLETE" not in job.text()
+              and "Store :" in job.text())
+        wh.health_path().write_text("{truncated", encoding="utf-8")
+        job = Job(mounted=True)
+        job.menu()
+        check("a truncated record can't stop the menu opening",
+              "Store :" in job.text())
+        wh.load_or_seed = boom
+        job = Job(mounted=False)
+        job.menu()
+        wh.load_or_seed = saved["seed"]
+        check("nor can broken reporting", "Store :" in job.text())
+
+        # --- what reconnecting would cost ---------------------------------
+        steam = root / "steam"
+        (steam / "userdata" / "1" / "config").mkdir(parents=True)
+        for name in ("Kept", "Gone"):
+            (root / "games" / name).mkdir(parents=True)
+        sv.ensure_shortcut(steam, "Kept", "k.exe", str(root), "", 999000, [])
+        job = Job(mounted=False)
+        job.steam_root = steam
+        job.cfg = {"deployed": {
+            "Kept": {"sd_dir": str(root / "games" / "Kept")},
+            "Gone": {"shortcut_seen": True,
+                     "sd_dir": str(root / "games" / "Gone")}}}
+        check("the real reclaim scan finds a game held back only by the NAS",
+              job._reclaim_held_back() == 1)
+        check("and looking does not latch anything",
+              "shortcut_seen" not in job.cfg["deployed"]["Kept"])
+        job._warn_before_reconnect()
+        check("the reconnect flows spell that out",
+              "Up to 1 deployed game(s)" in job.text()
+              and "no prompt" in job.text()
+              and "\U0001F9F9 Reclaim" in job.text())
+        job.mounted = True
+        job.ui.msgs.clear()
+        job._warn_before_reconnect()
+        check("and stay quiet when the share is already up", job.text() == "")
+        job = Job(mounted=False, prefixes=1)
+        job.steam_root = steam
+        job.cfg = {"deployed": {"Gone": {
+            "shortcut_seen": True, "sd_dir": str(root / "games" / "Gone")}}}
+        sent.clear()
+        job.cmd_weekly_backup()
+        check("the unattended warning carries the same caution",
+              "at risk" in sent[0][1])
+        rec, alert, held = job._weekly_state()
+        check("the menu's count is live, and Self-Check gets the full story",
+              held == 1 and any(
+                  r.label == "before you reconnect" and "no prompt" in r.note
+                  for r in sc.weekly_rows(rec, alert, held)))
+
+        for route in ("cmd_setup_nas", "cmd_connect_nfs", "cmd_test_nas_mount"):
+            src = _weekly_source(gfm_mod, route)
+            check(f"{route} warns before its first question",
+                  src.index("_warn_before_reconnect")
+                  < src.index("NAS host / IP"))
+
+        # --- Self-Check ---------------------------------------------------
+        check("Self-Check reads the record",
+              "weekly_rows" in _weekly_source(gfm_mod, "cmd_selfcheck"))
+        check("a device with no runs is not a fault",
+              [r.verdict for r in sc.weekly_rows({}, None)] == [sc.INFO])
+        whole = {"last_run": good("2026-11-08T19:00:00"),
+                 "last_ok": good("2026-11-08T19:00:00")}
+        check("a healthy record is all OK",
+              {r.verdict for r in sc.weekly_rows(whole, None)} == {sc.OK})
+        rec = wh.load(waiting)
+        alert = wh.summarise(rec, now=when, nas_mounted=False,
+                             expect_timer=True)
+        rows = sc.weekly_rows(rec, alert)
+        check("an outage shows up as a fault, with the fix beside it",
+              any(r.verdict == sc.BAD for r in rows)
+              and any("Connect NAS Payloads" in r.value for r in rows))
+
+        # --- the diagnosis ------------------------------------------------
+        unit = "mnt-gamefixes"
+        release = root / "os-release"
+        release.write_text('NAME="SteamOS"\nBUILD_ID="20261015.100"\n',
+                           encoding="utf-8")
+        check("the OS build is read from os-release",
+              sc.os_build(release) == "20261015.100")
+        check("no os-release reads as no build",
+              sc.os_build(root / "nope") == "")
+        check("neither unit: says the setup is gone altogether",
+              "no NAS setup left" in sc.automount_diagnosis(
+                  "/mnt/gamefixes", this_build="")[0])
+        (sc.SYSTEMD_ETC / f"{unit}.mount").write_text("x", encoding="utf-8")
+        said = " ".join(sc.automount_diagnosis("/mnt/gamefixes", this_build=""))
+        check("a lone .mount is told apart from no setup at all",
+              ".mount is still there" in said
+              and "OS updates are the likely cause" in said)
+        said = " ".join(sc.automount_diagnosis(
+            "/mnt/gamefixes", last_build="20260925.101",
+            this_build="20261015.100"))
+        check("an OS change since the last good run is named",
+              "20260925.101 to 20261015.100" in said)
+        (sc.ETC_PREVIOUS / f"{unit}.automount").write_text("x", encoding="utf-8")
+        said = " ".join(sc.automount_diagnosis("/mnt/gamefixes", this_build=""))
+        check("a copy left by the update is the proof, so it is cited",
+              "An OS update dropped it" in said)
+
+        # The reason the mount must stay down until the owner decides: a
+        # repair that got cleverer here would re-arm reclaim from a timer.
+        ran = []
+
+        def forbidden(argv, **k):
+            ran.append(argv)
+            raise AssertionError(f"ran {argv}")
+        wh.save({"seeded": True, "last_ok": good("2026-10-18T19:00:00")},
+                cfg_main)
+        job = Job(mounted=False)
+        subprocess.run = forbidden
+        try:
+            result = job._repair_nas_mount()
+        finally:
+            subprocess.run = saved["run"]
+        check("with the automount gone the repair still gives up",
+              result is False)
+        check("and starts nothing, not even the surviving .mount", ran == [])
+        check("and the log now says what is left and why",
+              ".mount is still there" in job.text()
+              and "Connect NAS Payloads" in job.text())
+        (sc.SYSTEMD_ETC / f"{unit}.mount").unlink()
+        (sc.ETC_PREVIOUS / f"{unit}.automount").unlink()
+        job = Job(mounted=False)
+        job._repair_nas_mount()
+        check("and the same call reports a device with no units at all",
+              "no NAS setup left" in job.text())
+    finally:
+        store.CONFIG_DIR = saved["cfg"]
+        sc.SYSTEMD_ETC = saved["etc"]
+        sc.ETC_PREVIOUS = saved["prev"]
+        sc.unit_name_for = saved["unit"]
+        sdmap.log_path = saved["log"]
+        store.sd_card_roots = saved["cards"]
+        wh.notify = real_notify
+        wh.load_or_seed = saved["seed"]
+        wh.record_run = saved["rec"]
+        wh.begin_run = saved["begin"]
+        subprocess.run = saved["run"]
+        prefixbackup.enumerate_prefixes = saved["enum"]
+        shortcutstate.load = saved["state"]
+        if saved["xdg"] is None:
+            os.environ.pop("XDG_CONFIG_HOME", None)
+        else:
+            os.environ["XDG_CONFIG_HOME"] = saved["xdg"]
+
+
+def _weekly_source(gfm_mod, name: str) -> str:
+    import inspect
+    return inspect.getsource(getattr(gfm_mod.App, name))
 
 
 if __name__ == "__main__":

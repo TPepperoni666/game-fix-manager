@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import binascii
+import copy
 import json
 import os
 import shutil
@@ -26,7 +27,7 @@ from pathlib import Path
 from core import (adopted, deckysettings, deploy, detect, engine, fetch,
                   manifest, prefixbackup, prefiximport, prefixes, reclaim,
                   saves, sdmap, sdscan, shortcutsvdf, shortcutstate, steamart,
-                  steamperf, steamscan, steamvdf, store)
+                  steamperf, steamscan, steamvdf, store, weeklyhealth)
 from ui import get_ui
 
 STATUS_ICON = {engine.APPLIED: "✅", engine.NOT_APPLIED: "☐ ",
@@ -1671,6 +1672,10 @@ class App:
             except Exception:
                 pass
             chosen = [p for p in allp if str(p.appid) in remembered]
+            # The managed half of `remembered` comes off the NAS, so with the
+            # share gone this quietly drops to the hand-picked few. Kept for
+            # weeklyhealth, which is what says so.
+            self._weekly_prefix_count = len(chosen)
             if not chosen:
                 self.ui.msg("Nothing to back up yet — deploy or adopt a game "
                             "(auto-included), or run 💼 Back Up Prefixes to pick "
@@ -2347,12 +2352,16 @@ class App:
         target = str(self.local_payloads)
         base = sc.unit_name_for(target)
         auto = base + ".automount"
-        if not (Path("/etc/systemd/system") / auto).is_file():
+        if not (sc.SYSTEMD_ETC / auto).is_file():
             # Writing a unit needs root, which we haven't got here. Say
             # precisely which thing is missing and which menu rebuilds it.
             self.ui.msg(f"  ! {auto} does not exist — only Settings > "
                         "🔌 Connect NAS Payloads can recreate it (needs sudo).",
                         "error")
+            last_ok = weeklyhealth.load().get("last_ok") or {}
+            for line in sc.automount_diagnosis(
+                    target, last_build=last_ok.get("os_build", "")):
+                self.ui.msg(f"    {line}", "warn")
             return False
         for cmd in (["systemctl", "start", auto],
                     ["sudo", "-n", "systemctl", "start", auto]):
@@ -2377,6 +2386,94 @@ class App:
                     "error")
         return False
 
+    def _reclaim_held_back(self) -> int:
+        """How many deployed games have lost their shortcut, and so are kept
+        only because the share isn't there to prove they could be re-deployed.
+
+        An upper bound: scanning as if there were no NAS stops at that guard,
+        before the size floor and the save check, because walking every game
+        folder has no place on the way into a menu. The deepcopy matters too:
+        scan latches shortcut_seen in place, and this is only a look."""
+        deployed = self.cfg.get("deployed") or {}
+        if not deployed or self.steam_root is None:
+            return 0
+        res = reclaim.scan(self.recipes, self.steam_root,
+                           copy.deepcopy(deployed), sdscan.find_games_dirs(),
+                           None)
+        return sum(1 for _name, why in res.considered if "shortcut gone" in why)
+
+    def _warn_before_reconnect(self) -> None:
+        """Say what reconnecting costs at the one moment it can still be
+        weighed. Every route that can bring the share back calls this."""
+        try:
+            held = 0 if self._nas_ok() else self._reclaim_held_back()
+        except Exception as e:  # noqa: BLE001
+            self.log(f"reclaim look-ahead failed: {e}")
+            return
+        if held:
+            self.ui.msg("⚠ " + weeklyhealth.reconnect_warning(held), "error")
+            self.ui.msg("", "dim")
+
+    def _weekly_state(self) -> tuple:
+        """(record, alert or None, games held back) for the menu and
+        Self-Check. Never raises: a warning about backups must not be what
+        stops the tool opening."""
+        try:
+            rec = weeklyhealth.load_or_seed()
+            mounted = (self._nas_ok() if self.local_payloads is not None
+                       else None)
+            # Once per session when it's needed at all: the menu redraws after
+            # every action, and shortcuts.vdf is re-parsed per game.
+            held = 0
+            if not mounted:
+                if getattr(self, "_held_back_cache", None) is None:
+                    self._held_back_cache = self._reclaim_held_back()
+                held = self._held_back_cache
+            return rec, weeklyhealth.summarise(rec, nas_mounted=mounted,
+                                               held_back=held), held
+        except Exception as e:  # noqa: BLE001
+            self.log(f"weekly health unavailable: {e}")
+            return {}, None, 0
+
+    def _weekly_mark_started(self) -> None:
+        try:
+            weeklyhealth.begin_run()
+        except Exception as e:  # noqa: BLE001
+            self.ui.msg(f"  ! could not mark this run as started — {e}", "warn")
+
+    def _weekly_record_outcome(self, failed, skipped, nas_down, sd_down) -> None:
+        """Leave the record, and tell someone if it's bad news.
+
+        Everything before this reaches only the log, and that is how the
+        October outage ran for two weeks unseen. Guarded because it runs after
+        the real work and outside step(): failing to report must never turn a
+        finished backup into a crash, or lose the exit code below it."""
+        from core import selfcheck as sc
+        try:
+            held = self._reclaim_held_back() if nas_down else 0
+            rec = weeklyhealth.record_run(
+                weeklyhealth.new_run(
+                    failed=[lbl for lbl, _err in failed],
+                    skipped=[lbl for lbl, _err in skipped],
+                    nas_skipped=nas_down, sd_skipped=sd_down,
+                    prefixes=getattr(self, "_weekly_prefix_count", None),
+                    os_build=sc.os_build()),
+                held_back=held)
+            alert = weeklyhealth.summarise(rec, nas_mounted=not nas_down)
+            weeklyhealth.sync_autostart(alert is not None)
+            if alert is None:
+                return
+            for style, text in alert.banner():
+                self.ui.msg(text, style)
+            via = weeklyhealth.notify(weeklyhealth.TITLE, alert.body())
+            self.ui.msg(f"Desktop notification sent ({via})." if via else
+                        "No desktop notification could be shown (expected in "
+                        "Game Mode). The menu warns on open, and Desktop Mode "
+                        "warns at its next login.", "dim")
+        except Exception as e:  # noqa: BLE001
+            self.ui.msg(f"  ! could not record this run's outcome — {e}",
+                        "error")
+
     def cmd_weekly_backup(self, args=None):
         """EVERYTHING, unattended: map, adopted pins, shortcut bodies,
         art/saves/settings, then the prefixes.
@@ -2395,6 +2492,7 @@ class App:
         from core import selfcheck as sc
         self.ui.header("🗓  WEEKLY BACKUP")
         started = time.monotonic()
+        self._weekly_mark_started()
         # Force unattended for everything downstream that checks args.auto.
         if self.args is not None:
             setattr(self.args, "auto", True)
@@ -2552,6 +2650,7 @@ class App:
                         f"OK in {mins}m {secs}s."
                         + (f" ({len(not_applicable)} n/a on this platform)"
                            if not_applicable else ""), "success")
+        self._weekly_record_outcome(failed, skipped, nas_down, sd_down)
         # Skips count toward the exit code too: a run that backed up none of
         # the things it exists to back up must not report success to systemd,
         # or `systemctl show gfm-backup.service -p Result` says "success" for
@@ -2904,6 +3003,7 @@ class App:
         if os.name == "nt":
             self.ui.msg("NFS setup here is Linux-only.", "warn")
             return
+        self._warn_before_reconnect()
         self.ui.msg("NFS avoids SMB's guest-auth quirks on Linux. You need an "
                     "NFS share for this dataset on TrueNAS first (Shares → "
                     "Unix (NFS) Shares), with this device allowed.", "dim")
@@ -3093,6 +3193,7 @@ class App:
             self.ui.msg("This tests Linux CIFS mounts — on Windows use "
                         "🔌 Connect NAS.", "warn")
             return
+        self._warn_before_reconnect()
         host = self.ui.input("NAS host / IP", "192.168.1.33")
         share = self.ui.input("SMB share name", "Game Fixes")
         if not host or not share:
@@ -3722,6 +3823,7 @@ class App:
         if os.name == "nt":
             return self._setup_nas_windows()
         self.ui.header("🔌 CONNECT NAS PAYLOADS")
+        self._warn_before_reconnect()
         self.ui.msg("Sets up an on-demand SMB automount that survives reboots "
                     "and won't hang boot when the NAS is offline.", "dim")
         self.ui.msg("", "dim")
@@ -4372,6 +4474,7 @@ class App:
                 os.environ.get("TERM", ""))),
             ("does it fit", sc.fit_rows(cols, rows, gum, longest, len(labels))),
             ("scheduled jobs", sc.timer_rows()),
+            ("weekly backup", sc.weekly_rows(*self._weekly_state())),
             ("NAS share", sc.nas_rows(self.local_payloads)),
             ("SD card", sc.sdcard_rows(self.steam_root)),
             ("environment", sc.env_rows(self.steam_root, self.store_root,
@@ -4510,9 +4613,19 @@ class App:
     def menu(self):
         while True:
             self.ui.header("🔧 GAME FIX MANAGER")
-            self.ui.msg(f"📦 Store : {self.store_root or 'NOT FOUND'}", "dim")
-            self.ui.msg(f"🎮 Steam : {self.steam_root or 'not found'}", "dim")
-            self.ui.msg(f"🗂️  Games : {len(self.recipes)} recipe(s)", "dim")
+            alert = self._weekly_state()[1]
+            if alert is None:
+                self.ui.msg(f"📦 Store : {self.store_root or 'NOT FOUND'}", "dim")
+                self.ui.msg(f"🎮 Steam : {self.steam_root or 'not found'}", "dim")
+                self.ui.msg(f"🗂️  Games : {len(self.recipes)} recipe(s)", "dim")
+            else:
+                # In PLACE of the status lines, not above them. An 80x24
+                # console has two rows spare under this menu, so anything
+                # taller scrolls the top of the screen away, and that top
+                # would be the warning. It redraws on every return here, so
+                # it can't be dismissed: only a complete run clears it.
+                for style, text in alert.banner():
+                    self.ui.msg(text, style)
             self.ui.msg("", "dim")
             choice = self.ui.choose("What would you like to do?", [
                 "🔧 Apply Fixes",

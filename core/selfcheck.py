@@ -258,6 +258,83 @@ def timer_rows() -> list[Row]:
     return out
 
 
+def weekly_rows(rec: dict, alert, held: int = 0) -> list[Row]:
+    """How the unattended backup has really been going, from its own record
+    (core/weeklyhealth.py). The timer rows above only say it is scheduled,
+    which stayed true through two weeks of runs that skipped the NAS."""
+    from . import weeklyhealth as wh
+    last = rec.get("last_run")
+    if not last:
+        return [Row("weekly runs recorded", "none yet", INFO)]
+    what = ("complete" if last.get("complete") else
+            f"{len(last.get('skipped') or [])} skipped, "
+            f"{len(last.get('failed') or [])} failed")
+    ok = rec.get("last_ok")
+    out = [Row("last weekly run", f"{wh.day(last.get('at'))}: {what}",
+               OK if last.get("complete") else BAD),
+           Row("last complete run", wh.day(ok["at"]) if ok else "none on record",
+               OK if ok else BAD)]
+    if alert is None:
+        return out
+    for problem in alert.problems:
+        out.append(Row("needs attention", problem, BAD))
+    out.append(Row("what to do", " ".join(alert.fixes), INFO))
+    if held and wh.NAS_FIX in alert.fixes:
+        out.append(Row("before you reconnect", f"up to {held} game(s) at risk",
+                       BAD, wh.reconnect_warning(held)))
+    return out
+
+
+# Module-level so the tests can point them at a temp directory.
+SYSTEMD_ETC = Path("/etc/systemd/system")
+# Where an update leaves the /etc files it dropped. Not documented by Valve;
+# it is described by people who have looked, so only a copy being there means
+# anything. Its absence proves nothing.
+ETC_PREVIOUS = Path("/etc/previous/systemd/system")
+OS_RELEASE = Path("/etc/os-release")
+
+
+def os_build(path=None) -> str:
+    """This OS image's BUILD_ID, or "" where there isn't one (Windows)."""
+    try:
+        text = Path(path or OS_RELEASE).read_text(encoding="utf-8",
+                                                  errors="replace")
+    except OSError:
+        return ""
+    for line in text.splitlines():
+        if line.startswith("BUILD_ID="):
+            return line.split("=", 1)[1].strip().strip('"')
+    return ""
+
+
+def automount_diagnosis(mount_path: str, last_build: str = "",
+                        this_build: str | None = None) -> list[str]:
+    """Why has the .automount gone, and what is left? Only ever looks at files.
+
+    It stops at saying what happened, and that is deliberate. Starting the
+    surviving .mount by hand would bring the share back, but only until the
+    next boot, and with nobody having decided to: while the NAS is down the
+    weekly reclaim step has nothing to act on, so an unattended job must never
+    be the thing that brings it back."""
+    base = unit_name_for(mount_path)
+    auto = f"{base}.automount"
+    if not (SYSTEMD_ETC / f"{base}.mount").is_file():
+        return ["The .mount unit has gone too, so this device has no NAS setup "
+                "left (a reimage, or it was never connected)."]
+    out = ["The .mount is still there, so only the part that starts it has "
+           "gone. A .mount alone never starts by itself."]
+    now = os_build() if this_build is None else this_build
+    if last_build and now and last_build != now:
+        out.append(f"The OS went from {last_build} to {now} since the last "
+                   "complete backup. OS updates are the likely cause.")
+    if (ETC_PREVIOUS / auto).is_file():
+        out.append(f"An OS update dropped it: a copy is in {ETC_PREVIOUS}.")
+    elif not (last_build and now and last_build != now):
+        out.append("OS updates are the likely cause: they replace /etc and "
+                   "keep only some of what was added to it.")
+    return out
+
+
 def nas_rows(payloads) -> list[Row]:
     """Is the NAS share actually mounted, and will it come back by itself?
 

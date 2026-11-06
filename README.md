@@ -45,6 +45,16 @@ then apply its fix. For couch use, pick **🖥️ Install Shortcut** once — se
 | 🟡 | PARTIAL — some steps applied, some not. Common after a game update overwrote the mod, or launch options got cleared. Re-apply fixes it. |
 | ❓ | Game not found. Install it, or apply and type the path once (it's remembered). |
 
+### When the weekly backup falls short
+
+The unattended backup can't ask for help, so every run leaves a record, and a problem is shown until a complete run clears it:
+
+- **The main menu** replaces its status lines with a `⚠ BACKUP INCOMPLETE` warning: how many runs skipped their NAS or SD steps and since when, the last complete run, and the exact fix. It also appears for failed steps, a run that never finished, no run for over 9 days, or a prefix set that suddenly shrank.
+- **🩺 Self-Check** shows the same thing in full.
+- **A desktop notification** is sent when the job runs, and again at each Desktop Mode login while the problem lasts. No route for one into Game Mode is known, so expect the menu to be the only warning there.
+
+If the NAS is the problem, read the warning before running **🔌 Connect NAS Payloads**. While the share is down, the weekly reclaim step can't act on deployed games that have lost their Steam shortcut. Once it's back, the next run can delete them with no prompt. **🧹 Reclaim** lists them.
+
 ## The games — what each fix does
 
 | Game | What the fix does | Manual steps left |
