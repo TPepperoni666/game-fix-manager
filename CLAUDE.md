@@ -36,9 +36,8 @@ rather than read:
   `{game_dir}/game/save1`. Lowercase *and* one level deeper. On btrfs that is
   simply a different path, and capture skips missing entries silently.
 
-So: `ssh deck@192.168.1.28` and look. `gfm.log` Syncthing-mirrors to
-`C:\Users\tonyf\SD Card Map\gfm.log`, so the log is readable from the
-workstation without anyone transcribing it.
+So: SSH into the device and look. `gfm.log` Syncthing-mirrors to the
+workstation, so the log is readable there without anyone transcribing it.
 
 When a `save_paths` entry is inferred from PCGamingWiki rather than confirmed
 against a live install, **say so in the recipe notes**. A capture that comes
@@ -67,6 +66,12 @@ generic deploy:   crc32(f"gfm:deploy:{folder_name}") | 0x80000000
 Deploy a game *before* its recipe exists and it is pinned under the deploy
 appid; the recipe then looks for the other one and finds no prefix, no
 artwork, no saves. Create the recipe first, or re-adopt afterwards.
+
+A shortcut that predates its recipe fails more quietly. `ensure_shortcut`
+matches by name and rewrites the entry's appid, so an unpinned recipe moves the
+game onto a new, empty prefix without adding a visible duplicate. Pin the live
+appid with `"appid"` on the `steam_shortcut` step. `steam_appid` is not a
+substitute: it is for real Steam installs.
 
 ## State that must survive a reimage
 
