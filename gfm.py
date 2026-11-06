@@ -3056,12 +3056,40 @@ class App:
             self._install_nas_automount(host, export, mount_point, "",
                                         fstype="nfs")
 
+    def _keep_nas_units(self, sudo_write) -> None:
+        """Put the automount on SteamOS's update keep list.
+
+        SteamOS rebuilds /etc on every update and keeps only what that list
+        names. It names *.mount but not *.automount, so each update removed the
+        automount and left a .mount that nothing starts. That is the "lone
+        .mount" this project kept rediscovering, and in October it took the
+        share down for weeks.
+
+        It only warns on failure. The share works today either way, and losing
+        a working install over this would be the worse outcome."""
+        from core import selfcheck as sc
+        if not sc.ATOMIC_UPDATE_CONF_D.is_dir():
+            return                 # not SteamOS: nothing rewrites /etc here
+        path = sc.nas_keep_path()
+        try:
+            sudo_write(path.as_posix(), sc.NAS_KEEP_LIST, mode="644")
+        except (OSError, subprocess.SubprocessError) as e:
+            self.log(f"keep-list write failed: {e}")
+        if path.is_file():
+            self.ui.msg("Added to the OS update keep list, so SteamOS updates "
+                        "won't remove the automount.", "dim")
+        else:
+            self.ui.msg(f"⚠ Couldn't write {path.as_posix()}. The share works "
+                        "now, but the next OS update will remove the automount.",
+                        "warn")
+
     def _install_nas_automount(self, host: str, share: str, mount_point: str,
                                opts: str, fstype: str = "cifs") -> bool:
         """Write + enable the systemd mount/automount units for the NAS share
         using an EXPLICIT option string (whatever the tester proved works).
         fstype switches between cifs and nfs. Returns True if it installed."""
         import tempfile
+        from core import selfcheck as sc
         uid, gid = os.getuid(), os.getgid()
 
         def sudo_write(path: str, content: str, mode: str | None = None):
@@ -3105,6 +3133,7 @@ class App:
                        "share\n\n[Automount]\n"
                        f"Where={mount_point}\n\n"
                        "[Install]\nWantedBy=multi-user.target\n")
+            self._keep_nas_units(sudo_write)
             subprocess.run(["sudo", "systemctl", "daemon-reload"], check=True)
             # The OLD mount has to go before the new options can apply. A bare
             # `systemctl restart` doesn't swap it while the automount is holding
@@ -3128,7 +3157,7 @@ class App:
         # down after every reboot until somebody investigates. A partial
         # install that reports success is worse than one that fails.
         missing = [u for u in (mount_unit, auto_unit)
-                   if not Path("/etc/systemd/system") .joinpath(u).is_file()]
+                   if not sc.SYSTEMD_ETC.joinpath(u).is_file()]
         state = ""
         try:
             r = subprocess.run(["systemctl", "is-enabled", auto_unit],
@@ -3938,6 +3967,7 @@ class App:
                    # keeping it mounted sidesteps the re-mount entirely.
                    f"[Automount]\nWhere={mount_point}\n\n"
                    "[Install]\nWantedBy=multi-user.target\n")
+        self._keep_nas_units(sudo_write)
 
         subprocess.run(["sudo", "systemctl", "daemon-reload"], check=True)
         subprocess.run(["sudo", "systemctl", "enable", "--now", auto_unit],

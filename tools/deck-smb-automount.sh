@@ -85,6 +85,20 @@ TimeoutIdleSec=300
 WantedBy=multi-user.target
 EOF
 
+# SteamOS rebuilds /etc on every update and keeps only what its keep list
+# names. That list has *.mount but not *.automount, so each update would remove
+# the unit above. This text must match selfcheck.NAS_KEEP_LIST; the test suite
+# checks that it does.
+if [ -d /etc/atomic-update.conf.d ]; then
+    sudo tee /etc/atomic-update.conf.d/gfm-nas.conf >/dev/null <<'EOF'
+## Game Fix Manager: keep the NAS share across SteamOS updates.
+## The default list keeps *.mount and *.wants/** but not *.automount, so an
+## update leaves a .mount that nothing starts and the share stays down.
+/etc/systemd/system/*.automount
+/etc/gfm-smb.cred
+EOF
+fi
+
 sudo systemctl daemon-reload
 sudo systemctl enable --now "$AUTO_UNIT"
 
@@ -96,3 +110,4 @@ echo
 echo "To remove later:"
 echo "  sudo systemctl disable --now '$AUTO_UNIT'"
 echo "  sudo rm /etc/systemd/system/$MOUNT_UNIT /etc/systemd/system/$AUTO_UNIT $CRED_FILE"
+echo "  sudo rm -f /etc/atomic-update.conf.d/gfm-nas.conf"

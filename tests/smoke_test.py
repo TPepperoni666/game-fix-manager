@@ -4227,6 +4227,7 @@ def main():
             _os.stat = _real_stat
 
         weekly_health_checks(tmp, gfm_mod)
+        keep_list_checks(tmp, gfm_mod)
 
         print(f"\nAll {PASS} checks passed.")
     finally:
@@ -4258,6 +4259,7 @@ def weekly_health_checks(tmp: Path, gfm_mod) -> None:
     saved = {
         "cfg": store.CONFIG_DIR, "etc": sc.SYSTEMD_ETC,
         "prev": sc.ETC_PREVIOUS, "unit": sc.unit_name_for,
+        "conf": sc.ATOMIC_UPDATE_CONF_D,
         "log": sdmap.log_path, "cards": store.sd_card_roots,
         "seed": wh.load_or_seed, "rec": wh.record_run, "begin": wh.begin_run,
         "run": subprocess.run, "xdg": os.environ.get("XDG_CONFIG_HOME"),
@@ -4267,6 +4269,8 @@ def weekly_health_checks(tmp: Path, gfm_mod) -> None:
     store.CONFIG_DIR = root / "cfg"
     sc.SYSTEMD_ETC = root / "etc"
     sc.ETC_PREVIOUS = root / "prev"
+    sc.ATOMIC_UPDATE_CONF_D = root / "conf.d"
+    sc.ATOMIC_UPDATE_CONF_D.mkdir()
     sc.SYSTEMD_ETC.mkdir()
     sc.ETC_PREVIOUS.mkdir()
     # A backslash in the real escaped name is a separator on Windows.
@@ -4853,7 +4857,7 @@ def weekly_health_checks(tmp: Path, gfm_mod) -> None:
         said = " ".join(sc.automount_diagnosis("/mnt/gamefixes", this_build=""))
         check("a lone .mount is told apart from no setup at all",
               ".mount is still there" in said
-              and "OS updates are the likely cause" in said)
+              and "keep .mount units but not .automount" in said)
         said = " ".join(sc.automount_diagnosis(
             "/mnt/gamefixes", last_build="20260925.101",
             this_build="20261015.100"))
@@ -4895,6 +4899,7 @@ def weekly_health_checks(tmp: Path, gfm_mod) -> None:
         store.CONFIG_DIR = saved["cfg"]
         sc.SYSTEMD_ETC = saved["etc"]
         sc.ETC_PREVIOUS = saved["prev"]
+        sc.ATOMIC_UPDATE_CONF_D = saved["conf"]
         sc.unit_name_for = saved["unit"]
         sdmap.log_path = saved["log"]
         store.sd_card_roots = saved["cards"]
@@ -4909,6 +4914,217 @@ def weekly_health_checks(tmp: Path, gfm_mod) -> None:
             os.environ.pop("XDG_CONFIG_HOME", None)
         else:
             os.environ["XDG_CONFIG_HOME"] = saved["xdg"]
+
+
+def keep_list_checks(tmp: Path, gfm_mod) -> None:
+    """A SteamOS update keeps *.mount but not *.automount, so every update
+    left a .mount that nothing starts. Nothing here can touch a real system:
+    subprocess is faked, so no sudo or systemctl runs even on a Deck, and every
+    /etc path is redirected into the temp tree. The installers themselves are
+    the real ones. They need an `os` that says posix and has getuid, so gfm.py
+    alone gets a proxy: patching os.name for real would break pathlib."""
+    import os
+    import shutil as sh
+    import subprocess
+    import types
+    from core import selfcheck as sc
+    from core import store
+
+    print("== update keep list (the .automount SteamOS throws away) ==")
+    root = tmp / "keep"
+    root.mkdir()
+    etc = root / "etc"
+    units = etc / "systemd" / "system"
+    units.mkdir(parents=True)
+    conf_d = etc / "atomic-update.conf.d"
+    previous = root / "previous"
+    previous.mkdir()
+    saved = {"units": sc.SYSTEMD_ETC, "conf": sc.ATOMIC_UPDATE_CONF_D,
+             "prev": sc.ETC_PREVIOUS, "unit": sc.unit_name_for,
+             "cfgd": store.CONFIG_DIR, "cfgf": store.CONFIG_FILE,
+             "run": subprocess.run, "os": gfm_mod.os}
+    sc.SYSTEMD_ETC = units
+    sc.ATOMIC_UPDATE_CONF_D = conf_d
+    sc.ETC_PREVIOUS = previous
+    sc.unit_name_for = lambda path: "mnt-gamefixes"
+    store.CONFIG_DIR = root / "cfg"
+    store.CONFIG_FILE = store.CONFIG_DIR / "config.json"
+
+    class PosixOs:
+        name = "posix"
+
+        @staticmethod
+        def getuid():
+            return 1000
+
+        @staticmethod
+        def getgid():
+            return 1000
+
+        def __getattr__(self, attr):
+            return getattr(os, attr)
+
+    calls = []
+
+    def where(path):
+        """Where a sudo write to a real /etc path lands in the temp tree."""
+        path = str(path)
+        return (etc / path[len("/etc/"):] if path.startswith("/etc/")
+                else Path(path))
+
+    def fake_run(argv, **kw):
+        argv = [str(a) for a in argv]
+        calls.append(argv)
+        out = ""
+        if argv[0] == "systemd-escape":
+            out = "mnt-gamefixes." + argv[2].split("=")[1] + "\n"
+        elif argv[:2] == ["sudo", "cp"]:
+            where(argv[3]).parent.mkdir(parents=True, exist_ok=True)
+            sh.copy(argv[2], where(argv[3]))
+        elif argv[:2] == ["systemctl", "is-enabled"]:
+            out = "enabled\n"
+        return types.SimpleNamespace(returncode=0, stdout=out, stderr="")
+
+    class UI:
+        def __init__(self, answers=()):
+            self.msgs = []
+            self.answers = list(answers)
+
+        def header(self, title):
+            pass
+
+        def msg(self, text, style="info"):
+            self.msgs.append((style, str(text)))
+
+        def input(self, prompt, default="", password=False):
+            return self.answers.pop(0) if self.answers else ""
+
+        def confirm(self, question, danger=False):
+            return True
+
+    class Installer:
+        """Just enough App to run the real installers."""
+        _keep_nas_units = gfm_mod.App._keep_nas_units
+        _install_nas_automount = gfm_mod.App._install_nas_automount
+        cmd_setup_nas = gfm_mod.App.cmd_setup_nas
+
+        def __init__(self, answers=()):
+            self.ui = UI(answers)
+            self.cfg = {}
+            self.local_payloads = None
+
+        def text(self):
+            return "\n".join(t for _s, t in self.ui.msgs)
+
+        def log(self, text):
+            pass
+
+        def _warn_before_reconnect(self):
+            pass
+
+    try:
+        # --- the entries themselves --------------------------------------
+        entries = [ln for ln in sc.NAS_KEEP_LIST.splitlines()
+                   if ln and not ln.startswith("#")]
+        check("the keep list names the unit type SteamOS drops",
+              "/etc/systemd/system/*.automount" in entries)
+        check("and the credentials file, which is not on Valve's list either",
+              "/etc/gfm-smb.cred" in entries)
+        check("every entry is an absolute /etc path, as rsync's filter needs",
+              all(e.startswith("/etc/") for e in entries))
+        # rsync reads a backslash differently with and without a wildcard, and
+        # real unit names contain one. Valve's own *.mount line has the same
+        # shape as ours and is proven on every update, so stay in that shape.
+        check("no entry relies on rsync's backslash rules",
+              not any("\\" in e for e in entries))
+        check("the file name matches Valve's *.conf rule, so it is kept too",
+              sc.nas_keep_path().name.endswith(".conf"))
+
+        script = (Path(__file__).resolve().parent.parent / "tools"
+                  / "deck-smb-automount.sh").read_text(encoding="utf-8")
+        body = script.split("gfm-nas.conf >/dev/null <<'EOF'\n")[1]
+        check("the shell installer writes exactly the same list",
+              body.split("EOF\n")[0].replace("\r\n", "\n") == sc.NAS_KEEP_LIST)
+        check("and only where SteamOS's keep-list folder exists",
+              "if [ -d /etc/atomic-update.conf.d ]" in script)
+
+        # --- writing it --------------------------------------------------
+        writes = []
+        job = Installer()
+        job._keep_nas_units(lambda *a, **k: writes.append(a))
+        check("off SteamOS nothing is written", writes == [] and job.text() == "")
+
+        conf_d.mkdir(parents=True)
+        subprocess.run = fake_run
+        gfm_mod.os = PosixOs()
+
+        job = Installer()
+        mount = root / "share"
+        ok = job._install_nas_automount("nas.test", "Fixes", str(mount), "guest")
+        kept = sc.nas_keep_path()
+        check("the real permanent-automount installer succeeds", ok is True)
+        check("and writes the keep list",
+              kept.is_file()
+              and kept.read_text(encoding="utf-8") == sc.NAS_KEEP_LIST)
+        check("and says so", "keep list" in job.text())
+        check("the keep list goes in before the automount is enabled",
+              [c for c in calls if c[:2] == ["sudo", "cp"]
+               and "gfm-nas.conf" in c[3]]
+              and calls.index([c for c in calls if "gfm-nas.conf" in c[-1]][0])
+              < calls.index([c for c in calls if "enable" in c][0]))
+
+        kept.unlink()
+        job = Installer(["nas.test", "Fixes", str(mount), "someone", "secret"])
+        job.cmd_setup_nas()
+        check("the real Connect NAS Payloads flow writes it too",
+              kept.is_file()
+              and kept.read_text(encoding="utf-8") == sc.NAS_KEEP_LIST)
+        check("and that flow still installs its units",
+              (units / "mnt-gamefixes.automount").is_file()
+              and (units / "mnt-gamefixes.mount").is_file())
+        check("the credentials file it depends on is the one on the list",
+              (etc / "gfm-smb.cred").is_file())
+
+        kept.unlink()
+
+        def failing(path, content, mode=None):
+            raise subprocess.CalledProcessError(1, "sudo")
+        job = Installer()
+        job._keep_nas_units(failing)
+        check("a failed write warns rather than losing a working install",
+              "next OS update will remove the automount" in job.text())
+        gfm_mod.os = saved["os"]
+        subprocess.run = saved["run"]
+
+        # --- reporting it ------------------------------------------------
+        rows = sc.nas_keep_rows()
+        check("Self-Check warns before the next update breaks it",
+              len(rows) == 1 and rows[0].verdict == sc.WARN
+              and "Connect NAS Payloads" in rows[0].note)
+        kept.write_text(sc.NAS_KEEP_LIST, encoding="utf-8")
+        check("and is happy once the entry is there",
+              [r.verdict for r in sc.nas_keep_rows()] == [sc.OK])
+        said = " ".join(sc.automount_diagnosis("/mnt/x", this_build=""))
+        check("a unit gone despite the entry points away from OS updates",
+              "Look for another cause" in said)
+        kept.unlink()
+        said = " ".join(sc.automount_diagnosis("/mnt/x", this_build=""))
+        check("without the entry the diagnosis names the real cause",
+              "keep .mount units but not .automount" in said)
+        sh.rmtree(conf_d)
+        check("off SteamOS Self-Check has nothing to say", sc.nas_keep_rows() == [])
+        check("and neither does the diagnosis",
+              ".automount units" not in " ".join(
+                  sc.automount_diagnosis("/mnt/x", this_build="")))
+    finally:
+        sc.SYSTEMD_ETC = saved["units"]
+        sc.ATOMIC_UPDATE_CONF_D = saved["conf"]
+        sc.ETC_PREVIOUS = saved["prev"]
+        sc.unit_name_for = saved["unit"]
+        store.CONFIG_DIR = saved["cfgd"]
+        store.CONFIG_FILE = saved["cfgf"]
+        subprocess.run = saved["run"]
+        gfm_mod.os = saved["os"]
 
 
 def _weekly_source(gfm_mod, name: str) -> str:

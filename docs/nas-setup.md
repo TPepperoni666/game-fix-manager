@@ -35,6 +35,12 @@ Prompts for the SMB user/pass (or blank for guest), then installs a systemd
 **automount**: mounts on-demand at `~/mnt/game-fixes`, survives reboots, and
 never hangs boot if the NAS is offline. Re-run after a reimage.
 
+On SteamOS it also adds `/etc/atomic-update.conf.d/gfm-nas.conf`. A SteamOS
+update keeps only the `/etc` files on its keep list, and that list has `*.mount`
+but not `*.automount`, so without this entry every update removes the automount
+and the share stays down. If you set the share up before this existed, re-run
+the setup once; 🩺 Self-Check shows `NAS survives OS updates` until you do.
+
 Then point GFM at it once (persists to config):
 
 ```

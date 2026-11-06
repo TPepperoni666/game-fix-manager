@@ -287,11 +287,45 @@ def weekly_rows(rec: dict, alert, held: int = 0) -> list[Row]:
 
 # Module-level so the tests can point them at a temp directory.
 SYSTEMD_ETC = Path("/etc/systemd/system")
-# Where an update leaves the /etc files it dropped. Not documented by Valve;
-# it is described by people who have looked, so only a copy being there means
-# anything. Its absence proves nothing.
+# Where a SteamOS update leaves the /etc edits it held. Only one update's worth
+# is kept, so a copy being here means something and its absence proves nothing.
 ETC_PREVIOUS = Path("/etc/previous/systemd/system")
 OS_RELEASE = Path("/etc/os-release")
+# A SteamOS update rebuilds /etc and keeps only what rsync's filter names: the
+# list in /usr/lib/rauc/atomic-update-keep.conf plus every *.conf in here. That
+# list has *.mount and *.wants/** and has never had *.automount, which is why
+# each update left a .mount that nothing starts. Valve's source for all of this
+# is the steamos-customizations repo.
+ATOMIC_UPDATE_CONF_D = Path("/etc/atomic-update.conf.d")
+# The wildcard is deliberate, and not only for tidiness. Real unit names have a
+# backslash in them (game\x2dfixes), and rsync's backslash rules change with
+# whether a pattern has a wildcard. This is the exact form of Valve's own
+# *.mount line, which already keeps a unit with that name through every update.
+# The same text is in tools/deck-smb-automount.sh; the suite checks they match.
+NAS_KEEP_LIST = ("## Game Fix Manager: keep the NAS share across SteamOS updates."
+                 "\n## The default list keeps *.mount and *.wants/** but not "
+                 "*.automount, so an\n## update leaves a .mount that nothing "
+                 "starts and the share stays down.\n"
+                 "/etc/systemd/system/*.automount\n"
+                 "/etc/gfm-smb.cred\n")
+
+
+def nas_keep_path() -> Path:
+    return ATOMIC_UPDATE_CONF_D / "gfm-nas.conf"
+
+
+def nas_keep_rows() -> list[Row]:
+    """Will the automount outlive the next OS update? Worth asking while it
+    still works: by the time it fails, it fails in silence. No rows at all off
+    SteamOS, where nothing rewrites /etc."""
+    if not ATOMIC_UPDATE_CONF_D.is_dir():
+        return []
+    kept = nas_keep_path().is_file()
+    return [Row("NAS survives OS updates", "yes" if kept else "NO",
+                OK if kept else WARN,
+                "" if kept else
+                "the next SteamOS update will remove the automount; re-run "
+                "Connect NAS Payloads to add it to the keep list")]
 
 
 def os_build(path=None) -> str:
@@ -326,12 +360,16 @@ def automount_diagnosis(mount_path: str, last_build: str = "",
     now = os_build() if this_build is None else this_build
     if last_build and now and last_build != now:
         out.append(f"The OS went from {last_build} to {now} since the last "
-                   "complete backup. OS updates are the likely cause.")
+                   "complete backup.")
     if (ETC_PREVIOUS / auto).is_file():
         out.append(f"An OS update dropped it: a copy is in {ETC_PREVIOUS}.")
-    elif not (last_build and now and last_build != now):
-        out.append("OS updates are the likely cause: they replace /etc and "
-                   "keep only some of what was added to it.")
+    if nas_keep_path().is_file():
+        out.append("It is on the update keep list, so an OS update should not "
+                   "have removed it. Look for another cause.")
+    elif ATOMIC_UPDATE_CONF_D.is_dir():
+        out.append("SteamOS updates keep .mount units but not .automount "
+                   "units. Connect NAS Payloads adds the missing keep-list "
+                   "entry as well.")
     return out
 
 
@@ -397,6 +435,7 @@ def nas_rows(payloads) -> list[Row]:
                        OK if state == "enabled" else BAD,
                        "" if state == "enabled"
                        else "not enabled, so it won't fire at boot"))
+        out += nas_keep_rows()
     return out
 
 

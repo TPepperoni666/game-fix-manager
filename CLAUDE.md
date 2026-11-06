@@ -130,6 +130,23 @@ afterwards.
   The owner decides when it comes back, so the warning names the cost beside
   the repair step, and every reconnect flow calls `_warn_before_reconnect`.
 
+## SteamOS updates rebuild /etc
+
+An update keeps only what `/usr/lib/rauc/atomic-update-keep.conf` and the
+`*.conf` drop-ins in `/etc/atomic-update.conf.d/` name, and throws the rest
+away. Read the list before putting anything in `/etc`. Valve's source is the
+`steamos-customizations` repo (`atomic-update/rauc/atomic-update-keep.conf.in`),
+and `misc/libexec/holo-sync-var.in` shows how it is applied.
+
+- `*.mount`, `*.service`, `*.socket` and `*.wants/**` under
+  `/etc/systemd/system` are kept. **`*.automount` is not.** That is why every
+  update left a lone `.mount`, and it took three sessions and a two-week
+  outage to find. `NAS_KEEP_LIST` is the fix; all three installers write it.
+- Entries are rsync filter rules. A backslash is an escape in a pattern with a
+  wildcard and literal in one without, and real unit names contain one
+  (`game\x2dfixes`). Write a wildcard entry in the shape Valve's own lines use.
+- Files in `/etc` that aren't on the list, like `/etc/gfm-smb.cred`, go too.
+
 ## Destructive operations
 
 - Reclaim removes a deployed game only when it is over the **34 GB** floor
