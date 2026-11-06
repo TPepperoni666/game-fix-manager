@@ -1351,7 +1351,11 @@ def main():
                 f.seek(int(kb * 1024) - 1)
                 f.write(b"\0")
             if on_nas:
-                (dep.staged_root(rc_nas) / name).mkdir(parents=True)
+                # A real copy, as deploy leaves one. This used to be an empty
+                # folder, which is exactly what the guard must now refuse.
+                nas = dep.staged_root(rc_nas) / name
+                nas.mkdir(parents=True)
+                shutil.copy2(d / "data.bin", nas / "data.bin")
 
         def rc_add_sc(name):
             sv.ensure_shortcut(rc_steam, name, str(rc_sd / name / "g.exe"),
@@ -1477,6 +1481,178 @@ def main():
               not r_coll.blocked and len(r_coll.candidates) == 1
               and r_coll.candidates[0].name == "Aliasy"
               and r_coll.candidates[0].recipe is other)
+
+        # ---- "still on the NAS" used to mean the FOLDER existed, so an old
+        # copy, or one built differently, counted as reversible and the weekly
+        # job could delete a modded game its NAS copy wouldn't bring back.
+        # These call the scan; the last ones go through cmd_reclaim's `if
+        # auto:` branch, the path that deletes with no prompt.
+        import os as _rc_os
+        rc_clear()
+
+        def rc_staged(name, rel="data.bin"):
+            return dep.staged_root(rc_nas) / name / rel
+
+        def rc_verdict(name, record=None):
+            """(candidate?, why) for one game whose shortcut is gone."""
+            r = rc_scan([], {name: record or {"shortcut_seen": True}})
+            return bool(r.candidates), dict(r.considered).get(name, "")
+
+        def rc_shift(path, seconds):
+            st = path.stat()
+            _rc_os.utime(path, (st.st_atime, st.st_mtime + seconds))
+
+        rc_game("Current", 40)
+        (rc_sd / "Current" / "bin").mkdir()
+        (rc_sd / "Current" / "bin" / "g.exe").write_bytes(b"MZ")
+        rc_staged("Current", "bin").mkdir()
+        shutil.copy2(rc_sd / "Current" / "bin" / "g.exe",
+                     rc_staged("Current", "bin/g.exe"))
+        _ok, _why = rc_verdict("Current")
+        check("reclaim: a NAS copy matching the SD -> candidate",
+              _ok and "REMOVABLE" in _why)
+
+        rc_game("OldBuild", 40)
+        rc_staged("OldBuild").write_bytes(b"an older build")
+        _ok, _why = rc_verdict("OldBuild")
+        check("reclaim: stale NAS copy -> kept, and says which file and why",
+              not _ok and "doesn't match" in _why and "1 changed" in _why
+              and "data.bin" in _why and "shortcut gone" in _why)
+
+        rc_game("Patched", 40)
+        with open(rc_sd / "Patched" / "data.bin", "r+b") as f:
+            f.write(b"\x90")
+        rc_shift(rc_sd / "Patched" / "data.bin", 60)
+        _ok, _why = rc_verdict("Patched")
+        check("reclaim: same-length patch on the SD -> kept (size can't see it)",
+              not _ok and "1 changed" in _why)
+
+        rc_game("Rebuilt", 40)
+        rc_shift(rc_staged("Rebuilt"), 60)
+        check("reclaim: NAS rebuilt at the same size -> kept",
+              not rc_verdict("Rebuilt")[0])
+
+        rc_game("Rounded", 40)
+        # A literal, so narrowing MTIME_SLACK below FAT32's 2 seconds fails here.
+        rc_shift(rc_sd / "Rounded" / "data.bin", -2)
+        check("reclaim: timestamp rounding on the card isn't a difference",
+              rc_verdict("Rounded")[0])
+
+        rc_game("Modded", 40)
+        (rc_sd / "Modded" / "dinput8.dll").write_bytes(b"mod")
+        _ok, _why = rc_verdict("Modded")
+        check("reclaim: a file the NAS doesn't have -> kept",
+              not _ok and "1 only on the SD" in _why
+              and "dinput8.dll" in _why)
+
+        rc_game("Pruned", 40)
+        rc_staged("Pruned", "extra.pak").write_bytes(b"old data")
+        _ok, _why = rc_verdict("Pruned")
+        check("reclaim: a file only the NAS has -> kept",
+              not _ok and "1 only on the NAS" in _why)
+
+        rc_game("Hollow", 40, on_nas=False)
+        (dep.staged_root(rc_nas) / "Hollow").mkdir()
+        check("reclaim: an empty NAS folder is not a copy of the game",
+              not rc_verdict("Hollow")[0])
+
+        # There is no deploy-time marker, so a record from before this guard
+        # gets the same answer as any other, and nothing a record says can
+        # vouch for the copy.
+        rc_game("Legacy", 40)
+        _old_rec = {"shortcut_seen": True}
+        check("reclaim: older record, current copy -> still reclaimable",
+              rc_verdict("Legacy", _old_rec)[0])
+        _full_rec = {"size": rc.dir_size(rc_sd / "Legacy"),
+                     "sd_dir": str(rc_sd / "Legacy"), "shortcut_seen": True}
+        rc_staged("Legacy").write_bytes(b"an older build")
+        check("reclaim: older record, stale copy -> kept",
+              not rc_verdict("Legacy", _old_rec)[0])
+        check("reclaim: a full record can't vouch for a stale copy",
+              not rc_verdict("Legacy", _full_rec)[0])
+
+        # Fail closed: not being able to look is not the same as matching.
+        rc_game("Unread", 40)
+        _unread = str(rc_staged("Unread"))
+        _rc_real_stat = _rc_os.stat
+
+        def _rc_no_read(path, *a, **k):
+            if str(path) == _unread:
+                raise PermissionError(13, "Permission denied")
+            return _rc_real_stat(path, *a, **k)
+        _rc_os.stat = _rc_no_read
+        try:
+            _ok, _why = rc_verdict("Unread")
+        finally:
+            _rc_os.stat = _rc_real_stat
+        check("reclaim: a NAS file it can't read -> kept, and says so",
+              not _ok and "couldn't be compared" in _why)
+
+        # os.walk drops a folder it can't list. Unreadable on BOTH sides, a
+        # plain walk would compare what's left and call the copies equal.
+        rc_game("Locked", 40)
+        for _base in (rc_sd / "Locked", rc_staged("Locked").parent):
+            (_base / "locked").mkdir()
+            (_base / "locked" / "pak.dat").write_bytes(b"x")
+        _rc_real_scandir = _rc_os.scandir
+
+        def _rc_no_list(path):
+            if _rc_os.path.basename(str(path)) == "locked":
+                raise PermissionError(13, "Permission denied")
+            return _rc_real_scandir(path)
+        _rc_os.scandir = _rc_no_list
+        try:
+            _ok, _why = rc_verdict("Locked")
+        finally:
+            _rc_os.scandir = _rc_real_scandir
+        check("reclaim: a folder it can't list on either side -> kept",
+              not _ok and "couldn't be compared" in _why)
+
+        # A record pointing at the staged folder would match itself perfectly,
+        # and uninstall would then rmtree the only copy.
+        rc_game("SelfRef", 40, on_nas=False)
+        shutil.copytree(rc_sd / "SelfRef", rc_staged("SelfRef").parent)
+        _ok, _why = rc_verdict("SelfRef", {
+            "sd_dir": str(rc_staged("SelfRef").parent),
+            "shortcut_seen": True})
+        check("reclaim: a record pointing at the NAS copy itself -> kept",
+              not _ok and "IS this folder" in _why)
+
+        # The path that matters. Both games pass every other guard, so all
+        # that stands between the stale one and rmtree is the comparison.
+        rc_game("AutoStale", 40)
+        rc_staged("AutoStale").write_bytes(b"an older build")
+        rc_game("AutoCurrent", 40)
+        _rc_app = object.__new__(_gfm.App)
+        _rc_app.ui = _NoPromptUI()
+        _rc_app.args = _np_args
+        _rc_app.cfg = {"deployed": {"AutoStale": {"shortcut_seen": True},
+                                    "AutoCurrent": {"shortcut_seen": True}}}
+        _rc_app.recipes = []
+        _rc_app.steam_root = rc_steam
+        _rc_app.local_payloads = rc_nas
+        _rc_app.log = lambda *a, **k: None
+        _rc_real = (rc.scan, _gfm.sdscan.find_games_dirs,
+                    _gfm.store.save_config)
+        # The 34 GB floor is a default argument, so a stub scan is the only
+        # way to reach this path without writing 34 GB.
+        rc.scan = lambda *a, **k: _rc_real[0](*a, min_bytes=RC_FLOOR, **k)
+        _gfm.sdscan.find_games_dirs = lambda *a, **k: [rc_sd]
+        _gfm.store.save_config = lambda cfg: None
+        try:
+            _gfm.App.cmd_reclaim(_rc_app, skip_map=True)
+        finally:
+            (rc.scan, _gfm.sdscan.find_games_dirs,
+             _gfm.store.save_config) = _rc_real
+        check("reclaim: --auto keeps a game whose NAS copy is stale",
+              (rc_sd / "AutoStale").is_dir()
+              and "AutoStale" in _rc_app.cfg["deployed"])
+        check("reclaim: --auto still deletes one whose NAS copy is current",
+              not (rc_sd / "AutoCurrent").exists()
+              and "AutoCurrent" not in _rc_app.cfg["deployed"])
+        check("reclaim: --auto says why it kept the stale one",
+              any("AutoStale" in _t and "doesn't match" in _t
+                  for _k, _t in _rc_app.ui.msgs))
 
         # ---- platform gate -------------------------------------------
         # Detection resolves steam_appid through the appmanifest on ANY OS, so

@@ -16,8 +16,10 @@ safety rule. A candidate must satisfy ALL of:
      "you deleted it" both look like "no shortcut right now"; only the second
      should delete. We latch `shortcut_seen` per game so a freshly-deployed,
      not-yet-applied game (the gap between Deploy and Apply) is never touched.
-  3. It's still on the SD (else nothing to do) AND still staged on the NAS
-     `_games/<name>/` (else deletion isn't reversible — refuse).
+  3. It's still on the SD (else nothing to do) AND the NAS `_games/<name>/`
+     would put it back as it is now (else deletion isn't reversible — refuse).
+     A folder merely being there proves nothing: it can hold an older or
+     differently built copy, so the two trees are compared file by file.
   4. It's larger than the size floor (default 34 GB). Every game whose save
      lives in the GAME FOLDER (The Crew, Simpsons, HOTP) is smaller than this,
      so the floor makes them ineligible by construction — the case that could
@@ -44,6 +46,9 @@ DEFAULT_MIN_BYTES = 34 * (1 << 30)   # 34 GB — Tony's floor (2026-07-13)
 # something is wrong with shortcuts.vdf (reimage, reset, botched write) rather
 # than the user deleting a couple by hand. Unattended runs refuse the batch.
 MAX_AUTO_BATCH = 3
+# A faithful copy's mtime can read this far from its source: FAT32 keeps
+# timestamps to 2 seconds. Anything wider is an edit, not rounding.
+MTIME_SLACK = 2
 
 
 @dataclass
@@ -101,6 +106,69 @@ def _saves_safe(recipe, local_payloads: Path | None) -> bool:
     # folder that holds the only copy.
     return saves.index_is_whole(
         store.recipe_data_dir(local_payloads, recipe.id, "saves"))
+
+
+def _file_stats(root: Path) -> dict:
+    """{relative path: (size, mtime)} for every file under root. Unlike
+    dir_size this RAISES on anything unreadable: os.walk quietly drops a folder
+    it can't list, and one dropped from both sides would compare as equal."""
+    def _raise(e: OSError):
+        raise e
+
+    out = {}
+    for dp, _d, names in os.walk(root, onerror=_raise):
+        for n in names:
+            path = os.path.join(dp, n)
+            st = os.stat(path)
+            out[os.path.relpath(path, root)] = (st.st_size, st.st_mtime)
+    return out
+
+
+def _nas_gap(sd_dir: Path, staged: Path) -> str:
+    """Why re-deploying `staged` would NOT put `sd_dir` back as it is now, or
+    "" if it would. Anything that stops the comparison counts as a gap.
+
+    Compares against the SD itself rather than a marker saved at deploy. A
+    marker only proves the NAS hasn't moved, and the usual failure is the SD
+    moving on (a modded or updated game) while the NAS stays put. It also means
+    games deployed before this guard existed are judged on the same evidence,
+    rather than all being trusted or all being refused.
+
+    Size + mtime, because deploy carries the mtime across. deploy._same can't
+    stand in: it asks "does this need copying?", so it accepts a NEWER file on
+    the SD, and that is what a same-length patch to an exe looks like. Hashing
+    would be stronger, but not across 100 GB of SMB from a weekly timer, so an
+    edit that keeps both the size and the mtime still gets through.
+
+    Strict on purpose. Any file the NAS can't restore keeps the game, even one
+    that looks disposable, because a mod's dll looks no more important than a
+    log. A recipe's files count too: it may put them back, but nothing here can
+    prove it, and keeping a game only costs disk space.
+    """
+    try:
+        # A folder always matches itself, and deleting this one would take
+        # the only copy with it.
+        if os.path.samefile(sd_dir, staged):
+            return ("the NAS copy IS this folder, so deleting it would delete "
+                    "the only copy")
+        sd, nas = _file_stats(sd_dir), _file_stats(staged)
+    except OSError as e:
+        return (f"the NAS copy couldn't be compared ({e.strerror or e}), so "
+                "it can't be shown to be current")
+    changed = sorted(r for r in sd.keys() & nas.keys()
+                     if sd[r][0] != nas[r][0]
+                     or abs(sd[r][1] - nas[r][1]) > MTIME_SLACK)
+    sd_only = sorted(sd.keys() - nas.keys())
+    nas_only = sorted(nas.keys() - sd.keys())
+    if not (changed or sd_only or nas_only):
+        return ""
+    counts = ", ".join(
+        f"{len(paths)} {label}" for paths, label in (
+            (changed, "changed"), (sd_only, "only on the SD"),
+            (nas_only, "only on the NAS")) if paths)
+    first = (changed + sd_only + nas_only)[0]
+    return (f"the NAS copy doesn't match the SD ({counts}; first: {first}), "
+            "so deleting it wouldn't be reversible")
 
 
 def scan(recipes, steam_root, deployed: dict, sd_games_dirs,
@@ -203,6 +271,12 @@ def scan(recipes, steam_root, deployed: dict, sd_games_dirs,
             out.considered.append(
                 (name, f"kept — shortcut gone, but {size / (1 << 30):.1f}GB is "
                        f"under the {floor_gb:.0f}GB floor"))
+            continue
+        # Last because it's the slow one, a stat per file over SMB: only a
+        # game that would otherwise be deleted pays for it.
+        gap = _nas_gap(sd_dir, staged)
+        if gap:
+            out.considered.append((name, f"kept — shortcut gone, but {gap}"))
             continue
         out.candidates.append(Candidate(name, sd_dir, size, recipe))
         out.considered.append((name, f"REMOVABLE — {size / (1 << 30):.1f}GB, "

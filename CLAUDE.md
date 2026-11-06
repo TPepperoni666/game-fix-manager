@@ -153,6 +153,15 @@ afterwards.
   because `_saves_safe(recipe=None)` returns True before reading
   `save_paths`. `by_name` is keyed on `all_names` for this reason; keep it
   that way.
+- **"On the NAS" means the NAS copy would put the game back, not that a folder
+  exists.** `_games/<name>` can be older than what was deployed, or built
+  differently, and a bare `is_dir` called that reversible. `scan`'s last guard
+  compares the SD and NAS trees file by file (size + mtime), and any difference
+  keeps the game, including files a recipe wrote. `deploy._same` is the wrong
+  tool: it accepts a newer SD file, which is what an in-place patch looks like.
+  There is deliberately no deploy-time marker. One would only prove the NAS
+  hadn't moved, and would split games into those with a marker and those
+  without.
 
 ## Working on the Legion
 
